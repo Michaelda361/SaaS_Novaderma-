@@ -9,8 +9,6 @@ obj/
 ## Configuración sensible
 appsettings.Development.json
 appsettings.Production.json
-src/Server/appsettings.json
-src/Client/wwwroot/appsettings.json
 
 ## Publicación
 publish/
