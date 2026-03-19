@@ -82,14 +82,12 @@ body {
 .sidebar-brand-icon {
     width: 2.25rem;
     height: 2.25rem;
-    background: var(--primary);
     border-radius: var(--radius);
     display: flex;
     align-items: center;
     justify-content: center;
     font-size: 1.1rem;
     flex-shrink: 0;
-    box-shadow: 0 2px 8px rgba(79,70,229,0.4);
 }
 
 .sidebar-brand-text h1 {
@@ -1180,6 +1178,8 @@ textarea { resize: vertical; min-height: 80px; }
     height: 2.25rem;
     object-fit: contain;
     border-radius: 6px;
+    background: #fff;
+    padding: 2px;
 }
 
 .landing-logo-img {

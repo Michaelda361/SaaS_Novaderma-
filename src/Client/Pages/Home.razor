@@ -3,14 +3,13 @@
 @inject ColaboradorApiService ColaboradorSvc
 @inject CapacitacionApiService CapacitacionSvc
 @inject CertificadoApiService CertificadoSvc
-@using TalentManagement.Client.Services
-@using TalentManagement.Shared.DTOs.Certificados
+@inject AreaApiService AreaSvc
 
 <!-- Welcome banner -->
 <div class="welcome-banner">
     <div class="welcome-text">
         <div class="welcome-title">Bienvenido a TalentHub 👋</div>
-        <div class="welcome-sub">Aquí tienes un resumen del estado actual de tu equipo.</div>
+        <div class="welcome-title">Bienvenido a NovaHub 👋</div> actual de tu equipo.</div>
     </div>
     <div class="welcome-date">@DateTime.Today.ToString("dddd, d 'de' MMMM 'de' yyyy", new System.Globalization.CultureInfo("es-CO"))</div>
 </div>
@@ -19,7 +18,7 @@
 @if (cargando)
 {
     <div class="stats-grid">
-        @for (int i = 0; i < 4; i++) { <div class="stat-card skeleton-card"></div> }
+        @for (int i = 0; i < 5; i++) { <div class="stat-card skeleton-card"></div> }
     </div>
 }
 else
@@ -42,10 +41,18 @@ else
             <span class="stat-arrow">→</span>
         </a>
         <a class="stat-card stat-card-link" href="certificados">
+            <div class="stat-icon green">🏆</div>
+            <div class="stat-info">
+                <div class="stat-value">@(totalCertificados)</div>
+                <div class="stat-label">Certificados totales</div>
+            </div>
+            <span class="stat-arrow">→</span>
+        </a>
+        <a class="stat-card stat-card-link" href="certificados">
             <div class="stat-icon amber">⚠️</div>
             <div class="stat-info">
                 <div class="stat-value">@(proximosVencer?.Count ?? 0)</div>
-                <div class="stat-label">Certificados por vencer</div>
+                <div class="stat-label">Por vencer (30 días)</div>
             </div>
             <span class="stat-arrow">→</span>
         </a>
@@ -60,13 +67,13 @@ else
     </div>
 }
 
-<!-- Bottom row: alerts + quick actions -->
+<!-- Main grid -->
 <div class="dashboard-grid">
 
-    <!-- Alerts table -->
+    <!-- Certificados próximos a vencer -->
     <div class="card">
         <div class="card-header">
-            <span class="card-title">⚠️ Certificados próximos a vencer</span>
+            <span class="card-title">⚠️ Próximos a vencer</span>
             <a href="certificados" class="btn btn-ghost btn-sm">Ver todos</a>
         </div>
         @if (cargando)
@@ -86,14 +93,10 @@ else
             <div class="table-wrapper">
                 <table>
                     <thead>
-                        <tr>
-                            <th>Colaborador</th>
-                            <th>Certificado</th>
-                            <th>Vence</th>
-                        </tr>
+                        <tr><th>Colaborador</th><th>Certificado</th><th>Vence</th></tr>
                     </thead>
                     <tbody>
-                        @foreach (var cert in proximosVencer.Take(6))
+                        @foreach (var cert in proximosVencer.Take(5))
                         {
                             <tr>
                                 <td>
@@ -103,11 +106,7 @@ else
                                     </div>
                                 </td>
                                 <td class="text-sm text-muted">@cert.Nombre</td>
-                                <td>
-                                    <span class="badge badge-warning">
-                                        @cert.FechaVencimiento?.ToString("dd/MM/yyyy")
-                                    </span>
-                                </td>
+                                <td><span class="badge badge-warning">@cert.FechaVencimiento?.ToString("dd/MM/yyyy")</span></td>
                             </tr>
                         }
                     </tbody>
@@ -116,7 +115,7 @@ else
         }
     </div>
 
-    <!-- Quick actions -->
+    <!-- Acciones rápidas -->
     <div class="card">
         <div class="card-header">
             <span class="card-title">⚡ Acciones rápidas</span>
@@ -146,25 +145,168 @@ else
                 </div>
                 <span class="quick-action-arrow">→</span>
             </a>
+            <a href="areas" class="quick-action-item">
+                <div class="quick-action-icon amber">🏢</div>
+                <div class="quick-action-text">
+                    <div class="quick-action-title">Gestionar áreas</div>
+                    <div class="quick-action-sub">Administrar áreas y cargos</div>
+                </div>
+                <span class="quick-action-arrow">→</span>
+            </a>
         </div>
     </div>
 
 </div>
 
+<!-- Segunda fila: colaboradores recientes + vencidos -->
+<div class="dashboard-grid" style="margin-top:0;">
+
+    <!-- Colaboradores recientes -->
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">👥 Colaboradores recientes</span>
+            <a href="colaboradores" class="btn btn-ghost btn-sm">Ver todos</a>
+        </div>
+        @if (cargando)
+        {
+            <div class="loading"><div class="spinner"></div> Cargando...</div>
+        }
+        else if (colaboradores is null || colaboradores.Count == 0)
+        {
+            <div class="empty-state" style="padding:2rem 1rem;">
+                <div class="empty-state-icon">👥</div>
+                <h3>Sin colaboradores</h3>
+                <p>Agrega el primer colaborador.</p>
+            </div>
+        }
+        else
+        {
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr><th>Colaborador</th><th>Cargo</th><th>Área</th><th>Ingreso</th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var c in colaboradores.OrderByDescending(x => x.FechaIngreso).Take(5))
+                        {
+                            <tr>
+                                <td>
+                                    <div class="user-cell">
+                                        <div class="avatar avatar-sm">@Iniciales2(c.Nombre, c.Apellido)</div>
+                                        <div>
+                                            <div class="user-name">@c.NombreCompleto</div>
+                                            <div class="user-email">@c.Email</div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td class="text-sm">@c.CargoNombre</td>
+                                <td><span class="badge badge-info">@c.AreaNombre</span></td>
+                                <td class="text-muted text-sm">@c.FechaIngreso.ToString("dd/MM/yyyy")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+
+    <!-- Certificados vencidos -->
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">❌ Certificados vencidos</span>
+            <a href="certificados" class="btn btn-ghost btn-sm">Ver todos</a>
+        </div>
+        @if (cargando)
+        {
+            <div class="loading"><div class="spinner"></div> Cargando...</div>
+        }
+        else if (vencidos is null || vencidos.Count == 0)
+        {
+            <div class="empty-state" style="padding:2rem 1rem;">
+                <div class="empty-state-icon">✅</div>
+                <h3>Sin vencidos</h3>
+                <p>No hay certificados vencidos.</p>
+            </div>
+        }
+        else
+        {
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr><th>Colaborador</th><th>Certificado</th><th>Venció</th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var cert in vencidos.Take(5))
+                        {
+                            <tr>
+                                <td>
+                                    <div class="user-cell">
+                                        <div class="avatar avatar-sm">@Iniciales(cert.ColaboradorNombre)</div>
+                                        <span class="font-medium">@cert.ColaboradorNombre</span>
+                                    </div>
+                                </td>
+                                <td class="text-sm text-muted">@cert.Nombre</td>
+                                <td><span class="badge badge-danger">@cert.FechaVencimiento?.ToString("dd/MM/yyyy")</span></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+
+</div>
+
+<!-- Distribución por área -->
+@if (!cargando && areas is not null && areas.Count > 0)
+{
+    <div class="card" style="margin-top:0;">
+        <div class="card-header">
+            <span class="card-title">🏢 Distribución por área</span>
+            <a href="areas" class="btn btn-ghost btn-sm">Gestionar</a>
+        </div>
+        <div class="areas-grid">
+            @foreach (var area in areas.OrderByDescending(a => a.TotalColaboradores))
+            {
+                <div class="area-stat-card">
+                    <div class="area-stat-name">@area.Nombre</div>
+                    <div class="area-stat-numbers">
+                        <span class="badge badge-info">@area.TotalColaboradores colaboradores</span>
+                        <span class="badge badge-gray">@area.TotalCargos cargos</span>
+                    </div>
+                    <div class="area-stat-bar">
+                        <div class="area-stat-fill"
+                             style="width: @(areas.Max(a => a.TotalColaboradores) > 0
+                                ? (area.TotalColaboradores * 100 / areas.Max(a => a.TotalColaboradores))
+                                : 0)%">
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+}
+
 @code {
     private List<TalentManagement.Shared.DTOs.Colaboradores.ColaboradorDto>? colaboradores;
     private List<TalentManagement.Shared.DTOs.Capacitaciones.CapacitacionDto>? capacitaciones;
-    private List<CertificadoDto>? proximosVencer;
-    private List<CertificadoDto>? vencidos;
+    private List<TalentManagement.Shared.DTOs.Certificados.CertificadoDto>? proximosVencer;
+    private List<TalentManagement.Shared.DTOs.Certificados.CertificadoDto>? vencidos;
+    private List<TalentManagement.Shared.DTOs.Certificados.CertificadoDto>? todosCertificados;
+    private List<TalentManagement.Shared.DTOs.Areas.AreaDto>? areas;
     private bool cargando = true;
+
+    private int totalCertificados => todosCertificados?.Count ?? 0;
 
     protected override async Task OnInitializedAsync()
     {
         await Task.WhenAll(
             ColaboradorSvc.GetAllAsync().ContinueWith(t => colaboradores = t.Result),
             CapacitacionSvc.GetAllAsync().ContinueWith(t => capacitaciones = t.Result),
+            CertificadoSvc.GetAllAsync().ContinueWith(t => todosCertificados = t.Result),
             CertificadoSvc.GetProximosAVencerAsync().ContinueWith(t => proximosVencer = t.Result),
-            CertificadoSvc.GetVencidosAsync().ContinueWith(t => vencidos = t.Result)
+            CertificadoSvc.GetVencidosAsync().ContinueWith(t => vencidos = t.Result),
+            AreaSvc.GetAllAsync().ContinueWith(t => areas = t.Result)
         );
         cargando = false;
     }
@@ -176,4 +318,7 @@ else
             ? $"{parts[0][0]}{parts[1][0]}".ToUpper()
             : nombre.Length > 0 ? nombre[0..1].ToUpper() : "?";
     }
+
+    private static string Iniciales2(string nombre, string apellido) =>
+        $"{(nombre.Length > 0 ? nombre[0] : '?')}{(apellido.Length > 0 ? apellido[0] : '?')}".ToUpper();
 }
