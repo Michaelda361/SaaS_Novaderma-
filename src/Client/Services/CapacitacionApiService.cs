@@ -1,0 +1,38 @@
+using System.Net.Http.Json;
+using TalentManagement.Shared.DTOs.Capacitaciones;
+
+namespace TalentManagement.Client.Services;
+
+public class CapacitacionApiService(HttpClient http)
+{
+    private const string Base = "api/v1/capacitaciones";
+
+    public Task<List<CapacitacionDto>?> GetAllAsync() =>
+        http.GetFromJsonAsync<List<CapacitacionDto>>(Base);
+
+    public Task<CapacitacionDto?> GetByIdAsync(int id) =>
+        http.GetFromJsonAsync<CapacitacionDto>($"{Base}/{id}");
+
+    public Task<List<CapacitacionDto>?> GetByAreaAsync(int areaId) =>
+        http.GetFromJsonAsync<List<CapacitacionDto>>($"{Base}/area/{areaId}");
+
+    public Task<List<CapacitacionDto>?> GetByColaboradorAsync(int colaboradorId) =>
+        http.GetFromJsonAsync<List<CapacitacionDto>>($"{Base}/colaborador/{colaboradorId}");
+
+    public async Task<CapacitacionDto?> UpdateAsync(int id, CreateCapacitacionDto dto)
+    {
+        var r = await http.PutAsJsonAsync($"{Base}/{id}", dto);
+        return r.IsSuccessStatusCode ? await r.Content.ReadFromJsonAsync<CapacitacionDto>() : null;
+    }
+
+    public async Task<CapacitacionDto?> CreateAsync(CreateCapacitacionDto dto)
+    {
+        var response = await http.PostAsJsonAsync(Base, dto);
+        return response.IsSuccessStatusCode
+            ? await response.Content.ReadFromJsonAsync<CapacitacionDto>()
+            : null;
+    }
+
+    public Task<bool> DeleteAsync(int id) =>
+        http.DeleteAsync($"{Base}/{id}").ContinueWith(t => t.Result.IsSuccessStatusCode);
+}

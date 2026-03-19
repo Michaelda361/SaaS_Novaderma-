@@ -1,0 +1,448 @@
+@page "/areas/{Id:int}"
+@attribute [Authorize]
+@inject AreaApiService AreaService
+@inject ColaboradorApiService ColaboradorService
+@inject CargoApiService CargoService
+@inject NavigationManager Nav
+
+<Toast @ref="toast" />
+<ConfirmDialog Visible="confirmVisible"
+               Message="@confirmMensaje"
+               OnConfirm="ConfirmarEliminar"
+               OnCancel="() => confirmVisible = false" />
+
+@if (cargando)
+{
+    <div class="loading" style="min-height:40vh;"><div class="spinner"></div> Cargando...</div>
+}
+else if (area is null)
+{
+    <div class="empty-state"><div class="empty-state-icon">❌</div><h3>Área no encontrada</h3></div>
+}
+else
+{
+    <!-- Header del área -->
+    <div class="area-detalle-header">
+        <div class="area-detalle-back">
+            <button class="btn btn-ghost btn-sm" @onclick='() => Nav.NavigateTo("areas")'>← Volver</button>
+        </div>
+        <div class="area-detalle-info">
+            <div class="area-detalle-icon">🏢</div>
+            <div>
+                <h2 class="area-detalle-nombre">@area.Nombre</h2>
+                <p class="area-detalle-desc">@(string.IsNullOrEmpty(area.Descripcion) ? "Sin descripción" : area.Descripcion)</p>
+            </div>
+        </div>
+        <div class="area-detalle-stats">
+            <div class="area-stat-pill">
+                <span class="badge badge-info">@area.TotalColaboradores colaboradores</span>
+            </div>
+            <div class="area-stat-pill">
+                <span class="badge badge-gray">@area.TotalCargos cargos</span>
+            </div>
+            <button class="btn btn-ghost btn-sm" @onclick="AbrirEditarArea">✏️ Editar área</button>
+        </div>
+    </div>
+
+    <!-- Jefe de área -->
+    <div class="card" style="margin-bottom:0;">
+        <div class="card-header">
+            <span class="card-title">👑 Jefe de área</span>
+            <button class="btn btn-ghost btn-sm" @onclick="AbrirAsignarJefe">
+                @(area.JefeId.HasValue ? "Cambiar jefe" : "Asignar jefe")
+            </button>
+        </div>
+        @if (area.JefeId.HasValue)
+        {
+            var jefe = colaboradores?.FirstOrDefault(c => c.Id == area.JefeId);
+            <div class="jefe-card">
+                <div class="avatar">@Iniciales(area.JefeNombre ?? "")</div>
+                <div class="jefe-info">
+                    <div class="jefe-nombre">@area.JefeNombre</div>
+                    <div class="jefe-cargo">@(jefe?.CargoNombre ?? "—")</div>
+                    <div class="jefe-email text-muted text-sm">@(jefe?.Email ?? "")</div>
+                </div>
+                <span class="badge badge-purple">Jefe de área</span>
+            </div>
+        }
+        else
+        {
+            <div class="empty-state" style="padding:1.5rem;">
+                <div class="empty-state-icon">👑</div>
+                <p>No hay jefe asignado a esta área.</p>
+            </div>
+        }
+    </div>
+
+    <!-- Colaboradores del área -->
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">👥 Colaboradores</span>
+            <button class="btn btn-primary btn-sm" @onclick="AbrirNuevoColaborador">+ Agregar colaborador</button>
+        </div>
+
+        <div class="filter-bar">
+            <div class="search-input-wrap">
+                <span class="search-icon">🔍</span>
+                <input type="search" placeholder="Buscar colaborador..." @bind="busqueda" @bind:event="oninput" />
+            </div>
+        </div>
+
+        @if (ColaboradoresFiltrados.Count == 0)
+        {
+            <div class="empty-state" style="padding:2rem;">
+                <div class="empty-state-icon">👥</div>
+                <h3>Sin colaboradores</h3>
+                <p>Agrega el primer colaborador a esta área.</p>
+            </div>
+        }
+        else
+        {
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Colaborador</th>
+                            <th>Cargo</th>
+                            <th>Rol</th>
+                            <th>Ingreso</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var c in ColaboradoresFiltrados)
+                        {
+                            <tr>
+                                <td>
+                                    <div class="user-cell">
+                                        <div class="avatar">@Iniciales(c.NombreCompleto)</div>
+                                        <div>
+                                            <div class="user-name">@c.NombreCompleto</div>
+                                            <div class="user-email">@c.Email</div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td class="text-sm">@c.CargoNombre</td>
+                                <td>
+                                    @if (c.Id == area.JefeId)
+                                    {
+                                        <span class="badge badge-purple">Jefe de área</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge badge-gray">Colaborador</span>
+                                    }
+                                </td>
+                                <td class="text-muted text-sm">@c.FechaIngreso.ToString("dd/MM/yyyy")</td>
+                                <td>
+                                    <div class="flex gap-2">
+                                        @if (c.Id != area.JefeId)
+                                        {
+                                            <button class="btn btn-ghost btn-sm" title="Asignar como jefe"
+                                                    @onclick="() => AsignarJefeDirecto(c.Id)">👑</button>
+                                        }
+                                        <button class="btn btn-danger btn-sm btn-icon"
+                                                @onclick="() => PedirConfirmacion(c)" title="Eliminar">🗑️</button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+}
+
+<!-- Modal: editar área -->
+@if (mostrarModalArea)
+{
+    <div class="modal-backdrop" @onclick="() => mostrarModalArea = false">
+        <div class="modal" @onclick:stopPropagation>
+            <div class="modal-header">
+                <span class="modal-title">Editar área</span>
+                <button class="btn btn-ghost btn-sm btn-icon" @onclick="() => mostrarModalArea = false">✕</button>
+            </div>
+            <EditForm Model="formArea" OnValidSubmit="GuardarArea">
+                <DataAnnotationsValidator />
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label>Nombre</label>
+                        <InputText @bind-Value="formArea.Nombre" />
+                        <ValidationMessage For="() => formArea.Nombre" class="validation-message" />
+                    </div>
+                    <div class="form-group">
+                        <label>Descripción</label>
+                        <InputText @bind-Value="formArea.Descripcion" />
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-ghost" @onclick="() => mostrarModalArea = false">Cancelar</button>
+                    <button type="submit" class="btn btn-primary" disabled="@guardando">
+                        @(guardando ? "Guardando..." : "Guardar")
+                    </button>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+}
+
+<!-- Modal: asignar jefe -->
+@if (mostrarModalJefe)
+{
+    <div class="modal-backdrop" @onclick="() => mostrarModalJefe = false">
+        <div class="modal" @onclick:stopPropagation>
+            <div class="modal-header">
+                <span class="modal-title">Asignar jefe de área</span>
+                <button class="btn btn-ghost btn-sm btn-icon" @onclick="() => mostrarModalJefe = false">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Selecciona el jefe</label>
+                    <select class="form-control" @bind="jefeSeleccionadoId">
+                        <option value="0">-- Sin jefe --</option>
+                        @foreach (var c in colaboradores ?? [])
+                        {
+                            <option value="@c.Id">@c.NombreCompleto — @c.CargoNombre</option>
+                        }
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-ghost" @onclick="() => mostrarModalJefe = false">Cancelar</button>
+                <button class="btn btn-primary" @onclick="GuardarJefe" disabled="@guardando">
+                    @(guardando ? "Guardando..." : "Asignar")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Modal: nuevo colaborador -->
+@if (mostrarModalColaborador)
+{
+    <div class="modal-backdrop" @onclick="() => mostrarModalColaborador = false">
+        <div class="modal" @onclick:stopPropagation>
+            <div class="modal-header">
+                <span class="modal-title">@(editandoColaboradorId.HasValue ? "Editar colaborador" : "Nuevo colaborador")</span>
+                <button class="btn btn-ghost btn-sm btn-icon" @onclick="() => mostrarModalColaborador = false">✕</button>
+            </div>
+            <EditForm Model="formColaborador" OnValidSubmit="GuardarColaborador">
+                <DataAnnotationsValidator />
+                <div class="modal-body">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>Nombre</label>
+                            <InputText @bind-Value="formColaborador.Nombre" placeholder="Nombre" />
+                            <ValidationMessage For="() => formColaborador.Nombre" class="validation-message" />
+                        </div>
+                        <div class="form-group">
+                            <label>Apellido</label>
+                            <InputText @bind-Value="formColaborador.Apellido" placeholder="Apellido" />
+                            <ValidationMessage For="() => formColaborador.Apellido" class="validation-message" />
+                        </div>
+                        <div class="form-group">
+                            <label>Email</label>
+                            <InputText @bind-Value="formColaborador.Email" placeholder="correo@empresa.com" />
+                            <ValidationMessage For="() => formColaborador.Email" class="validation-message" />
+                        </div>
+                        <div class="form-group">
+                            <label>Teléfono</label>
+                            <InputText @bind-Value="formColaborador.Telefono" placeholder="+57 300 000 0000" />
+                        </div>
+                        <div class="form-group">
+                            <label>Fecha de ingreso</label>
+                            <InputDate @bind-Value="formColaborador.FechaIngreso" />
+                        </div>
+                        <div class="form-group">
+                            <label>Cargo</label>
+                            <InputSelect @bind-Value="formColaborador.CargoId">
+                                <option value="0">-- Selecciona un cargo --</option>
+                                @foreach (var cargo in cargosDelArea ?? [])
+                                {
+                                    <option value="@cargo.Id">@cargo.Nombre</option>
+                                }
+                            </InputSelect>
+                            <ValidationMessage For="() => formColaborador.CargoId" class="validation-message" />
+                        </div>
+                        <div class="form-group">
+                            <label>Rol</label>
+                            <select class="form-control" @bind="esJefe">
+                                <option value="false">Colaborador</option>
+                                <option value="true">Jefe de área</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-ghost" @onclick="() => mostrarModalColaborador = false">Cancelar</button>
+                    <button type="submit" class="btn btn-primary" disabled="@guardando">
+                        @(guardando ? "Guardando..." : "Guardar")
+                    </button>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private AreaDto? area;
+    private List<ColaboradorDto>? colaboradores;
+    private List<CargoDto>? cargosDelArea;
+    private bool cargando = true;
+    private bool guardando = false;
+    private string busqueda = string.Empty;
+    private Toast toast = default!;
+
+    // Confirm
+    private bool confirmVisible = false;
+    private int eliminandoId;
+    private string confirmMensaje = string.Empty;
+
+    // Modal área
+    private bool mostrarModalArea = false;
+    private CreateAreaDto formArea = new();
+
+    // Modal jefe
+    private bool mostrarModalJefe = false;
+    private int jefeSeleccionadoId = 0;
+
+    // Modal colaborador
+    private bool mostrarModalColaborador = false;
+    private int? editandoColaboradorId = null;
+    private CreateColaboradorDto formColaborador = new();
+    private bool esJefe = false;
+
+    private List<ColaboradorDto> ColaboradoresFiltrados =>
+        string.IsNullOrWhiteSpace(busqueda)
+            ? colaboradores ?? []
+            : (colaboradores ?? []).Where(c =>
+                c.NombreCompleto.Contains(busqueda, StringComparison.OrdinalIgnoreCase) ||
+                c.Email.Contains(busqueda, StringComparison.OrdinalIgnoreCase)).ToList();
+
+    protected override async Task OnInitializedAsync() => await Cargar();
+
+    private async Task Cargar()
+    {
+        cargando = true;
+        area = await AreaService.GetByIdAsync(Id);
+        if (area is not null)
+        {
+            var t1 = ColaboradorService.GetAllAsync();
+            var t2 = CargoService.GetByAreaAsync(Id);
+            await Task.WhenAll(t1, t2);
+            // Solo colaboradores de esta área
+            colaboradores = (t1.Result ?? []).Where(c => c.AreaId == Id).ToList();
+            cargosDelArea = t2.Result;
+        }
+        cargando = false;
+    }
+
+    // --- Área ---
+    private void AbrirEditarArea()
+    {
+        formArea = new CreateAreaDto { Nombre = area!.Nombre, Descripcion = area.Descripcion, JefeId = area.JefeId };
+        mostrarModalArea = true;
+    }
+
+    private async Task GuardarArea()
+    {
+        guardando = true;
+        var ok = await AreaService.UpdateAsync(Id, formArea) is not null;
+        guardando = false;
+        mostrarModalArea = false;
+        if (ok) { await Cargar(); await toast.Show("Área actualizada."); }
+        else await toast.Show("Error al guardar.", "error");
+    }
+
+    // --- Jefe ---
+    private void AbrirAsignarJefe()
+    {
+        jefeSeleccionadoId = area?.JefeId ?? 0;
+        mostrarModalJefe = true;
+    }
+
+    private async Task GuardarJefe()
+    {
+        guardando = true;
+        var dto = new CreateAreaDto
+        {
+            Nombre = area!.Nombre,
+            Descripcion = area.Descripcion,
+            JefeId = jefeSeleccionadoId > 0 ? jefeSeleccionadoId : null
+        };
+        var ok = await AreaService.UpdateAsync(Id, dto) is not null;
+        guardando = false;
+        mostrarModalJefe = false;
+        if (ok) { await Cargar(); await toast.Show("Jefe asignado."); }
+        else await toast.Show("Error al asignar.", "error");
+    }
+
+    private async Task AsignarJefeDirecto(int colaboradorId)
+    {
+        var dto = new CreateAreaDto { Nombre = area!.Nombre, Descripcion = area.Descripcion, JefeId = colaboradorId };
+        if (await AreaService.UpdateAsync(Id, dto) is not null)
+        { await Cargar(); await toast.Show("Jefe asignado."); }
+        else await toast.Show("Error al asignar.", "error");
+    }
+
+    // --- Colaborador ---
+    private void AbrirNuevoColaborador()
+    {
+        formColaborador = new CreateColaboradorDto { FechaIngreso = DateTime.Today, AreaId = Id };
+        editandoColaboradorId = null;
+        esJefe = false;
+        mostrarModalColaborador = true;
+    }
+
+    private async Task GuardarColaborador()
+    {
+        guardando = true;
+        formColaborador.AreaId = Id;
+        ColaboradorDto? resultado = editandoColaboradorId.HasValue
+            ? await ColaboradorService.UpdateAsync(editandoColaboradorId.Value,
+                new UpdateColaboradorDto
+                {
+                    Nombre = formColaborador.Nombre, Apellido = formColaborador.Apellido,
+                    Email = formColaborador.Email, Telefono = formColaborador.Telefono,
+                    AreaId = Id, CargoId = formColaborador.CargoId
+                })
+            : await ColaboradorService.CreateAsync(formColaborador);
+
+        // Si marcó como jefe, actualizar el área
+        if (resultado is not null && esJefe)
+        {
+            var dto = new CreateAreaDto { Nombre = area!.Nombre, Descripcion = area.Descripcion, JefeId = resultado.Id };
+            await AreaService.UpdateAsync(Id, dto);
+        }
+
+        guardando = false;
+        mostrarModalColaborador = false;
+
+        if (resultado is not null) { await Cargar(); await toast.Show(editandoColaboradorId.HasValue ? "Colaborador actualizado." : "Colaborador agregado."); }
+        else await toast.Show("Error al guardar.", "error");
+    }
+
+    private void PedirConfirmacion(ColaboradorDto c)
+    {
+        eliminandoId = c.Id;
+        confirmMensaje = $"¿Eliminar a {c.NombreCompleto} del sistema?";
+        confirmVisible = true;
+    }
+
+    private async Task ConfirmarEliminar()
+    {
+        confirmVisible = false;
+        if (await ColaboradorService.DeleteAsync(eliminandoId)) { await Cargar(); await toast.Show("Colaborador eliminado."); }
+        else await toast.Show("No se pudo eliminar.", "error");
+    }
+
+    private static string Iniciales(string nombre)
+    {
+        var parts = nombre.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length >= 2 ? $"{parts[0][0]}{parts[1][0]}".ToUpper()
+            : nombre.Length > 0 ? nombre[0..1].ToUpper() : "?";
+    }
+}

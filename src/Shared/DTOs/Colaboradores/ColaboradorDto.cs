@@ -10,6 +10,8 @@ public class ColaboradorDto
     public string Telefono { get; set; } = string.Empty;
     public DateTime FechaIngreso { get; set; }
     public string AreaNombre { get; set; } = string.Empty;
+    public int AreaId { get; set; }
     public string CargoNombre { get; set; } = string.Empty;
+    public int CargoId { get; set; }
     public string? SupervisorNombre { get; set; }
 }

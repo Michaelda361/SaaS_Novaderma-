@@ -1,0 +1,25 @@
+@if (Visible)
+{
+    <div class="confirm-overlay">
+        <div class="confirm-box">
+            <div class="confirm-icon">🗑️</div>
+            <div class="confirm-title">@Title</div>
+            <div class="confirm-msg">@Message</div>
+            <div class="confirm-actions">
+                <button class="btn btn-ghost" @onclick="Cancel">Cancelar</button>
+                <button class="btn btn-danger" @onclick="Confirm">Eliminar</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool Visible { get; set; }
+    [Parameter] public string Title { get; set; } = "¿Eliminar registro?";
+    [Parameter] public string Message { get; set; } = "Esta acción no se puede deshacer.";
+    [Parameter] public EventCallback OnConfirm { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private async Task Confirm() => await OnConfirm.InvokeAsync();
+    private async Task Cancel()  => await OnCancel.InvokeAsync();
+}

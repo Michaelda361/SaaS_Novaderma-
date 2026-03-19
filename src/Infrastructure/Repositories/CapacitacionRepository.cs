@@ -7,16 +7,17 @@ namespace TalentManagement.Infrastructure.Repositories;
 
 public class CapacitacionRepository(AppDbContext context) : ICapacitacionRepository
 {
-    public async Task<IEnumerable<Capacitacion>> GetAllAsync() =>
-        await context.Capacitaciones
+    private IQueryable<Capacitacion> WithIncludes() =>
+        context.Capacitaciones
             .Include(c => c.Inscripciones)
-            .AsNoTracking()
-            .ToListAsync();
+            .Include(c => c.Area)
+            .Include(c => c.Colaborador);
+
+    public async Task<IEnumerable<Capacitacion>> GetAllAsync() =>
+        await WithIncludes().AsNoTracking().ToListAsync();
 
     public async Task<Capacitacion?> GetByIdAsync(int id) =>
-        await context.Capacitaciones
-            .Include(c => c.Inscripciones)
-            .FirstOrDefaultAsync(c => c.Id == id);
+        await WithIncludes().FirstOrDefaultAsync(c => c.Id == id);
 
     public async Task<Capacitacion> CreateAsync(Capacitacion capacitacion)
     {

@@ -18,6 +18,18 @@ public class CapacitacionService(ICapacitacionRepository repository)
         return cap is null ? null : MapToDto(cap);
     }
 
+    public async Task<IEnumerable<CapacitacionDto>> GetByAreaAsync(int areaId)
+    {
+        var all = await repository.GetAllAsync();
+        return all.Where(c => c.AreaId == areaId).Select(MapToDto);
+    }
+
+    public async Task<IEnumerable<CapacitacionDto>> GetByColaboradorAsync(int colaboradorId)
+    {
+        var all = await repository.GetAllAsync();
+        return all.Where(c => c.ColaboradorId == colaboradorId).Select(MapToDto);
+    }
+
     public async Task<CapacitacionDto> CreateAsync(CreateCapacitacionDto dto)
     {
         var capacitacion = new Capacitacion
@@ -26,7 +38,9 @@ public class CapacitacionService(ICapacitacionRepository repository)
             Descripcion = dto.Descripcion,
             DuracionHoras = dto.DuracionHoras,
             FechaInicio = dto.FechaInicio,
-            FechaFin = dto.FechaFin
+            FechaFin = dto.FechaFin,
+            AreaId = dto.AreaId,
+            ColaboradorId = dto.ColaboradorId
         };
 
         var created = await repository.CreateAsync(capacitacion);
@@ -43,6 +57,8 @@ public class CapacitacionService(ICapacitacionRepository repository)
         cap.DuracionHoras = dto.DuracionHoras;
         cap.FechaInicio = dto.FechaInicio;
         cap.FechaFin = dto.FechaFin;
+        cap.AreaId = dto.AreaId;
+        cap.ColaboradorId = dto.ColaboradorId;
 
         var updated = await repository.UpdateAsync(cap);
         return MapToDto(updated);
@@ -64,6 +80,10 @@ public class CapacitacionService(ICapacitacionRepository repository)
         DuracionHoras = c.DuracionHoras,
         FechaInicio = c.FechaInicio,
         FechaFin = c.FechaFin,
-        TotalInscritos = c.Inscripciones?.Count ?? 0
+        TotalInscritos = c.Inscripciones?.Count ?? 0,
+        AreaId = c.AreaId,
+        AreaNombre = c.Area?.Nombre,
+        ColaboradorId = c.ColaboradorId,
+        ColaboradorNombre = c.Colaborador is null ? null : $"{c.Colaborador.Nombre} {c.Colaborador.Apellido}"
     };
 }

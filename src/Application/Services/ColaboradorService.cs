@@ -69,7 +69,9 @@ public class ColaboradorService(IColaboradorRepository repository)
         Telefono = c.Telefono,
         FechaIngreso = c.FechaIngreso,
         AreaNombre = c.Area?.Nombre ?? string.Empty,
+        AreaId = c.AreaId,
         CargoNombre = c.Cargo?.Nombre ?? string.Empty,
+        CargoId = c.CargoId,
         SupervisorNombre = c.Supervisor is null ? null : $"{c.Supervisor.Nombre} {c.Supervisor.Apellido}"
     };
 }

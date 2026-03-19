@@ -10,5 +10,13 @@ public class Capacitacion : BaseEntity
     public DateTime FechaInicio { get; set; }
     public DateTime FechaFin { get; set; }
 
+    // Asignación opcional: a un área o a un colaborador específico
+    public int? AreaId { get; set; }
+    public Area? Area { get; set; }
+
+    public int? ColaboradorId { get; set; }
+    public Colaborador? Colaborador { get; set; }
+
     public ICollection<Inscripcion> Inscripciones { get; set; } = [];
+    public ICollection<RecursoCapacitacion> Recursos { get; set; } = [];
 }

@@ -9,4 +9,12 @@ public class CapacitacionDto
     public DateTime FechaInicio { get; set; }
     public DateTime FechaFin { get; set; }
     public int TotalInscritos { get; set; }
+
+    public int? AreaId { get; set; }
+    public string? AreaNombre { get; set; }
+
+    public int? ColaboradorId { get; set; }
+    public string? ColaboradorNombre { get; set; }
+
+    public string TipoAsignacion => AreaId.HasValue ? "Área" : ColaboradorId.HasValue ? "Colaborador" : "General";
 }

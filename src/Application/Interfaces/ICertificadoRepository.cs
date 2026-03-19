@@ -4,6 +4,7 @@ namespace TalentManagement.Application.Interfaces;
 
 public interface ICertificadoRepository
 {
+    Task<IEnumerable<Certificado>> GetAllAsync();
     Task<IEnumerable<Certificado>> GetByColaboradorAsync(int colaboradorId);
     Task<Certificado?> GetByIdAsync(int id);
     Task<Certificado> CreateAsync(Certificado certificado);

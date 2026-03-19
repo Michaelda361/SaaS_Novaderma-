@@ -1,0 +1,15 @@
+@page "/authentication/{action}"
+@using Microsoft.AspNetCore.Components.WebAssembly.Authentication
+@attribute [AllowAnonymous]
+
+<RemoteAuthenticatorView Action="@Action">
+    <LogOutSucceeded>
+        <div class="loading" style="min-height:100vh;">
+            <div class="spinner"></div> Sesión cerrada. Redirigiendo...
+        </div>
+    </LogOutSucceeded>
+</RemoteAuthenticatorView>
+
+@code {
+    [Parameter] public string? Action { get; set; }
+}

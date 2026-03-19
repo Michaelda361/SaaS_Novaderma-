@@ -1,0 +1,315 @@
+@page "/colaboradores"
+@attribute [Authorize]
+@inject ColaboradorApiService ApiService
+@inject AreaApiService AreaService
+@inject CargoApiService CargoService
+
+<Toast @ref="toast" />
+<ConfirmDialog Visible="confirmVisible"
+               Message="@confirmMensaje"
+               OnConfirm="ConfirmarEliminar"
+               OnCancel="CancelarEliminar" />
+
+<div class="card">
+    <div class="card-header">
+        <span class="card-title">Colaboradores</span>
+        <button class="btn btn-primary btn-sm" @onclick="AbrirModal">+ Nuevo colaborador</button>
+    </div>
+
+    <!-- Search bar -->
+    <div class="filter-bar">
+        <div class="search-input-wrap">
+            <span class="search-icon">🔍</span>
+            <input type="search" placeholder="Buscar por nombre o email..."
+                   @bind="busqueda" @bind:event="oninput" />
+        </div>
+        @if (!string.IsNullOrEmpty(busqueda))
+        {
+            <span class="text-sm text-muted">@ColaboradoresFiltrados.Count resultado(s)</span>
+        }
+    </div>
+
+    @if (cargando)
+    {
+        <div class="loading"><div class="spinner"></div> Cargando...</div>
+    }
+    else if (colaboradores is null || colaboradores.Count == 0)
+    {
+        <div class="empty-state">
+            <div class="empty-state-icon">👥</div>
+            <h3>Sin colaboradores</h3>
+            <p>Agrega el primer colaborador para comenzar.</p>
+        </div>
+    }
+    else if (ColaboradoresFiltrados.Count == 0)
+    {
+        <div class="empty-state">
+            <div class="empty-state-icon">🔍</div>
+            <h3>Sin resultados</h3>
+            <p>No hay colaboradores que coincidan con "@busqueda".</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Colaborador</th>
+                        <th>Cargo</th>
+                        <th>Área</th>
+                        <th>Ingreso</th>
+                        <th>Supervisor</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var c in ColaboradoresFiltrados)
+                    {
+                        <tr>
+                            <td>
+                                <div class="user-cell">
+                                    <div class="avatar">@Iniciales(c.Nombre, c.Apellido)</div>
+                                    <div>
+                                        <div class="user-name">@c.NombreCompleto</div>
+                                        <div class="user-email">@c.Email</div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="text-sm">@c.CargoNombre</td>
+                            <td><span class="badge badge-info">@c.AreaNombre</span></td>
+                            <td class="text-muted text-sm">@c.FechaIngreso.ToString("dd/MM/yyyy")</td>
+                            <td class="text-muted text-sm">@(c.SupervisorNombre ?? "—")</td>
+                            <td>
+                                <div class="flex gap-2">
+                                    <button class="btn btn-ghost btn-sm btn-icon"
+                                            @onclick="() => AbrirEditar(c)" title="Editar">✏️</button>
+                                    <button class="btn btn-danger btn-sm btn-icon"
+                                            @onclick="() => PedirConfirmacion(c)" title="Eliminar">🗑️</button>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@if (mostrarModal)
+{
+    <div class="modal-backdrop" @onclick="CerrarModal">
+        <div class="modal" @onclick:stopPropagation>
+            <div class="modal-header">
+                <span class="modal-title">@(editandoId.HasValue ? "Editar colaborador" : "Nuevo colaborador")</span>
+                <button class="btn btn-ghost btn-sm btn-icon" @onclick="CerrarModal">✕</button>
+            </div>
+            <EditForm Model="form" OnValidSubmit="Guardar">
+                <DataAnnotationsValidator />
+                <div class="modal-body">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>Nombre</label>
+                            <InputText @bind-Value="form.Nombre" placeholder="Nombre" />
+                            <ValidationMessage For="() => form.Nombre" class="validation-message" />
+                        </div>
+                        <div class="form-group">
+                            <label>Apellido</label>
+                            <InputText @bind-Value="form.Apellido" placeholder="Apellido" />
+                            <ValidationMessage For="() => form.Apellido" class="validation-message" />
+                        </div>
+                        <div class="form-group">
+                            <label>Email</label>
+                            <InputText @bind-Value="form.Email" placeholder="correo@empresa.com" />
+                            <ValidationMessage For="() => form.Email" class="validation-message" />
+                        </div>
+                        <div class="form-group">
+                            <label>Teléfono</label>
+                            <InputText @bind-Value="form.Telefono" placeholder="+57 300 000 0000" />
+                        </div>
+                        <div class="form-group">
+                            <label>Fecha de ingreso</label>
+                            <InputDate @bind-Value="form.FechaIngreso" />
+                        </div>
+                        <div class="form-group">
+                            <label>Área</label>
+                            <InputSelect @bind-Value="form.AreaId" @bind-Value:after="OnAreaChanged">
+                                <option value="0">-- Selecciona un área --</option>
+                                @foreach (var a in areas ?? [])
+                                {
+                                    <option value="@a.Id">@a.Nombre</option>
+                                }
+                            </InputSelect>
+                            <ValidationMessage For="() => form.AreaId" class="validation-message" />
+                        </div>
+                        <div class="form-group">
+                            <label>Cargo</label>
+                            <InputSelect @bind-Value="form.CargoId">
+                                <option value="0">-- Selecciona un cargo --</option>
+                                @foreach (var c in cargosFiltrados ?? [])
+                                {
+                                    <option value="@c.Id">@c.Nombre</option>
+                                }
+                            </InputSelect>
+                            <ValidationMessage For="() => form.CargoId" class="validation-message" />
+                        </div>
+                        <div class="form-group">
+                            <label>ID Supervisor (opcional)</label>
+                            <InputSelect @bind-Value="form.SupervisorId">
+                                <option value="">-- Sin supervisor --</option>
+                                @foreach (var c in colaboradores ?? [])
+                                {
+                                    <option value="@c.Id">@c.NombreCompleto</option>
+                                }
+                            </InputSelect>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-ghost" @onclick="CerrarModal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary" disabled="@guardando">
+                        @(guardando ? "Guardando..." : "Guardar")
+                    </button>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+}
+
+@code {
+    private List<ColaboradorDto>? colaboradores;
+    private List<AreaDto>? areas;
+    private List<CargoDto>? todosLosCargos;
+    private List<CargoDto>? cargosFiltrados;
+    private bool cargando = true;
+    private bool mostrarModal = false;
+    private bool guardando = false;
+    private int? editandoId = null;
+    private string busqueda = string.Empty;
+    private Toast toast = default!;
+
+    // Confirm dialog state
+    private bool confirmVisible = false;
+    private int eliminandoId;
+    private string eliminandoNombre = string.Empty;
+    private string confirmMensaje = string.Empty;
+
+    private CreateColaboradorDto form = new();
+
+    private List<ColaboradorDto> ColaboradoresFiltrados =>
+        string.IsNullOrWhiteSpace(busqueda)
+            ? colaboradores ?? []
+            : (colaboradores ?? []).Where(c =>
+                c.NombreCompleto.Contains(busqueda, StringComparison.OrdinalIgnoreCase) ||
+                c.Email.Contains(busqueda, StringComparison.OrdinalIgnoreCase)).ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var t1 = ApiService.GetAllAsync();
+        var t2 = AreaService.GetAllAsync();
+        var t3 = CargoService.GetAllAsync();
+        await Task.WhenAll(t1, t2, t3);
+        colaboradores = t1.Result;
+        areas = t2.Result;
+        todosLosCargos = t3.Result;
+        cargando = false;
+    }
+
+    private async Task Cargar()
+    {
+        cargando = true;
+        colaboradores = await ApiService.GetAllAsync();
+        cargando = false;
+    }
+
+    private async Task OnAreaChanged()
+    {
+        cargosFiltrados = form.AreaId > 0
+            ? await CargoService.GetByAreaAsync(form.AreaId)
+            : todosLosCargos;
+        form.CargoId = 0;
+    }
+
+    private void AbrirModal()
+    {
+        form = new CreateColaboradorDto { FechaIngreso = DateTime.Today };
+        cargosFiltrados = todosLosCargos;
+        editandoId = null;
+        mostrarModal = true;
+    }
+
+    private void AbrirEditar(ColaboradorDto c)
+    {
+        form = new CreateColaboradorDto
+        {
+            Nombre = c.Nombre, Apellido = c.Apellido,
+            Email = c.Email, Telefono = c.Telefono,
+            FechaIngreso = c.FechaIngreso, AreaId = c.AreaId, CargoId = c.CargoId
+        };
+        cargosFiltrados = todosLosCargos?.Where(x => x.AreaId == c.AreaId).ToList() ?? todosLosCargos;
+        editandoId = c.Id;
+        mostrarModal = true;
+    }
+
+    private void CerrarModal() => mostrarModal = false;
+
+    private async Task Guardar()
+    {
+        guardando = true;
+        bool ok;
+        if (editandoId.HasValue)
+        {
+            var dto = new UpdateColaboradorDto
+            {
+                Nombre = form.Nombre, Apellido = form.Apellido,
+                Email = form.Email, Telefono = form.Telefono,
+                AreaId = form.AreaId, CargoId = form.CargoId,
+                SupervisorId = form.SupervisorId
+            };
+            ok = await ApiService.UpdateAsync(editandoId.Value, dto) is not null;
+        }
+        else
+        {
+            ok = await ApiService.CreateAsync(form) is not null;
+        }
+        guardando = false;
+
+        if (ok)
+        {
+            CerrarModal();
+            await Cargar();
+            await toast.Show(editandoId.HasValue ? "Colaborador actualizado." : "Colaborador creado.");
+        }
+        else
+        {
+            await toast.Show("Error al guardar. Verifica los datos.", "error");
+        }
+    }
+
+    private void PedirConfirmacion(ColaboradorDto c)
+    {
+        eliminandoId = c.Id;
+        eliminandoNombre = c.NombreCompleto;
+        confirmMensaje = $"¿Seguro que deseas eliminar a {c.NombreCompleto}? Esta acción no se puede deshacer.";
+        confirmVisible = true;
+    }
+
+    private async Task ConfirmarEliminar()
+    {
+        confirmVisible = false;
+        if (await ApiService.DeleteAsync(eliminandoId))
+        {
+            await Cargar();
+            await toast.Show("Colaborador eliminado.");
+        }
+        else
+        {
+            await toast.Show("No se pudo eliminar.", "error");
+        }
+    }
+
+    private void CancelarEliminar() => confirmVisible = false;
+
+    private static string Iniciales(string nombre, string apellido) =>
+        $"{(nombre.Length > 0 ? nombre[0] : ' ')}{(apellido.Length > 0 ? apellido[0] : ' ')}".ToUpper();
+}

@@ -1,0 +1,10 @@
+@inject NavigationManager Navigation
+@using Microsoft.AspNetCore.Components.WebAssembly.Authentication
+
+@code {
+    protected override void OnInitialized()
+    {
+        // Lleva a la landing en vez de directo a Microsoft
+        Navigation.NavigateTo("landing");
+    }
+}

@@ -7,6 +7,12 @@ namespace TalentManagement.Infrastructure.Repositories;
 
 public class CertificadoRepository(AppDbContext context) : ICertificadoRepository
 {
+    public async Task<IEnumerable<Certificado>> GetAllAsync() =>
+        await context.Certificados
+            .Include(c => c.Colaborador)
+            .AsNoTracking()
+            .ToListAsync();
+
     public async Task<IEnumerable<Certificado>> GetByColaboradorAsync(int colaboradorId) =>
         await context.Certificados
             .Include(c => c.Colaborador)

@@ -1,9 +1,11 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using TalentManagement.Application.Services;
 using TalentManagement.Shared.DTOs.Capacitaciones;
 
 namespace TalentManagement.Server.Controllers;
 
+[Authorize]
 [ApiController]
 [Route("api/v1/[controller]")]
 public class CapacitacionesController(CapacitacionService service) : ControllerBase
@@ -11,6 +13,14 @@ public class CapacitacionesController(CapacitacionService service) : ControllerB
     [HttpGet]
     public async Task<IActionResult> GetAll() =>
         Ok(await service.GetAllAsync());
+
+    [HttpGet("area/{areaId:int}")]
+    public async Task<IActionResult> GetByArea(int areaId) =>
+        Ok(await service.GetByAreaAsync(areaId));
+
+    [HttpGet("colaborador/{colaboradorId:int}")]
+    public async Task<IActionResult> GetByColaborador(int colaboradorId) =>
+        Ok(await service.GetByColaboradorAsync(colaboradorId));
 
     [HttpGet("{id:int}")]
     public async Task<IActionResult> GetById(int id)

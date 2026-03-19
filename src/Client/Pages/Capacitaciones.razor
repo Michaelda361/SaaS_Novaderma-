@@ -1,0 +1,303 @@
+@page "/capacitaciones"
+@attribute [Authorize]
+@inject CapacitacionApiService ApiService
+@inject AreaApiService AreaService
+@inject ColaboradorApiService ColaboradorService
+@inject NavigationManager Nav
+
+<Toast @ref="toast" />
+<ConfirmDialog Visible="confirmVisible"
+               Message="¿Seguro que deseas eliminar esta capacitación? Esta acción no se puede deshacer."
+               OnConfirm="ConfirmarEliminar"
+               OnCancel="() => confirmVisible = false" />
+
+<div class="card">
+    <div class="card-header">
+        <span class="card-title">Capacitaciones</span>
+        <button class="btn btn-primary btn-sm" @onclick="AbrirModal">+ Nueva capacitación</button>
+    </div>
+
+    <div class="filter-bar">
+        <div class="search-input-wrap">
+            <span class="search-icon">🔍</span>
+            <input type="search" placeholder="Buscar capacitación..."
+                   @bind="busqueda" @bind:event="oninput" />
+        </div>
+        <select @bind="filtroTipo" style="min-width:140px">
+            <option value="">Todos</option>
+            <option value="General">General</option>
+            <option value="Área">Por área</option>
+            <option value="Colaborador">Por colaborador</option>
+        </select>
+        @if (!string.IsNullOrEmpty(busqueda) || !string.IsNullOrEmpty(filtroTipo))
+        {
+            <span class="text-sm text-muted">@Filtradas.Count resultado(s)</span>
+        }
+    </div>
+
+    @if (cargando)
+    {
+        <div class="loading"><div class="spinner"></div> Cargando...</div>
+    }
+    else if (capacitaciones is null || capacitaciones.Count == 0)
+    {
+        <div class="empty-state">
+            <div class="empty-state-icon">📚</div>
+            <h3>Sin capacitaciones</h3>
+            <p>Crea la primera capacitación para comenzar.</p>
+        </div>
+    }
+    else if (Filtradas.Count == 0)
+    {
+        <div class="empty-state">
+            <div class="empty-state-icon">🔍</div>
+            <h3>Sin resultados</h3>
+            <p>No hay capacitaciones que coincidan con los filtros.</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Nombre</th>
+                        <th>Asignación</th>
+                        <th>Duración</th>
+                        <th>Inicio</th>
+                        <th>Fin</th>
+                        <th>Inscritos</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var c in Filtradas)
+                    {
+                        <tr>
+                            <td>
+                                <div class="font-medium">@c.Nombre</div>
+                                @if (!string.IsNullOrEmpty(c.Descripcion))
+                                {
+                                    <div class="text-sm text-muted truncate" style="max-width:200px">@c.Descripcion</div>
+                                }
+                            </td>
+                            <td>
+                                @if (c.AreaId.HasValue)
+                                {
+                                    <span class="badge badge-info">🏢 @c.AreaNombre</span>
+                                }
+                                else if (c.ColaboradorId.HasValue)
+                                {
+                                    <span class="badge badge-warning">👤 @c.ColaboradorNombre</span>
+                                }
+                                else
+                                {
+                                    <span class="badge badge-gray">General</span>
+                                }
+                            </td>
+                            <td><span class="badge badge-info">@c.DuracionHoras h</span></td>
+                            <td class="text-sm">@c.FechaInicio.ToString("dd/MM/yyyy")</td>
+                            <td class="text-sm">@c.FechaFin.ToString("dd/MM/yyyy")</td>
+                            <td><span class="badge badge-gray">@c.TotalInscritos</span></td>
+                            <td>
+                                <div class="flex gap-2">
+                                    <button class="btn btn-ghost btn-sm btn-icon"
+                                            @onclick="() => VerDetalle(c.Id)" title="Ver detalle">👁️</button>
+                                    <button class="btn btn-ghost btn-sm btn-icon"
+                                            @onclick="() => AbrirEditar(c)" title="Editar">✏️</button>
+                                    <button class="btn btn-danger btn-sm btn-icon"
+                                            @onclick="() => PedirConfirmacion(c.Id)" title="Eliminar">🗑️</button>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@if (mostrarModal)
+{
+    <div class="modal-backdrop" @onclick="CerrarModal">
+        <div class="modal" @onclick:stopPropagation>
+            <div class="modal-header">
+                <span class="modal-title">@(editandoId.HasValue ? "Editar capacitación" : "Nueva capacitación")</span>
+                <button class="btn btn-ghost btn-sm btn-icon" @onclick="CerrarModal">✕</button>
+            </div>
+            <EditForm Model="form" OnValidSubmit="Guardar">
+                <DataAnnotationsValidator />
+                <div class="modal-body">
+                    <div class="form-grid">
+                        <div class="form-group full">
+                            <label>Nombre</label>
+                            <InputText @bind-Value="form.Nombre" placeholder="Nombre de la capacitación" />
+                            <ValidationMessage For="() => form.Nombre" class="validation-message" />
+                        </div>
+                        <div class="form-group full">
+                            <label>Descripción</label>
+                            <InputTextArea @bind-Value="form.Descripcion" rows="2" placeholder="Descripción..." />
+                        </div>
+                        <div class="form-group">
+                            <label>Duración (horas)</label>
+                            <InputNumber @bind-Value="form.DuracionHoras" />
+                            <ValidationMessage For="() => form.DuracionHoras" class="validation-message" />
+                        </div>
+                        <div class="form-group">
+                            <label>Fecha inicio</label>
+                            <InputDate @bind-Value="form.FechaInicio" />
+                        </div>
+                        <div class="form-group">
+                            <label>Fecha fin</label>
+                            <InputDate @bind-Value="form.FechaFin" />
+                        </div>
+
+                        <div class="form-group full">
+                            <label>Asignar a</label>
+                            <select @bind="tipoAsignacion" class="form-select">
+                                <option value="general">General (todos)</option>
+                                <option value="area">Área específica</option>
+                                <option value="colaborador">Colaborador específico</option>
+                            </select>
+                        </div>
+
+                        @if (tipoAsignacion == "area")
+                        {
+                            <div class="form-group full">
+                                <label>Área</label>
+                                <select @bind="form.AreaId" class="form-select">
+                                    <option value="">-- Seleccionar área --</option>
+                                    @foreach (var a in areas)
+                                    {
+                                        <option value="@a.Id">@a.Nombre</option>
+                                    }
+                                </select>
+                            </div>
+                        }
+                        else if (tipoAsignacion == "colaborador")
+                        {
+                            <div class="form-group full">
+                                <label>Colaborador</label>
+                                <select @bind="form.ColaboradorId" class="form-select">
+                                    <option value="">-- Seleccionar colaborador --</option>
+                                    @foreach (var col in colaboradores)
+                                    {
+                                        <option value="@col.Id">@col.Nombre @col.Apellido — @col.AreaNombre</option>
+                                    }
+                                </select>
+                            </div>
+                        }
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-ghost" @onclick="CerrarModal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary" disabled="@guardando">
+                        @(guardando ? "Guardando..." : "Guardar")
+                    </button>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+}
+
+@code {
+    private List<CapacitacionDto>? capacitaciones;
+    private List<AreaDto> areas = [];
+    private List<ColaboradorDto> colaboradores = [];
+    private bool cargando = true;
+    private bool mostrarModal = false;
+    private bool guardando = false;
+    private int? editandoId = null;
+    private string busqueda = string.Empty;
+    private string filtroTipo = string.Empty;
+    private string tipoAsignacion = "general";
+    private bool confirmVisible = false;
+    private int eliminandoId;
+    private Toast toast = default!;
+    private CreateCapacitacionDto form = new();
+
+    private List<CapacitacionDto> Filtradas
+    {
+        get
+        {
+            var lista = capacitaciones ?? [];
+            if (!string.IsNullOrWhiteSpace(busqueda))
+                lista = lista.Where(c => c.Nombre.Contains(busqueda, StringComparison.OrdinalIgnoreCase)).ToList();
+            if (!string.IsNullOrWhiteSpace(filtroTipo))
+                lista = lista.Where(c => c.TipoAsignacion == filtroTipo).ToList();
+            return lista;
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Task.WhenAll(Cargar(), CargarSelectores());
+    }
+
+    private void VerDetalle(int id) => Nav.NavigateTo($"/capacitaciones/{id}");
+
+    private async Task Cargar()
+    {
+        cargando = true;
+        capacitaciones = await ApiService.GetAllAsync();
+        cargando = false;
+    }
+
+    private async Task CargarSelectores()
+    {
+        areas = await AreaService.GetAllAsync() ?? [];
+        colaboradores = await ColaboradorService.GetAllAsync() ?? [];
+    }
+
+    private void AbrirModal()
+    {
+        form = new CreateCapacitacionDto { FechaInicio = DateTime.Today, FechaFin = DateTime.Today.AddDays(1) };
+        tipoAsignacion = "general";
+        editandoId = null;
+        mostrarModal = true;
+    }
+
+    private void AbrirEditar(CapacitacionDto c)
+    {
+        form = new CreateCapacitacionDto
+        {
+            Nombre = c.Nombre,
+            Descripcion = c.Descripcion,
+            DuracionHoras = c.DuracionHoras,
+            FechaInicio = c.FechaInicio,
+            FechaFin = c.FechaFin,
+            AreaId = c.AreaId,
+            ColaboradorId = c.ColaboradorId
+        };
+        tipoAsignacion = c.AreaId.HasValue ? "area" : c.ColaboradorId.HasValue ? "colaborador" : "general";
+        editandoId = c.Id;
+        mostrarModal = true;
+    }
+
+    private void CerrarModal() => mostrarModal = false;
+
+    private async Task Guardar()
+    {
+        // Limpiar el campo que no aplica según el tipo
+        if (tipoAsignacion != "area") form.AreaId = null;
+        if (tipoAsignacion != "colaborador") form.ColaboradorId = null;
+
+        guardando = true;
+        bool ok = editandoId.HasValue
+            ? await ApiService.UpdateAsync(editandoId.Value, form) is not null
+            : await ApiService.CreateAsync(form) is not null;
+        guardando = false;
+
+        if (ok) { CerrarModal(); await Cargar(); await toast.Show(editandoId.HasValue ? "Capacitación actualizada." : "Capacitación creada."); }
+        else await toast.Show("Error al guardar.", "error");
+    }
+
+    private void PedirConfirmacion(int id) { eliminandoId = id; confirmVisible = true; }
+
+    private async Task ConfirmarEliminar()
+    {
+        confirmVisible = false;
+        if (await ApiService.DeleteAsync(eliminandoId)) { await Cargar(); await toast.Show("Capacitación eliminada."); }
+        else await toast.Show("No se pudo eliminar.", "error");
+    }
+}

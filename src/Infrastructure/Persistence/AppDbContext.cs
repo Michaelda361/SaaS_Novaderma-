@@ -13,6 +13,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Inscripcion> Inscripciones => Set<Inscripcion>();
     public DbSet<RutaAprendizaje> RutasAprendizaje => Set<RutaAprendizaje>();
     public DbSet<RutaCapacitacion> RutaCapacitaciones => Set<RutaCapacitacion>();
+    public DbSet<RecursoCapacitacion> RecursosCapacitacion => Set<RecursoCapacitacion>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -28,6 +29,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         modelBuilder.Entity<Area>().HasQueryFilter(a => a.Activo);
         modelBuilder.Entity<Cargo>().HasQueryFilter(c => c.Activo);
         modelBuilder.Entity<Certificado>().HasQueryFilter(c => c.Activo);
+        modelBuilder.Entity<Capacitacion>().HasQueryFilter(c => c.Activo);
 
         // Evitar múltiples cascade paths en Colaborador
         modelBuilder.Entity<Colaborador>()
@@ -48,5 +50,13 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .WithMany()
             .HasForeignKey(c => c.SupervisorId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        // Jefe de área — sin cascade para evitar ciclos
+        modelBuilder.Entity<Area>()
+            .HasOne(a => a.Jefe)
+            .WithMany()
+            .HasForeignKey(a => a.JefeId)
+            .OnDelete(DeleteBehavior.SetNull)
+            .IsRequired(false);
     }
 }

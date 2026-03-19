@@ -1,9 +1,11 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using TalentManagement.Application.Services;
 using TalentManagement.Shared.DTOs.Colaboradores;
 
 namespace TalentManagement.Server.Controllers;
 
+[Authorize]
 [ApiController]
 [Route("api/v1/[controller]")]
 public class ColaboradoresController(ColaboradorService service) : ControllerBase

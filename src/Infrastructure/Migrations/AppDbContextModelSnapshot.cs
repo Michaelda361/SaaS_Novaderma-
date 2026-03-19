@@ -37,11 +37,16 @@ namespace TalentManagement.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<int?>("JefeId")
+                        .HasColumnType("int");
+
                     b.Property<string>("Nombre")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("JefeId");
 
                     b.ToTable("Areas");
                 });
@@ -56,6 +61,12 @@ namespace TalentManagement.Infrastructure.Migrations
 
                     b.Property<bool>("Activo")
                         .HasColumnType("bit");
+
+                    b.Property<int?>("AreaId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("ColaboradorId")
+                        .HasColumnType("int");
 
                     b.Property<string>("Descripcion")
                         .IsRequired()
@@ -75,6 +86,10 @@ namespace TalentManagement.Infrastructure.Migrations
                         .HasColumnType("nvarchar(max)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("AreaId");
+
+                    b.HasIndex("ColaboradorId");
 
                     b.ToTable("Capacitaciones");
                 });
@@ -285,6 +300,31 @@ namespace TalentManagement.Infrastructure.Migrations
                     b.HasIndex("RutaAprendizajeId");
 
                     b.ToTable("RutaCapacitaciones");
+                });
+
+            modelBuilder.Entity("TalentManagement.Domain.Entities.Area", b =>
+                {
+                    b.HasOne("TalentManagement.Domain.Entities.Colaborador", "Jefe")
+                        .WithMany()
+                        .HasForeignKey("JefeId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Jefe");
+                });
+
+            modelBuilder.Entity("TalentManagement.Domain.Entities.Capacitacion", b =>
+                {
+                    b.HasOne("TalentManagement.Domain.Entities.Area", "Area")
+                        .WithMany()
+                        .HasForeignKey("AreaId");
+
+                    b.HasOne("TalentManagement.Domain.Entities.Colaborador", "Colaborador")
+                        .WithMany()
+                        .HasForeignKey("ColaboradorId");
+
+                    b.Navigation("Area");
+
+                    b.Navigation("Colaborador");
                 });
 
             modelBuilder.Entity("TalentManagement.Domain.Entities.Cargo", b =>

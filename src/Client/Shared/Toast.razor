@@ -1,0 +1,28 @@
+@if (messages.Count > 0)
+{
+    <div class="toast-container">
+        @foreach (var m in messages)
+        {
+            <div class="toast toast-@m.Type">
+                <span>@m.Icon</span>
+                <span>@m.Text</span>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    private record ToastMessage(string Text, string Type, string Icon);
+    private List<ToastMessage> messages = [];
+
+    public async Task Show(string text, string type = "success")
+    {
+        var icon = type switch { "error" => "❌", "warning" => "⚠️", _ => "✅" };
+        var msg = new ToastMessage(text, type, icon);
+        messages.Add(msg);
+        StateHasChanged();
+        await Task.Delay(3000);
+        messages.Remove(msg);
+        StateHasChanged();
+    }
+}

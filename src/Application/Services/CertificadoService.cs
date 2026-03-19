@@ -6,6 +6,12 @@ namespace TalentManagement.Application.Services;
 
 public class CertificadoService(ICertificadoRepository repository)
 {
+    public async Task<IEnumerable<CertificadoDto>> GetAllAsync()
+    {
+        var certs = await repository.GetAllAsync();
+        return certs.Select(MapToDto);
+    }
+
     public async Task<IEnumerable<CertificadoDto>> GetByColaboradorAsync(int colaboradorId)
     {
         var certs = await repository.GetByColaboradorAsync(colaboradorId);
@@ -29,9 +35,21 @@ public class CertificadoService(ICertificadoRepository repository)
             UrlDocumento = dto.UrlDocumento,
             ColaboradorId = dto.ColaboradorId
         };
-
         var created = await repository.CreateAsync(certificado);
         return MapToDto(created);
+    }
+
+    public async Task<CertificadoDto?> UpdateAsync(int id, CreateCertificadoDto dto)
+    {
+        var cert = await repository.GetByIdAsync(id);
+        if (cert is null) return null;
+        cert.Nombre = dto.Nombre;
+        cert.Institucion = dto.Institucion;
+        cert.FechaEmision = dto.FechaEmision;
+        cert.FechaVencimiento = dto.FechaVencimiento;
+        cert.UrlDocumento = dto.UrlDocumento;
+        var updated = await repository.UpdateAsync(cert);
+        return MapToDto(updated);
     }
 
     public async Task<IEnumerable<CertificadoDto>> GetVencidosAsync()

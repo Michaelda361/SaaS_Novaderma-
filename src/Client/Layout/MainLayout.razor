@@ -1,16 +1,80 @@
 ﻿@inherits LayoutComponentBase
-<div class="page">
-    <div class="sidebar">
-        <NavMenu />
-    </div>
 
-    <main>
-        <div class="top-row px-4">
-            <a href="https://learn.microsoft.com/aspnet/core/" target="_blank">About</a>
+<div class="app-layout">
+    <aside class="sidebar">
+        <div class="sidebar-brand">
+            <div class="sidebar-brand-icon">
+                <img src="logo.png" alt="NovaHub" class="sidebar-logo" />
+            </div>
+            <div class="sidebar-brand-text">
+                <h1>NovaHub</h1>
+                <span>Gestión de Talento</span>
+            </div>
         </div>
 
-        <article class="content px-4">
+        <nav class="sidebar-nav">
+            <span class="nav-section-label">Principal</span>
+            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
+                <span class="nav-icon">🏠</span> Dashboard
+            </NavLink>
+
+            <span class="nav-section-label">Gestión</span>
+            <NavLink class="nav-link" href="colaboradores">
+                <span class="nav-icon">👥</span> Colaboradores
+            </NavLink>
+            <NavLink class="nav-link" href="capacitaciones">
+                <span class="nav-icon">📚</span> Capacitaciones
+            </NavLink>
+            <NavLink class="nav-link" href="certificados">
+                <span class="nav-icon">🏆</span> Certificados
+            </NavLink>
+
+            <span class="nav-section-label">Configuración</span>
+            <NavLink class="nav-link" href="areas">
+                <span class="nav-icon">🏢</span> Áreas
+            </NavLink>
+            <NavLink class="nav-link" href="cargos">
+                <span class="nav-icon">💼</span> Cargos
+            </NavLink>
+        </nav>
+
+        <div class="sidebar-footer">
+            <div class="sidebar-user">
+                <div class="avatar avatar-sm" style="background:#312e81;color:#a5b4fc;">AD</div>
+                <div class="sidebar-user-info">
+                    <div class="sidebar-user-name">Administrador</div>
+                    <div class="sidebar-user-role">Admin del sistema</div>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <div class="main-content">
+        <header class="topbar">
+            <div class="topbar-left">
+                <span class="topbar-title">@GetPageTitle()</span>
+            </div>
+            <div class="topbar-right">
+                <LoginDisplay />
+            </div>
+        </header>
+        <main class="page-body">
             @Body
-        </article>
-    </main>
+        </main>
+    </div>
 </div>
+
+@code {
+    [CascadingParameter] private RouteData? RouteData { get; set; }
+
+    private string GetPageTitle() => RouteData?.PageType?.Name switch
+    {
+        "Home"           => "Dashboard",
+        "Colaboradores"  => "Colaboradores",
+        "Capacitaciones" => "Capacitaciones",
+        "Certificados"   => "Certificados",
+        "Areas"          => "Áreas",
+        "Cargos"         => "Cargos",
+        _                => "NovaHub"
+    };
+}

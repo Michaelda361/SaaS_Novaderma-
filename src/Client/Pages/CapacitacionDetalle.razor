@@ -1,0 +1,397 @@
+@page "/capacitaciones/{Id:int}"
+@attribute [Authorize]
+@inject InscripcionApiService InscripcionService
+@inject CapacitacionApiService CapacitacionService
+@inject ColaboradorApiService ColaboradorService
+@inject RecursoApiService RecursoService
+@inject NavigationManager Nav
+
+<Toast @ref="toast" />
+
+<div class="page-header" style="margin-bottom:1.5rem;display:flex;align-items:center;gap:1rem;flex-wrap:wrap;">
+    <button class="btn btn-ghost btn-sm" @onclick='() => Nav.NavigateTo("/capacitaciones")'>← Volver</button>
+    <h2 style="margin:0;font-size:1.25rem;font-weight:600;">
+        @(capacitacion?.Nombre ?? "Cargando...")
+    </h2>
+    @if (capacitacion is not null)
+    {
+        <span class="badge badge-info">@capacitacion.DuracionHoras h</span>
+        <span class="text-sm text-muted">@capacitacion.FechaInicio.ToString("dd/MM/yyyy") — @capacitacion.FechaFin.ToString("dd/MM/yyyy")</span>
+        @if (capacitacion.AreaId.HasValue)
+        {
+            <span class="badge badge-info">🏢 @capacitacion.AreaNombre</span>
+        }
+        else if (capacitacion.ColaboradorId.HasValue)
+        {
+            <span class="badge badge-warning">👤 @capacitacion.ColaboradorNombre</span>
+        }
+    }
+</div>
+
+<!-- RECURSOS -->
+<div class="card" style="margin-bottom:1.5rem;">
+    <div class="card-header">
+        <span class="card-title">📎 Materiales y recursos (@recursos.Count)</span>
+        <button class="btn btn-primary btn-sm" @onclick="AbrirModalRecurso">+ Agregar recurso</button>
+    </div>
+
+    @if (recursos.Count == 0)
+    {
+        <div class="empty-state" style="padding:1.5rem;">
+            <div class="empty-state-icon">📂</div>
+            <h3>Sin materiales</h3>
+            <p>Agrega videos, documentos o enlaces para esta capacitación.</p>
+        </div>
+    }
+    else
+    {
+        <div style="padding:1rem;display:flex;flex-direction:column;gap:0.75rem;">
+            @foreach (var r in recursos.OrderBy(x => x.Orden))
+            {
+                <div class="recurso-item">
+                    <span class="recurso-icon">@IconoTipo(r.Tipo)</span>
+                    <div class="recurso-info">
+                        <span class="font-medium">@r.Titulo</span>
+                        @if (!string.IsNullOrEmpty(r.Descripcion))
+                        {
+                            <span class="text-sm text-muted">@r.Descripcion</span>
+                        }
+                    </div>
+                    <div class="flex gap-2" style="margin-left:auto;">
+                        <a href="@r.Url" target="_blank" class="btn btn-primary btn-sm">Abrir →</a>
+                        <button class="btn btn-ghost btn-sm btn-icon"
+                                @onclick="() => AbrirEditarRecurso(r)" title="Editar">✏️</button>
+                        <button class="btn btn-danger btn-sm btn-icon"
+                                @onclick="() => EliminarRecurso(r.Id)" title="Eliminar">🗑️</button>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+<!-- INSCRITOS -->
+<div class="card">
+    <div class="card-header">
+        <span class="card-title">👥 Inscritos (@inscripciones.Count)</span>
+        <button class="btn btn-primary btn-sm" @onclick="AbrirModal">+ Inscribir colaborador</button>
+    </div>
+
+    @if (cargando)
+    {
+        <div class="loading"><div class="spinner"></div> Cargando...</div>
+    }
+    else if (inscripciones.Count == 0)
+    {
+        <div class="empty-state">
+            <div class="empty-state-icon">👥</div>
+            <h3>Sin inscritos</h3>
+            <p>Inscribe colaboradores a esta capacitación.</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Colaborador</th>
+                        <th>Área</th>
+                        <th>Cargo</th>
+                        <th>Fecha inscripción</th>
+                        <th>Asistió</th>
+                        <th>Calificación</th>
+                        <th>Observaciones</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var i in inscripciones)
+                    {
+                        <tr>
+                            <td class="font-medium">@i.ColaboradorNombre</td>
+                            <td class="text-sm text-muted">@i.ColaboradorArea</td>
+                            <td class="text-sm text-muted">@i.ColaboradorCargo</td>
+                            <td class="text-sm">@i.FechaInscripcion.ToString("dd/MM/yyyy")</td>
+                            <td>
+                                @if (editandoId == i.Id)
+                                {
+                                    <input type="checkbox" @bind="editForm.Asistio" />
+                                }
+                                else
+                                {
+                                    <span class="badge @(i.Asistio ? "badge-success" : "badge-gray")">
+                                        @(i.Asistio ? "Sí" : "No")
+                                    </span>
+                                }
+                            </td>
+                            <td>
+                                @if (editandoId == i.Id)
+                                {
+                                    <input type="number" step="0.01" min="0" max="10"
+                                           style="width:70px" @bind="editForm.Calificacion" />
+                                }
+                                else
+                                {
+                                    <span class="@(i.Calificacion >= 7 ? "text-success" : i.Calificacion.HasValue ? "text-danger" : "")">
+                                        @(i.Calificacion.HasValue ? i.Calificacion.Value.ToString("0.##") : "-")
+                                    </span>
+                                }
+                            </td>
+                            <td>
+                                @if (editandoId == i.Id)
+                                {
+                                    <input type="text" @bind="editForm.Observaciones"
+                                           placeholder="Observaciones..." style="width:150px" />
+                                }
+                                else
+                                {
+                                    <span class="text-sm text-muted">@(i.Observaciones ?? "-")</span>
+                                }
+                            </td>
+                            <td>
+                                <div class="flex gap-2">
+                                    @if (editandoId == i.Id)
+                                    {
+                                        <button class="btn btn-primary btn-sm btn-icon"
+                                                @onclick="() => GuardarEdicion(i.Id)" title="Guardar">💾</button>
+                                        <button class="btn btn-ghost btn-sm btn-icon"
+                                                @onclick="CancelarEdicion" title="Cancelar">✕</button>
+                                    }
+                                    else
+                                    {
+                                        <button class="btn btn-ghost btn-sm btn-icon"
+                                                @onclick="() => IniciarEdicion(i)" title="Editar">✏️</button>
+                                        <button class="btn btn-danger btn-sm btn-icon"
+                                                @onclick="() => Desinscribir(i.Id)" title="Eliminar">🗑️</button>
+                                    }
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+<!-- MODAL INSCRIBIR -->
+@if (mostrarModal)
+{
+    <div class="modal-backdrop" @onclick="CerrarModal">
+        <div class="modal" @onclick:stopPropagation>
+            <div class="modal-header">
+                <span class="modal-title">Inscribir colaborador</span>
+                <button class="btn btn-ghost btn-sm btn-icon" @onclick="CerrarModal">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Colaborador</label>
+                    <select @bind="nuevaInscripcion.ColaboradorId" class="form-select">
+                        <option value="0">-- Seleccionar --</option>
+                        @foreach (var col in colaboradoresDisponibles)
+                        {
+                            <option value="@col.Id">@col.Nombre @col.Apellido — @col.AreaNombre</option>
+                        }
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Fecha de inscripción</label>
+                    <input type="date" @bind="nuevaInscripcion.FechaInscripcion" @bind:format="yyyy-MM-dd" />
+                </div>
+                @if (!string.IsNullOrEmpty(errorInscripcion))
+                {
+                    <p class="validation-message">@errorInscripcion</p>
+                }
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-ghost" @onclick="CerrarModal">Cancelar</button>
+                <button class="btn btn-primary" @onclick="Inscribir" disabled="@inscribiendo">
+                    @(inscribiendo ? "Inscribiendo..." : "Inscribir")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- MODAL RECURSO -->
+@if (mostrarModalRecurso)
+{
+    <div class="modal-backdrop" @onclick="CerrarModalRecurso">
+        <div class="modal" @onclick:stopPropagation>
+            <div class="modal-header">
+                <span class="modal-title">@(editandoRecursoId.HasValue ? "Editar recurso" : "Agregar recurso")</span>
+                <button class="btn btn-ghost btn-sm btn-icon" @onclick="CerrarModalRecurso">✕</button>
+            </div>
+            <EditForm Model="recursoForm" OnValidSubmit="GuardarRecurso">
+                <DataAnnotationsValidator />
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label>Título</label>
+                        <InputText @bind-Value="recursoForm.Titulo" placeholder="Ej: Video introducción, Manual PDF..." />
+                        <ValidationMessage For="() => recursoForm.Titulo" class="validation-message" />
+                    </div>
+                    <div class="form-group">
+                        <label>URL</label>
+                        <InputText @bind-Value="recursoForm.Url" placeholder="https://..." />
+                        <ValidationMessage For="() => recursoForm.Url" class="validation-message" />
+                    </div>
+                    <div class="form-group">
+                        <label>Tipo</label>
+                        <select @bind="recursoForm.Tipo" class="form-select">
+                            <option value="Video">🎬 Video</option>
+                            <option value="Documento">📄 Documento</option>
+                            <option value="Presentacion">📊 Presentación</option>
+                            <option value="Enlace">🔗 Enlace</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Descripción (opcional)</label>
+                        <InputText @bind-Value="recursoForm.Descripcion" placeholder="Breve descripción..." />
+                    </div>
+                    <div class="form-group">
+                        <label>Orden</label>
+                        <InputNumber @bind-Value="recursoForm.Orden" />
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-ghost" @onclick="CerrarModalRecurso">Cancelar</button>
+                    <button type="submit" class="btn btn-primary" disabled="@guardandoRecurso">
+                        @(guardandoRecurso ? "Guardando..." : "Guardar")
+                    </button>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private CapacitacionDto? capacitacion;
+    private List<InscripcionDto> inscripciones = [];
+    private List<RecursoDto> recursos = [];
+    private List<ColaboradorDto> colaboradoresDisponibles = [];
+    private bool cargando = true;
+    private bool mostrarModal = false;
+    private bool inscribiendo = false;
+    private string? errorInscripcion;
+    private Toast toast = default!;
+
+    // Inscripciones
+    private CreateInscripcionDto nuevaInscripcion = new();
+    private int? editandoId;
+    private UpdateInscripcionDto editForm = new();
+
+    // Recursos
+    private bool mostrarModalRecurso = false;
+    private bool guardandoRecurso = false;
+    private int? editandoRecursoId;
+    private CreateRecursoDto recursoForm = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        capacitacion = await CapacitacionService.GetByIdAsync(Id);
+        await Task.WhenAll(Cargar(), CargarRecursos());
+    }
+
+    private async Task Cargar()
+    {
+        cargando = true;
+        inscripciones = await InscripcionService.GetByCapacitacionAsync(Id);
+        cargando = false;
+    }
+
+    private async Task CargarRecursos() =>
+        recursos = await RecursoService.GetByCapacitacionAsync(Id);
+
+    // --- Inscripciones ---
+    private async Task AbrirModal()
+    {
+        var todos = await ColaboradorService.GetAllAsync() ?? [];
+        var yaInscritos = inscripciones.Select(i => i.ColaboradorId).ToHashSet();
+        colaboradoresDisponibles = todos.Where(c => !yaInscritos.Contains(c.Id)).ToList();
+        nuevaInscripcion = new CreateInscripcionDto { CapacitacionId = Id, FechaInscripcion = DateTime.Today };
+        errorInscripcion = null;
+        mostrarModal = true;
+    }
+
+    private void CerrarModal() => mostrarModal = false;
+
+    private async Task Inscribir()
+    {
+        if (nuevaInscripcion.ColaboradorId == 0) { errorInscripcion = "Selecciona un colaborador."; return; }
+        inscribiendo = true;
+        errorInscripcion = await InscripcionService.CreateWithErrorAsync(nuevaInscripcion);
+        inscribiendo = false;
+        if (errorInscripcion is null) { CerrarModal(); await Cargar(); await toast.Show("Colaborador inscrito."); }
+    }
+
+    private void IniciarEdicion(InscripcionDto i)
+    {
+        editandoId = i.Id;
+        editForm = new UpdateInscripcionDto { Asistio = i.Asistio, Calificacion = i.Calificacion, Observaciones = i.Observaciones };
+    }
+
+    private void CancelarEdicion() => editandoId = null;
+
+    private async Task GuardarEdicion(int id)
+    {
+        var result = await InscripcionService.UpdateAsync(id, editForm);
+        editandoId = null;
+        if (result is not null) { await Cargar(); await toast.Show("Registro actualizado."); }
+        else await toast.Show("Error al actualizar.", "error");
+    }
+
+    private async Task Desinscribir(int id)
+    {
+        if (await InscripcionService.DeleteAsync(id)) { await Cargar(); await toast.Show("Inscripción eliminada."); }
+        else await toast.Show("Error al eliminar.", "error");
+    }
+
+    // --- Recursos ---
+    private void AbrirModalRecurso()
+    {
+        recursoForm = new CreateRecursoDto { CapacitacionId = Id, Tipo = "Enlace", Orden = recursos.Count + 1 };
+        editandoRecursoId = null;
+        mostrarModalRecurso = true;
+    }
+
+    private void AbrirEditarRecurso(RecursoDto r)
+    {
+        recursoForm = new CreateRecursoDto
+        {
+            Titulo = r.Titulo, Url = r.Url, Tipo = r.Tipo,
+            Descripcion = r.Descripcion, Orden = r.Orden, CapacitacionId = Id
+        };
+        editandoRecursoId = r.Id;
+        mostrarModalRecurso = true;
+    }
+
+    private void CerrarModalRecurso() => mostrarModalRecurso = false;
+
+    private async Task GuardarRecurso()
+    {
+        guardandoRecurso = true;
+        bool ok = editandoRecursoId.HasValue
+            ? await RecursoService.UpdateAsync(editandoRecursoId.Value, recursoForm) is not null
+            : await RecursoService.CreateAsync(recursoForm) is not null;
+        guardandoRecurso = false;
+        if (ok) { CerrarModalRecurso(); await CargarRecursos(); await toast.Show("Recurso guardado."); }
+        else await toast.Show("Error al guardar.", "error");
+    }
+
+    private async Task EliminarRecurso(int id)
+    {
+        if (await RecursoService.DeleteAsync(id)) { await CargarRecursos(); await toast.Show("Recurso eliminado."); }
+        else await toast.Show("Error al eliminar.", "error");
+    }
+
+    private static string IconoTipo(string tipo) => tipo switch
+    {
+        "Video" => "🎬",
+        "Documento" => "📄",
+        "Presentacion" => "📊",
+        _ => "🔗"
+    };
+}

@@ -1,0 +1,41 @@
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Components.WebAssembly.Authentication
+@inject NavigationManager Navigation
+
+<AuthorizeView>
+    <Authorized>
+        <div class="topbar-user">
+            <div class="avatar avatar-sm" style="background:#312e81;color:#a5b4fc;">
+                @Iniciales(context.User.Identity?.Name)
+            </div>
+            <span class="topbar-user-name">@NombreCorto(context.User.Identity?.Name)</span>
+            <button class="btn btn-ghost btn-sm" @onclick="LogoutLocal">Salir</button>
+        </div>
+    </Authorized>
+    <NotAuthorized>
+        <button class="btn btn-primary btn-sm" @onclick="Login">Iniciar sesión</button>
+    </NotAuthorized>
+</AuthorizeView>
+
+@code {
+    private void Login() => Navigation.NavigateToLogin("authentication/login");
+
+    // Cierra sesión solo en la app — NO cierra la sesión de Microsoft/Office 365
+    private void LogoutLocal() => Navigation.NavigateToLogout("authentication/logout", "landing");
+
+    private static string Iniciales(string? nombre)
+    {
+        if (string.IsNullOrEmpty(nombre)) return "?";
+        var parts = nombre.Split(new[] { ' ', '@' }, StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length >= 2
+            ? $"{parts[0][0]}{parts[1][0]}".ToUpper()
+            : nombre[0..1].ToUpper();
+    }
+
+    private static string NombreCorto(string? nombre)
+    {
+        if (string.IsNullOrEmpty(nombre)) return "Usuario";
+        var at = nombre.IndexOf('@');
+        return at > 0 ? nombre[..at] : nombre.Split(' ')[0];
+    }
+}

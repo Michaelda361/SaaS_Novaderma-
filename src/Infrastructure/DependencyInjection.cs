@@ -21,11 +21,19 @@ public static class DependencyInjection
         services.AddScoped<IColaboradorRepository, ColaboradorRepository>();
         services.AddScoped<ICapacitacionRepository, CapacitacionRepository>();
         services.AddScoped<ICertificadoRepository, CertificadoRepository>();
+        services.AddScoped<IAreaRepository, AreaRepository>();
+        services.AddScoped<ICargoRepository, CargoRepository>();
+        services.AddScoped<IInscripcionRepository, InscripcionRepository>();
+        services.AddScoped<IRecursoRepository, RecursoRepository>();
 
         // Servicios de aplicación
         services.AddScoped<ColaboradorService>();
         services.AddScoped<CapacitacionService>();
         services.AddScoped<CertificadoService>();
+        services.AddScoped<AreaService>();
+        services.AddScoped<CargoService>();
+        services.AddScoped<InscripcionService>();
+        services.AddScoped<RecursoService>();
 
         return services;
     }

@@ -1,0 +1,74 @@
+using TalentManagement.Application.Interfaces;
+using TalentManagement.Domain.Entities;
+using TalentManagement.Shared.DTOs.Inscripciones;
+
+namespace TalentManagement.Application.Services;
+
+public class InscripcionService(IInscripcionRepository repository)
+{
+    public async Task<IEnumerable<InscripcionDto>> GetByCapacitacionAsync(int capacitacionId)
+    {
+        var items = await repository.GetByCapacitacionAsync(capacitacionId);
+        return items.Select(MapToDto);
+    }
+
+    public async Task<IEnumerable<InscripcionDto>> GetByColaboradorAsync(int colaboradorId)
+    {
+        var items = await repository.GetByColaboradorAsync(colaboradorId);
+        return items.Select(MapToDto);
+    }
+
+    public async Task<InscripcionDto?> GetByIdAsync(int id)
+    {
+        var item = await repository.GetByIdAsync(id);
+        return item is null ? null : MapToDto(item);
+    }
+
+    public async Task<(InscripcionDto? result, string? error)> CreateAsync(CreateInscripcionDto dto)
+    {
+        var existing = await repository.GetByCapacitacionAsync(dto.CapacitacionId);
+        if (existing.Any(i => i.ColaboradorId == dto.ColaboradorId))
+            return (null, "El colaborador ya está inscrito en esta capacitación.");
+
+        var inscripcion = new Inscripcion
+        {
+            ColaboradorId = dto.ColaboradorId,
+            CapacitacionId = dto.CapacitacionId,
+            FechaInscripcion = dto.FechaInscripcion
+        };
+
+        var created = await repository.CreateAsync(inscripcion);
+        return (MapToDto(created), null);
+    }
+
+    public async Task<InscripcionDto?> UpdateAsync(int id, UpdateInscripcionDto dto)
+    {
+        var inscripcion = await repository.GetByIdAsync(id);
+        if (inscripcion is null) return null;
+
+        inscripcion.Asistio = dto.Asistio;
+        inscripcion.Calificacion = dto.Calificacion;
+        inscripcion.Observaciones = dto.Observaciones;
+
+        var updated = await repository.UpdateAsync(inscripcion);
+        return MapToDto(updated);
+    }
+
+    public async Task<bool> DeleteAsync(int id) => await repository.DeleteAsync(id);
+
+    private static InscripcionDto MapToDto(Inscripcion i) => new()
+    {
+        Id = i.Id,
+        ColaboradorId = i.ColaboradorId,
+        ColaboradorNombre = $"{i.Colaborador.Nombre} {i.Colaborador.Apellido}",
+        ColaboradorEmail = i.Colaborador.Email,
+        ColaboradorArea = i.Colaborador.Area?.Nombre ?? "-",
+        ColaboradorCargo = i.Colaborador.Cargo?.Nombre ?? "-",
+        CapacitacionId = i.CapacitacionId,
+        CapacitacionNombre = i.Capacitacion.Nombre,
+        FechaInscripcion = i.FechaInscripcion,
+        Asistio = i.Asistio,
+        Calificacion = i.Calificacion,
+        Observaciones = i.Observaciones
+    };
+}

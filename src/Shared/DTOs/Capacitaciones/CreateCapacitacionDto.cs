@@ -17,4 +17,7 @@ public class CreateCapacitacionDto
 
     [Required]
     public DateTime FechaFin { get; set; } = DateTime.Today.AddDays(1);
+
+    public int? AreaId { get; set; }
+    public int? ColaboradorId { get; set; }
 }

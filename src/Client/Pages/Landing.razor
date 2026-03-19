@@ -1,0 +1,70 @@
+@page "/landing"
+@layout EmptyLayout
+@attribute [AllowAnonymous]
+@inject NavigationManager Navigation
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Components.WebAssembly.Authentication
+
+<CascadingAuthenticationState>
+    <AuthorizeView>
+        <Authorized>
+            @{ Navigation.NavigateTo("/"); }
+        </Authorized>
+        <NotAuthorized>
+            <div class="landing-page">
+                <div class="landing-card">
+                    <div class="landing-logo">
+                        <div class="landing-logo-icon">
+                                <img src="logo.png" alt="NovaHub" class="landing-logo-img" />
+                            </div>
+                        <div class="landing-logo-text">
+                            <h1>NovaHub</h1>
+                            <span>Gestión de Talento y Capacitación</span>
+                        </div>
+                    </div>
+
+                    <div class="landing-body">
+                        <h2>Bienvenido</h2>
+                        <p>Gestiona tu equipo, capacitaciones y certificaciones desde un solo lugar.</p>
+
+                        <div class="landing-features">
+                            <div class="landing-feature">
+                                <span class="landing-feature-icon">👥</span>
+                                <span>Gestión de colaboradores</span>
+                            </div>
+                            <div class="landing-feature">
+                                <span class="landing-feature-icon">📚</span>
+                                <span>Capacitaciones y cursos</span>
+                            </div>
+                            <div class="landing-feature">
+                                <span class="landing-feature-icon">🏆</span>
+                                <span>Seguimiento de certificados</span>
+                            </div>
+                            <div class="landing-feature">
+                                <span class="landing-feature-icon">⚠️</span>
+                                <span>Alertas de vencimiento</span>
+                            </div>
+                        </div>
+
+                        <button class="btn btn-primary landing-btn" @onclick="Login">
+                            <span>Iniciar sesión con Microsoft</span>
+                            <span class="landing-btn-icon">→</span>
+                        </button>
+
+                        <p class="landing-hint">Usa tu cuenta corporativa de Microsoft 365</p>
+                    </div>
+                </div>
+
+                <div class="landing-bg">
+                    <div class="landing-bg-circle c1"></div>
+                    <div class="landing-bg-circle c2"></div>
+                    <div class="landing-bg-circle c3"></div>
+                </div>
+            </div>
+        </NotAuthorized>
+    </AuthorizeView>
+</CascadingAuthenticationState>
+
+@code {
+    private void Login() => Navigation.NavigateToLogin("authentication/login");
+}

@@ -9,9 +9,9 @@ public class Colaborador : BaseEntity
     public string Email { get; set; } = string.Empty;
     public string Telefono { get; set; } = string.Empty;
     public DateTime FechaIngreso { get; set; }
-    public bool Activo { get; set; } = true;
 
-    public int AreaId { get; set; }    public Area Area { get; set; } = null!;
+    public int AreaId { get; set; }
+    public Area Area { get; set; } = null!;
 
     public int CargoId { get; set; }
     public Cargo Cargo { get; set; } = null!;
