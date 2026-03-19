@@ -42,5 +42,6 @@ builder.Services.AddScoped<AreaApiService>();
 builder.Services.AddScoped<CargoApiService>();
 builder.Services.AddScoped<InscripcionApiService>();
 builder.Services.AddScoped<RecursoApiService>();
+builder.Services.AddScoped<ThemeService>();
 
 await builder.Build().RunAsync();

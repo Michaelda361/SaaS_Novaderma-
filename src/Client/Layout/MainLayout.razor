@@ -1,4 +1,6 @@
 ﻿@inherits LayoutComponentBase
+@inject ThemeService Theme
+@implements IDisposable
 
 <div class="app-layout">
     <aside class="sidebar">
@@ -55,6 +57,9 @@
                 <span class="topbar-title">@GetPageTitle()</span>
             </div>
             <div class="topbar-right">
+                <button class="theme-toggle" @onclick="ToggleTheme" title="@(Theme.IsDark ? "Tema claro" : "Tema oscuro")">
+                    @(Theme.IsDark ? "☀️" : "🌙")
+                </button>
                 <LoginDisplay />
             </div>
         </header>
@@ -67,14 +72,30 @@
 @code {
     [CascadingParameter] private RouteData? RouteData { get; set; }
 
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            Theme.OnChange += StateHasChanged;
+            await Theme.InitAsync();
+            StateHasChanged();
+        }
+    }
+
+    private async Task ToggleTheme() => await Theme.ToggleAsync();
+
+    public void Dispose() => Theme.OnChange -= StateHasChanged;
+
     private string GetPageTitle() => RouteData?.PageType?.Name switch
     {
-        "Home"           => "Dashboard",
-        "Colaboradores"  => "Colaboradores",
-        "Capacitaciones" => "Capacitaciones",
-        "Certificados"   => "Certificados",
-        "Areas"          => "Áreas",
-        "Cargos"         => "Cargos",
-        _                => "NovaHub"
+        "Home"                 => "Dashboard",
+        "Colaboradores"        => "Colaboradores",
+        "Capacitaciones"       => "Capacitaciones",
+        "CapacitacionDetalle"  => "Detalle de Capacitación",
+        "Certificados"         => "Certificados",
+        "Areas"                => "Áreas",
+        "AreaDetalle"          => "Detalle de Área",
+        "Cargos"               => "Cargos",
+        _                      => "NovaHub"
     };
 }
