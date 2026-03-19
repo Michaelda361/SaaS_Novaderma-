@@ -1,0 +1,19 @@
+## .NET
+bin/
+obj/
+*.user
+*.suo
+.vs/
+*.swp
+
+## Configuración sensible
+appsettings.Development.json
+appsettings.Production.json
+
+## Publicación
+publish/
+out/
+
+## Logs
+*.log
+logs/

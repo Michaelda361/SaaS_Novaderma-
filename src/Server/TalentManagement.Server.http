@@ -1,0 +1,6 @@
+@TalentManagement.Server_HostAddress = http://localhost:5194
+
+GET {{TalentManagement.Server_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
