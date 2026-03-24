@@ -4,8 +4,8 @@ namespace TalentManagement.Application.Interfaces;
 
 public interface IDocumentoRepository
 {
-    Task<IEnumerable<Documento>> GetAllAsync();
-    Task<IEnumerable<Documento>> GetPublicadosAsync();
+    Task<IEnumerable<Documento>> GetAllAsync(string? tipo, string? estado, int? areaId, string? busqueda);
+    Task<IEnumerable<Documento>> GetPublicadosAsync(string? tipo, int? areaId, string? busqueda);
     Task<Documento?> GetByIdAsync(int id);
     Task<Documento?> GetByIdConDetallesAsync(int id);
     Task<Documento> CreateAsync(Documento documento);

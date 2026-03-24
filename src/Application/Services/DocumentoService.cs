@@ -35,22 +35,8 @@ public class DocumentoService(
         string? tipo, string? estado, int? areaId, string? busqueda, bool esAdmin)
     {
         var docs = esAdmin
-            ? await repository.GetAllAsync()
-            : await repository.GetPublicadosAsync();
-
-        if (!string.IsNullOrWhiteSpace(tipo) &&
-            Enum.TryParse<TipoDocumento>(tipo, out var tipoEnum))
-            docs = docs.Where(d => d.TipoDocumento == tipoEnum);
-
-        if (esAdmin && !string.IsNullOrWhiteSpace(estado) &&
-            Enum.TryParse<EstadoDocumento>(estado, out var estadoEnum))
-            docs = docs.Where(d => d.Estado == estadoEnum);
-
-        if (areaId.HasValue)
-            docs = docs.Where(d => d.AreaId == areaId);
-
-        if (!string.IsNullOrWhiteSpace(busqueda))
-            docs = docs.Where(d => d.Titulo.Contains(busqueda, StringComparison.OrdinalIgnoreCase));
+            ? await repository.GetAllAsync(tipo, estado, areaId, busqueda)
+            : await repository.GetPublicadosAsync(tipo, areaId, busqueda);
 
         return docs.Select(MapToDto);
     }

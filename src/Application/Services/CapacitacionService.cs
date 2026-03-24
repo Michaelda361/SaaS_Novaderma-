@@ -20,14 +20,14 @@ public class CapacitacionService(ICapacitacionRepository repository)
 
     public async Task<IEnumerable<CapacitacionDto>> GetByAreaAsync(int areaId)
     {
-        var all = await repository.GetAllAsync();
-        return all.Where(c => c.AreaId == areaId).Select(MapToDto);
+        var items = await repository.GetByAreaAsync(areaId);
+        return items.Select(MapToDto);
     }
 
     public async Task<IEnumerable<CapacitacionDto>> GetByColaboradorAsync(int colaboradorId)
     {
-        var all = await repository.GetAllAsync();
-        return all.Where(c => c.ColaboradorId == colaboradorId).Select(MapToDto);
+        var items = await repository.GetByColaboradorAsync(colaboradorId);
+        return items.Select(MapToDto);
     }
 
     public async Task<CapacitacionDto> CreateAsync(CreateCapacitacionDto dto)

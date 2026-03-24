@@ -19,13 +19,43 @@ public class DocumentoRepository(AppDbContext context) : IDocumentoRepository
             .Include(d => d.Propuestas).ThenInclude(p => p.Colaborador)
             .Include(d => d.Propuestas).ThenInclude(p => p.Area);
 
-    public async Task<IEnumerable<Documento>> GetAllAsync() =>
-        await WithBase().AsNoTracking().ToListAsync();
+    public async Task<IEnumerable<Documento>> GetAllAsync(
+        string? tipo, string? estado, int? areaId, string? busqueda)
+    {
+        var query = WithBase().AsNoTracking();
 
-    public async Task<IEnumerable<Documento>> GetPublicadosAsync() =>
-        await WithBase().AsNoTracking()
-            .Where(d => d.Estado == EstadoDocumento.Publicado)
-            .ToListAsync();
+        if (!string.IsNullOrWhiteSpace(tipo) && Enum.TryParse<TipoDocumento>(tipo, out var tipoEnum))
+            query = query.Where(d => d.TipoDocumento == tipoEnum);
+
+        if (!string.IsNullOrWhiteSpace(estado) && Enum.TryParse<EstadoDocumento>(estado, out var estadoEnum))
+            query = query.Where(d => d.Estado == estadoEnum);
+
+        if (areaId.HasValue)
+            query = query.Where(d => d.AreaId == areaId);
+
+        if (!string.IsNullOrWhiteSpace(busqueda))
+            query = query.Where(d => d.Titulo.Contains(busqueda));
+
+        return await query.ToListAsync();
+    }
+
+    public async Task<IEnumerable<Documento>> GetPublicadosAsync(
+        string? tipo, int? areaId, string? busqueda)
+    {
+        var query = WithBase().AsNoTracking()
+            .Where(d => d.Estado == EstadoDocumento.Publicado);
+
+        if (!string.IsNullOrWhiteSpace(tipo) && Enum.TryParse<TipoDocumento>(tipo, out var tipoEnum))
+            query = query.Where(d => d.TipoDocumento == tipoEnum);
+
+        if (areaId.HasValue)
+            query = query.Where(d => d.AreaId == areaId);
+
+        if (!string.IsNullOrWhiteSpace(busqueda))
+            query = query.Where(d => d.Titulo.Contains(busqueda));
+
+        return await query.ToListAsync();
+    }
 
     public async Task<Documento?> GetByIdAsync(int id) =>
         await WithBase().FirstOrDefaultAsync(d => d.Id == id);

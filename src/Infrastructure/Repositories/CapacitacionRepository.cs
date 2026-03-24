@@ -16,6 +16,16 @@ public class CapacitacionRepository(AppDbContext context) : ICapacitacionReposit
     public async Task<IEnumerable<Capacitacion>> GetAllAsync() =>
         await WithIncludes().AsNoTracking().ToListAsync();
 
+    public async Task<IEnumerable<Capacitacion>> GetByAreaAsync(int areaId) =>
+        await WithIncludes().AsNoTracking()
+            .Where(c => c.AreaId == areaId)
+            .ToListAsync();
+
+    public async Task<IEnumerable<Capacitacion>> GetByColaboradorAsync(int colaboradorId) =>
+        await WithIncludes().AsNoTracking()
+            .Where(c => c.ColaboradorId == colaboradorId)
+            .ToListAsync();
+
     public async Task<Capacitacion?> GetByIdAsync(int id) =>
         await WithIncludes().FirstOrDefaultAsync(c => c.Id == id);
 

@@ -38,10 +38,10 @@ public class ColaboradorService(IColaboradorRepository repository)
 
     public async Task<ColaboradorDto?> UpdateAsync(int id, UpdateColaboradorDto dto)
     {
-        if (!await repository.ExistsAsync(id)) return null;
-
         var colaborador = await repository.GetByIdAsync(id);
-        colaborador!.Nombre = dto.Nombre;
+        if (colaborador is null) return null;
+
+        colaborador.Nombre = dto.Nombre;
         colaborador.Apellido = dto.Apellido;
         colaborador.Email = dto.Email;
         colaborador.Telefono = dto.Telefono;
@@ -55,7 +55,8 @@ public class ColaboradorService(IColaboradorRepository repository)
 
     public async Task<bool> DeleteAsync(int id)
     {
-        if (!await repository.ExistsAsync(id)) return false;
+        var colaborador = await repository.GetByIdAsync(id);
+        if (colaborador is null) return false;
         await repository.DeleteAsync(id);
         return true;
     }
