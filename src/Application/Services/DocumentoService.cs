@@ -15,9 +15,7 @@ public class DocumentoService(
 
     public async Task<Colaborador> ResolverColaboradorAsync(string email)
     {
-        var todos = await colaboradorRepository.GetAllAsync();
-        var colaborador = todos.FirstOrDefault(c =>
-            c.Email.Equals(email, StringComparison.OrdinalIgnoreCase));
+        var colaborador = await colaboradorRepository.GetByEmailAsync(email);
         return colaborador ?? throw new UnauthorizedAccessException(
             "Usuario no registrado como colaborador");
     }

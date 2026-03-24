@@ -8,7 +8,7 @@
 
 @if (loading)
 {
-    <div class="loading-state">Cargando documento...</div>
+    <div class="loading"><div class="spinner"></div> Cargando documento...</div>
 }
 else if (doc is null)
 {
@@ -78,7 +78,7 @@ else
                         <li class="timeline-item">
                             <div class="timeline-dot"></div>
                             <div class="timeline-content">
-                                <span class="badge badge-secondary">@f.EstadoAnterior</span>
+                                <span class="badge badge-gray">@f.EstadoAnterior</span>
                                 → <span class="badge @GetEstadoClass(f.EstadoNuevo)">@f.EstadoNuevo</span>
                                 <div class="text-muted" style="font-size:.8rem;">
                                     @f.ColaboradorNombre · @f.FechaTransicion.ToString("dd/MM/yyyy HH:mm")
@@ -262,11 +262,11 @@ else
 
     private static string GetEstadoClass(string estado) => estado switch
     {
-        "Borrador"  => "badge-secondary",
+        "Borrador"  => "badge-gray",
         "Revision"  => "badge-warning",
         "Aprobado"  => "badge-info",
         "Publicado" => "badge-success",
-        _           => "badge-secondary"
+        _           => "badge-gray"
     };
 
     private static string GetPropuestaClass(string estado) => estado switch
@@ -274,7 +274,7 @@ else
         "PendienteRevision" => "badge-warning",
         "Aprobada"          => "badge-success",
         "Rechazada"         => "badge-danger",
-        _                   => "badge-secondary"
+        _                   => "badge-gray"
     };
 
     private static string GetBotonAvance(string estado) => estado switch

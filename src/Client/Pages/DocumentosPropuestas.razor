@@ -19,12 +19,12 @@
 <div class="card">
     @if (loading)
     {
-        <div class="loading-state">Cargando propuestas...</div>
+        <div class="loading"><div class="spinner"></div> Cargando propuestas...</div>
     }
     else if (!propuestas.Any())
     {
         <div class="empty-state">
-            <span class="empty-icon">✅</span>
+            <div class="empty-state-icon">✅</div>
             <p>No hay propuestas pendientes en tu área</p>
         </div>
     }

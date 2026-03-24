@@ -22,6 +22,12 @@ public class ColaboradorRepository(AppDbContext context) : IColaboradorRepositor
             .Include(c => c.Supervisor)
             .FirstOrDefaultAsync(c => c.Id == id);
 
+    public async Task<Colaborador?> GetByEmailAsync(string email) =>
+        await context.Colaboradores
+            .Include(c => c.Area)
+            .Include(c => c.Cargo)
+            .FirstOrDefaultAsync(c => c.Email.ToLower() == email.ToLower());
+
     public async Task<Colaborador> CreateAsync(Colaborador colaborador)
     {
         context.Colaboradores.Add(colaborador);

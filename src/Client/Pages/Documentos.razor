@@ -327,10 +327,10 @@
     }
     private static string GetEstadoClass(string estado) => estado switch
     {
-        "Borrador"  => "badge-secondary",
+        "Borrador"  => "badge-gray",
         "Revision"  => "badge-warning",
         "Aprobado"  => "badge-info",
         "Publicado" => "badge-success",
-        _           => "badge-secondary"
+        _           => "badge-gray"
     };
 }
