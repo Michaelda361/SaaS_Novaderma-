@@ -5,6 +5,7 @@ using TalentManagement.Application.Interfaces;
 using TalentManagement.Application.Services;
 using TalentManagement.Infrastructure.Persistence;
 using TalentManagement.Infrastructure.Repositories;
+using TalentManagement.Infrastructure.Services;
 
 namespace TalentManagement.Infrastructure;
 
@@ -25,6 +26,7 @@ public static class DependencyInjection
         services.AddScoped<ICargoRepository, CargoRepository>();
         services.AddScoped<IInscripcionRepository, InscripcionRepository>();
         services.AddScoped<IRecursoRepository, RecursoRepository>();
+        services.AddScoped<IDocumentoRepository, DocumentoRepository>();
 
         // Servicios de aplicación
         services.AddScoped<ColaboradorService>();
@@ -34,6 +36,14 @@ public static class DependencyInjection
         services.AddScoped<CargoService>();
         services.AddScoped<InscripcionService>();
         services.AddScoped<RecursoService>();
+        services.AddScoped<DocumentoService>();
+
+        // SharePoint — mock en Development, real en producción
+        var env = configuration["ASPNETCORE_ENVIRONMENT"] ?? "Production";
+        if (env == "Development")
+            services.AddScoped<ISharePointService, MockSharePointService>();
+        else
+            services.AddScoped<ISharePointService, SharePointService>();
 
         return services;
     }

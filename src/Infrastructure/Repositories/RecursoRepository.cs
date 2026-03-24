@@ -35,7 +35,7 @@ public class RecursoRepository(AppDbContext context) : IRecursoRepository
     {
         var recurso = await context.RecursosCapacitacion.FindAsync(id);
         if (recurso is null) return false;
-        context.RecursosCapacitacion.Remove(recurso);
+        recurso.Activo = false;
         await context.SaveChangesAsync();
         return true;
     }

@@ -37,5 +37,30 @@ public static class DbSeeder
 
         db.Cargos.AddRange(cargos);
         await db.SaveChangesAsync();
+
+        // ── Colaboradores de prueba (dev) ────────────────────────────────────
+        // Emails usables via DevSettings:ImpersonateEmail en appsettings.Development.json
+        var colaboradores = new List<Colaborador>
+        {
+            // Colaborador en Finanzas — sin ser jefe de área
+            new() { Nombre = "Dev",    Apellido = "Colaborador", Email = "dev.colaborador@test.local",
+                    CargoId = cargos[0].Id, AreaId = areas[0].Id },
+
+            // Jefe de área Tecnología — puede aprobar/rechazar propuestas
+            new() { Nombre = "Dev",    Apellido = "JefeTech",  Email = "dev.jefe@test.local",
+                    CargoId = cargos[2].Id, AreaId = areas[0].Id },
+
+            // Jefe de área RRHH
+            new() { Nombre = "Dev",    Apellido = "JefeRRHH",  Email = "dev.jeferrhh@test.local",
+                    CargoId = cargos[4].Id, AreaId = areas[1].Id },
+        };
+
+        db.Colaboradores.AddRange(colaboradores);
+        await db.SaveChangesAsync();
+
+        // Asignar jefes de área
+        areas[0].JefeId = colaboradores[1].Id; // dev.jefe@test.local → Tecnología
+        areas[1].JefeId = colaboradores[2].Id; // dev.jeferrhh@test.local → RRHH
+        await db.SaveChangesAsync();
     }
 }

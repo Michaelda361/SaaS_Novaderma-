@@ -1,5 +1,6 @@
 ﻿@inherits LayoutComponentBase
 @inject ThemeService Theme
+@inject DocumentoApiService DocumentoApi
 @implements IDisposable
 
 <div class="app-layout">
@@ -29,6 +30,13 @@
             </NavLink>
             <NavLink class="nav-link" href="certificados">
                 <span class="nav-icon">🏆</span> Certificados
+            </NavLink>
+            <NavLink class="nav-link" href="documentos">
+                <span class="nav-icon">📄</span> Documentos
+                @if (propuestasPendientes > 0)
+                {
+                    <span class="badge badge-warning badge-pill">@propuestasPendientes</span>
+                }
             </NavLink>
 
             <span class="nav-section-label">Configuración</span>
@@ -72,12 +80,15 @@
 @code {
     [CascadingParameter] private RouteData? RouteData { get; set; }
 
+    private int propuestasPendientes = 0;
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender)
         {
             Theme.OnChange += StateHasChanged;
             await Theme.InitAsync();
+            propuestasPendientes = await DocumentoApi.GetPropuestasPendientesCountAsync();
             StateHasChanged();
         }
     }
@@ -88,14 +99,17 @@
 
     private string GetPageTitle() => RouteData?.PageType?.Name switch
     {
-        "Home"                 => "Dashboard",
-        "Colaboradores"        => "Colaboradores",
-        "Capacitaciones"       => "Capacitaciones",
-        "CapacitacionDetalle"  => "Detalle de Capacitación",
-        "Certificados"         => "Certificados",
-        "Areas"                => "Áreas",
-        "AreaDetalle"          => "Detalle de Área",
-        "Cargos"               => "Cargos",
-        _                      => "NovaHub"
+        "Home"                    => "Dashboard",
+        "Colaboradores"           => "Colaboradores",
+        "Capacitaciones"          => "Capacitaciones",
+        "CapacitacionDetalle"     => "Detalle de Capacitación",
+        "Certificados"            => "Certificados",
+        "Areas"                   => "Áreas",
+        "AreaDetalle"             => "Detalle de Área",
+        "Cargos"                  => "Cargos",
+        "Documentos"              => "Documentos",
+        "DocumentoDetalle"        => "Detalle de Documento",
+        "DocumentosPropuestas"    => "Propuestas Pendientes",
+        _                         => "NovaHub"
     };
 }

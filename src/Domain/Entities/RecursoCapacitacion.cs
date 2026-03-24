@@ -1,16 +1,10 @@
+using TalentManagement.Domain.Common;
+using TalentManagement.Domain.Enums;
+
 namespace TalentManagement.Domain.Entities;
 
-public enum TipoRecurso
+public class RecursoCapacitacion : BaseEntity
 {
-    Video,
-    Documento,
-    Presentacion,
-    Enlace
-}
-
-public class RecursoCapacitacion
-{
-    public int Id { get; set; }
     public string Titulo { get; set; } = string.Empty;
     public string Url { get; set; } = string.Empty;
     public TipoRecurso Tipo { get; set; } = TipoRecurso.Enlace;

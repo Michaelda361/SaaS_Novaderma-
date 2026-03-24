@@ -33,6 +33,26 @@
     </div>
     <script src="_content/Microsoft.Authentication.WebAssembly.Msal/AuthenticationService.js"></script>
     <script src="_framework/blazor.webassembly#[.{fingerprint}].js"></script>
+    <script>
+        // Exponer instancia MSAL para el picker de SharePoint
+        window.addEventListener("load", () => {
+            const interval = setInterval(() => {
+                if (window.Microsoft && window.Microsoft.MSAL) {
+                    clearInterval(interval);
+                }
+                // Buscar la instancia MSAL creada por Blazor
+                const msalKey = Object.keys(sessionStorage).find(k => k.includes("msal"));
+                if (msalKey || (window.msal && window.msal.PublicClientApplication)) {
+                    clearInterval(interval);
+                }
+            }, 500);
+        });
+
+        // Helper para que el picker pueda obtener el token via MSAL
+        window.getMsalInstance = function() {
+            return window._msalInstance;
+        };
+    </script>
 </body>
 
 </html>

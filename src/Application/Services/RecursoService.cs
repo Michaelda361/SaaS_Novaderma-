@@ -1,5 +1,6 @@
 using TalentManagement.Application.Interfaces;
 using TalentManagement.Domain.Entities;
+using TalentManagement.Domain.Enums;
 using TalentManagement.Shared.DTOs.Recursos;
 
 namespace TalentManagement.Application.Services;

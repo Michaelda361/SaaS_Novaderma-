@@ -1,8 +1,9 @@
+using TalentManagement.Domain.Common;
+
 namespace TalentManagement.Domain.Entities;
 
-public class Inscripcion
+public class Inscripcion : BaseEntity
 {
-    public int Id { get; set; }
     public DateTime FechaInscripcion { get; set; }
     public bool Asistio { get; set; }
     public decimal? Calificacion { get; set; }

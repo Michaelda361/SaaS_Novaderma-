@@ -1,0 +1,335 @@
+@page "/documentos"
+@attribute [Authorize]
+@inject DocumentoApiService DocumentoApi
+@inject AreaApiService AreaApi
+@inject NavigationManager Nav
+
+<Toast @ref="toast" />
+
+<div class="page-header">
+    <div>
+        <h2 class="page-title">Documentos</h2>
+        <p class="page-subtitle">Repositorio documental de la organización</p>
+    </div>
+    <button class="btn btn-primary" @onclick="() => showModal = true">
+        + Nuevo Documento
+    </button>
+</div>
+
+<!-- Filtros -->
+<div class="card" style="margin-bottom:1rem;">
+    <div class="filter-row">
+        <select class="form-control" @bind="filtroTipo" @bind:after="Filtrar">
+            <option value="">Todos los tipos</option>
+            @foreach (var t in tipos)
+            {
+                <option value="@t">@t</option>
+            }
+        </select>
+        <AuthorizeView Roles="Admin">
+            <select class="form-control" @bind="filtroEstado" @bind:after="Filtrar">
+                <option value="">Todos los estados</option>
+                @foreach (var e in estados)
+                {
+                    <option value="@e">@e</option>
+                }
+            </select>
+        </AuthorizeView>
+        <select class="form-control" @bind="filtroAreaId" @bind:after="Filtrar">
+            <option value="0">Todas las áreas</option>
+            @foreach (var a in areas)
+            {
+                <option value="@a.Id">@a.Nombre</option>
+            }
+        </select>
+        <input class="form-control" placeholder="Buscar por título..."
+               @bind="filtroBusqueda" @bind:after="Filtrar" />
+    </div>
+</div>
+
+<!-- Tabla -->
+<div class="card">
+    @if (loading)
+    {
+        <div class="loading-state">Cargando documentos...</div>
+    }
+    else if (!documentos.Any())
+    {
+        <div class="empty-state">
+            <span class="empty-icon">📄</span>
+            <p>No hay documentos que coincidan con los filtros</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-wrapper">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Título</th>
+                        <th>Tipo</th>
+                        <th>Versión</th>
+                        <th>Estado</th>
+                        <th>Área</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var doc in documentos)
+                    {
+                        var docId = doc.Id;
+                        <tr>
+                            <td>@doc.Titulo</td>
+                            <td>@doc.TipoDocumento</td>
+                            <td>v@(doc.Version)</td>
+                            <td><span class="badge @GetEstadoClass(doc.Estado)">@doc.Estado</span></td>
+                            <td>@(doc.AreaNombre ?? "—")</td>
+                            <td style="display:flex;gap:.25rem;flex-wrap:wrap;">
+                                <button class="btn btn-sm btn-secondary"
+                                        @onclick="() => VerDetalle(docId)">
+                                    Ver
+                                </button>
+                                @if (doc.Estado != "Publicado")
+                                {
+                                    <button class="btn btn-sm btn-primary"
+                                            @onclick="() => AvanzarEstadoRapido(docId)">
+                                        @GetBotonAvance(doc.Estado)
+                                    </button>
+                                }
+                                <button class="btn btn-sm btn-danger"
+                                        @onclick="() => ConfirmarEliminar(doc)">
+                                    Eliminar
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+<!-- Modal Nuevo Documento -->
+@if (showModal)
+{
+    <div class="modal-overlay" @onclick="CerrarModal">
+        <div class="modal" @onclick:stopPropagation>
+            <div class="modal-header">
+                <h3>Nuevo Documento</h3>
+                <button class="modal-close" @onclick="CerrarModal">×</button>
+            </div>
+            <div class="modal-body">
+                <EditForm Model="form" OnValidSubmit="Crear">
+                    <DataAnnotationsValidator />
+                    <div class="form-group">
+                        <label>Título *</label>
+                        <InputText class="form-control" @bind-Value="form.Titulo" />
+                        <ValidationMessage For="() => form.Titulo" />
+                    </div>
+                    <div class="form-group">
+                        <label>Tipo *</label>
+                        <InputSelect class="form-control" @bind-Value="form.TipoDocumento">
+                            <option value="">Seleccionar tipo...</option>
+                            @foreach (var t in tipos)
+                            {
+                                <option value="@t">@t</option>
+                            }
+                        </InputSelect>
+                        <ValidationMessage For="() => form.TipoDocumento" />
+                    </div>
+                    <div class="form-group">
+                        <label>Área (opcional)</label>
+                        <InputSelect class="form-control" @bind-Value="form.AreaId">
+                            <option value="">Sin área específica</option>
+                            @foreach (var a in areas)
+                            {
+                                <option value="@a.Id">@a.Nombre</option>
+                            }
+                        </InputSelect>
+                    </div>
+                    <div class="form-group">
+                        <label>Archivo *</label>
+                        <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;">
+                            <InputFile OnChange="OnArchivoSeleccionado" class="form-control" style="flex:1;" />
+                            <button type="button" class="btn btn-secondary"
+                                    @onclick="() => showOneDriveBrowser = true">
+                                📂 OneDrive
+                            </button>
+                        </div>
+                        @if (archivoSeleccionado is not null)
+                        {
+                            <small class="text-muted">📎 @archivoSeleccionado.Name</small>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(form.UrlExterna))
+                        {
+                            <small class="text-muted">☁ @form.NombreArchivoExterno (OneDrive)</small>
+                        }
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" @onclick="CerrarModal">
+                            Cancelar
+                        </button>
+                        <button type="submit" class="btn btn-primary" disabled="@guardando">
+                            @(guardando ? "Guardando..." : "Crear Documento")
+                        </button>
+                    </div>
+                </EditForm>
+            </div>
+        </div>
+    </div>
+}
+
+<ConfirmDialog Visible="showConfirm"
+               Message="@confirmMsg"
+               OnConfirm="EliminarDocumento"
+               OnCancel="() => showConfirm = false" />
+
+<OneDriveBrowser Visible="showOneDriveBrowser"
+                 OnSeleccionado="OnArchivoOneDriveSeleccionado"
+                 OnCancelado="() => showOneDriveBrowser = false" />
+
+@code {
+    private Toast toast = null!;
+
+    private List<DocumentoDto> documentos = [];
+    private List<AreaDto> areas = [];
+    private bool loading = true;
+    private bool showModal = false;
+    private bool guardando = false;
+    private bool showConfirm = false;
+    private string confirmMsg = string.Empty;
+
+    private string filtroTipo = "";
+    private string filtroEstado = "";
+    private int filtroAreaId = 0;
+    private string filtroBusqueda = "";
+
+    private CreateDocumentoDto form = new();
+    private IBrowserFile? archivoSeleccionado;
+    private DocumentoDto? docAEliminar;
+    private bool showOneDriveBrowser = false;
+
+    private readonly string[] tipos = ["Politica", "Procedimiento", "Contrato", "Manual", "Reglamento"];
+    private readonly string[] estados = ["Borrador", "Revision", "Aprobado", "Publicado"];
+
+    protected override async Task OnInitializedAsync()
+    {
+        areas = await AreaApi.GetAllAsync();
+        await Filtrar();
+        loading = false;
+    }
+
+    private async Task Filtrar()
+    {
+        loading = true;
+        documentos = await DocumentoApi.GetAllAsync(
+            string.IsNullOrEmpty(filtroTipo) ? null : filtroTipo,
+            string.IsNullOrEmpty(filtroEstado) ? null : filtroEstado,
+            filtroAreaId > 0 ? filtroAreaId : null,
+            string.IsNullOrEmpty(filtroBusqueda) ? null : filtroBusqueda);
+        loading = false;
+    }
+
+    private void OnArchivoSeleccionado(InputFileChangeEventArgs e)
+    {
+        archivoSeleccionado = e.File;
+        form.UrlExterna = null;
+        form.NombreArchivoExterno = null;
+    }
+
+    private void OnArchivoOneDriveSeleccionado(OneDriveItem item)
+    {
+        form.UrlExterna = item.WebUrl;
+        form.NombreArchivoExterno = item.Name;
+        archivoSeleccionado = null;
+        showOneDriveBrowser = false;
+    }
+
+    private async Task Crear()
+    {
+        if (archivoSeleccionado is null && string.IsNullOrWhiteSpace(form.UrlExterna))
+        {
+            toast.Show("Debes seleccionar un archivo o elegir uno de OneDrive", "error");
+            return;
+        }
+        guardando = true;
+        DocumentoDto? result;
+        if (!string.IsNullOrWhiteSpace(form.UrlExterna))
+            result = await DocumentoApi.CreateDesdeUrlAsync(form);
+        else
+            result = await DocumentoApi.CreateAsync(form, archivoSeleccionado!);
+        guardando = false;
+        if (result is not null)
+        {
+            toast.Show("Documento creado correctamente");
+            CerrarModal();
+            await Filtrar();
+        }
+        else
+        {
+            toast.Show("Error al crear el documento", "error");
+        }
+    }
+
+    private void ConfirmarEliminar(DocumentoDto doc)
+    {
+        docAEliminar = doc;
+        confirmMsg = "¿Eliminar el documento \"" + doc.Titulo + "\"? Esta acción no se puede deshacer.";
+        showConfirm = true;
+    }
+
+    private async Task EliminarDocumento()
+    {
+        showConfirm = false;
+        if (docAEliminar is null) return;
+        var ok = await DocumentoApi.DeleteAsync(docAEliminar.Id);
+        if (ok)
+        {
+            toast.Show("Documento eliminado");
+            await Filtrar();
+        }
+        else
+        {
+            toast.Show("Error al eliminar", "error");
+        }
+    }
+
+    private void VerDetalle(int id) => Nav.NavigateTo("documentos/" + id);
+
+    private async Task AvanzarEstadoRapido(int id)
+    {
+        var ok = await DocumentoApi.AvanzarEstadoAsync(id);
+        if (ok)
+        {
+            toast.Show("Estado actualizado");
+            await Filtrar();
+        }
+        else
+        {
+            toast.Show("No se pudo avanzar el estado", "error");
+        }
+    }
+
+    private static string GetBotonAvance(string estado) => estado switch
+    {
+        "Borrador" => "→ Revisión",
+        "Revision" => "→ Aprobar",
+        "Aprobado" => "→ Publicar",
+        _ => "Avanzar"
+    };
+
+    private void CerrarModal()
+    {
+        showModal = false;
+        form = new();
+        archivoSeleccionado = null;
+    }
+    private static string GetEstadoClass(string estado) => estado switch
+    {
+        "Borrador"  => "badge-secondary",
+        "Revision"  => "badge-warning",
+        "Aprobado"  => "badge-info",
+        "Publicado" => "badge-success",
+        _           => "badge-secondary"
+    };
+}

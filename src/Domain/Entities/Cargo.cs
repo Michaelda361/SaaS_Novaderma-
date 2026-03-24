@@ -11,5 +11,4 @@ public class Cargo : BaseEntity
     public Area Area { get; set; } = null!;
 
     public ICollection<Colaborador> Colaboradores { get; set; } = [];
-    public ICollection<RutaAprendizaje> RutasAprendizaje { get; set; } = [];
 }

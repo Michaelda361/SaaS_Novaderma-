@@ -1,0 +1,254 @@
+@page "/certificados"
+@attribute [Authorize]
+@inject CertificadoApiService ApiService
+@inject ColaboradorApiService ColaboradorService
+
+<Toast @ref="toast" />
+<ConfirmDialog Visible="confirmVisible"
+               Message="@confirmMensaje"
+               OnConfirm="ConfirmarEliminar"
+               OnCancel="() => confirmVisible = false" />
+
+<div class="card">
+    <div class="card-header">
+        <span class="card-title">Certificados</span>
+        <button class="btn btn-primary btn-sm" @onclick="AbrirModal">+ Nuevo certificado</button>
+    </div>
+
+    <div class="filter-bar">
+        <div class="search-input-wrap">
+            <span class="search-icon">🔍</span>
+            <input type="search" placeholder="Buscar por nombre o colaborador..."
+                   @bind="busqueda" @bind:event="oninput" />
+        </div>
+        <div class="flex gap-2">
+            <button class="btn btn-ghost btn-sm @(filtroEstado == "todos" ? "active" : "")"
+                    @onclick='() => filtroEstado = "todos"'>Todos</button>
+            <button class="btn btn-ghost btn-sm @(filtroEstado == "vencidos" ? "active" : "")"
+                    @onclick='() => filtroEstado = "vencidos"'>Vencidos</button>
+            <button class="btn btn-ghost btn-sm @(filtroEstado == "proximos" ? "active" : "")"
+                    @onclick='() => filtroEstado = "proximos"'>Próximos a vencer</button>
+        </div>
+    </div>
+
+    @if (cargando)
+    {
+        <div class="loading"><div class="spinner"></div> Cargando...</div>
+    }
+    else if (!Filtrados.Any())
+    {
+        <div class="empty-state">
+            <div class="empty-state-icon">🏆</div>
+            <h3>Sin certificados</h3>
+            <p>Agrega el primer certificado para comenzar.</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Certificado</th>
+                        <th>Colaborador</th>
+                        <th>Institución</th>
+                        <th>Emisión</th>
+                        <th>Vencimiento</th>
+                        <th>Estado</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var c in Filtrados)
+                    {
+                        <tr>
+                            <td><strong>@c.Nombre</strong></td>
+                            <td class="text-sm">@c.ColaboradorNombre</td>
+                            <td class="text-muted text-sm">@c.Institucion</td>
+                            <td class="text-sm">@c.FechaEmision.ToString("dd/MM/yyyy")</td>
+                            <td class="text-sm">@(c.FechaVencimiento?.ToString("dd/MM/yyyy") ?? "Sin vencimiento")</td>
+                            <td>
+                                @if (c.EstaVencido)
+                                {
+                                    <span class="badge badge-danger">Vencido</span>
+                                }
+                                else if (c.VenceProximamente)
+                                {
+                                    <span class="badge badge-warning">Próximo a vencer</span>
+                                }
+                                else
+                                {
+                                    <span class="badge badge-success">Vigente</span>
+                                }
+                            </td>
+                            <td>
+                                <div class="flex gap-2">
+                                    @if (!string.IsNullOrEmpty(c.UrlDocumento))
+                                    {
+                                        <a href="@c.UrlDocumento" target="_blank"
+                                           class="btn btn-ghost btn-sm btn-icon" title="Ver documento">📄</a>
+                                    }
+                                    <button class="btn btn-ghost btn-sm btn-icon"
+                                            @onclick="() => AbrirEditar(c)" title="Editar">✏️</button>
+                                    <button class="btn btn-danger btn-sm btn-icon"
+                                            @onclick="() => PedirConfirmacion(c)" title="Eliminar">🗑️</button>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@if (mostrarModal)
+{
+    <div class="modal-backdrop" @onclick="CerrarModal">
+        <div class="modal" @onclick:stopPropagation>
+            <div class="modal-header">
+                <span class="modal-title">@(editandoId.HasValue ? "Editar certificado" : "Nuevo certificado")</span>
+                <button class="btn btn-ghost btn-sm btn-icon" @onclick="CerrarModal">✕</button>
+            </div>
+            <EditForm Model="form" OnValidSubmit="Guardar">
+                <DataAnnotationsValidator />
+                <div class="modal-body">
+                    <div class="form-grid">
+                        <div class="form-group full">
+                            <label>Nombre del certificado</label>
+                            <InputText @bind-Value="form.Nombre" placeholder="Ej: AWS Solutions Architect" />
+                            <ValidationMessage For="() => form.Nombre" class="validation-message" />
+                        </div>
+                        <div class="form-group full">
+                            <label>Institución</label>
+                            <InputText @bind-Value="form.Institucion" placeholder="Ej: Amazon Web Services" />
+                            <ValidationMessage For="() => form.Institucion" class="validation-message" />
+                        </div>
+                        <div class="form-group full">
+                            <label>Colaborador</label>
+                            <InputSelect @bind-Value="form.ColaboradorId" disabled="@editandoId.HasValue">
+                                <option value="0">-- Selecciona un colaborador --</option>
+                                @foreach (var col in colaboradores ?? [])
+                                {
+                                    <option value="@col.Id">@col.NombreCompleto</option>
+                                }
+                            </InputSelect>
+                            <ValidationMessage For="() => form.ColaboradorId" class="validation-message" />
+                        </div>
+                        <div class="form-group">
+                            <label>Fecha de emisión</label>
+                            <InputDate @bind-Value="form.FechaEmision" />
+                        </div>
+                        <div class="form-group">
+                            <label>Fecha de vencimiento (opcional)</label>
+                            <InputDate @bind-Value="form.FechaVencimiento" />
+                        </div>
+                        <div class="form-group full">
+                            <label>URL del documento (opcional)</label>
+                            <InputText @bind-Value="form.UrlDocumento" placeholder="https://..." />
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-ghost" @onclick="CerrarModal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary" disabled="@guardando">
+                        @(guardando ? "Guardando..." : "Guardar")
+                    </button>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+}
+
+@code {
+    private List<CertificadoDto>? certificados;
+    private List<ColaboradorDto>? colaboradores;
+    private bool cargando = true;
+    private bool mostrarModal = false;
+    private bool guardando = false;
+    private int? editandoId = null;
+    private string busqueda = string.Empty;
+    private string filtroEstado = "todos";
+    private Toast toast = default!;
+    private bool confirmVisible = false;
+    private int eliminandoId;
+    private string confirmMensaje = string.Empty;
+    private CreateCertificadoDto form = new();
+
+    private IEnumerable<CertificadoDto> Filtrados
+    {
+        get
+        {
+            var lista = certificados ?? [];
+            if (!string.IsNullOrWhiteSpace(busqueda))
+                lista = lista.Where(c =>
+                    c.Nombre.Contains(busqueda, StringComparison.OrdinalIgnoreCase) ||
+                    c.ColaboradorNombre.Contains(busqueda, StringComparison.OrdinalIgnoreCase)).ToList();
+            return filtroEstado switch
+            {
+                "vencidos"  => lista.Where(c => c.EstaVencido),
+                "proximos"  => lista.Where(c => c.VenceProximamente),
+                _           => lista
+            };
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var t1 = ApiService.GetAllAsync();
+        var t2 = ColaboradorService.GetAllAsync();
+        await Task.WhenAll(t1, t2);
+        certificados = t1.Result;
+        colaboradores = t2.Result;
+        cargando = false;
+    }
+
+    private async Task Cargar() => certificados = await ApiService.GetAllAsync();
+
+    private void AbrirModal()
+    {
+        form = new CreateCertificadoDto { FechaEmision = DateTime.Today };
+        editandoId = null;
+        mostrarModal = true;
+    }
+
+    private void AbrirEditar(CertificadoDto c)
+    {
+        form = new CreateCertificadoDto
+        {
+            Nombre = c.Nombre, Institucion = c.Institucion,
+            FechaEmision = c.FechaEmision, FechaVencimiento = c.FechaVencimiento,
+            UrlDocumento = c.UrlDocumento, ColaboradorId = c.ColaboradorId
+        };
+        editandoId = c.Id;
+        mostrarModal = true;
+    }
+
+    private void CerrarModal() => mostrarModal = false;
+
+    private async Task Guardar()
+    {
+        guardando = true;
+        bool ok = editandoId.HasValue
+            ? await ApiService.UpdateAsync(editandoId.Value, form) is not null
+            : await ApiService.CreateAsync(form) is not null;
+        guardando = false;
+
+        if (ok) { CerrarModal(); await Cargar(); await toast.Show(editandoId.HasValue ? "Certificado actualizado." : "Certificado creado."); }
+        else await toast.Show("Error al guardar.", "error");
+    }
+
+    private void PedirConfirmacion(CertificadoDto c)
+    {
+        eliminandoId = c.Id;
+        confirmMensaje = $"¿Eliminar el certificado \"{c.Nombre}\"?";
+        confirmVisible = true;
+    }
+
+    private async Task ConfirmarEliminar()
+    {
+        confirmVisible = false;
+        if (await ApiService.DeleteAsync(eliminandoId)) { await Cargar(); await toast.Show("Certificado eliminado."); }
+        else await toast.Show("No se pudo eliminar.", "error");
+    }
+}

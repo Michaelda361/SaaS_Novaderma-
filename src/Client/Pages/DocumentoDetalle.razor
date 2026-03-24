@@ -1,0 +1,287 @@
+@page "/documentos/{Id:int}"
+@attribute [Authorize]
+@inject DocumentoApiService DocumentoApi
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<Toast @ref="toast" />
+
+@if (loading)
+{
+    <div class="loading-state">Cargando documento...</div>
+}
+else if (doc is null)
+{
+    <div class="empty-state">Documento no encontrado</div>
+}
+else
+{
+    <div class="page-header">
+        <div>
+            <h2 class="page-title">@doc.Titulo</h2>
+            <p class="page-subtitle">@doc.TipoDocumento · v@doc.Version · @(doc.AreaNombre ?? "Sin área")</p>
+        </div>
+        <div style="display:flex;gap:.5rem;align-items:center;">
+            <span class="badge @GetEstadoClass(doc.Estado)">@doc.Estado</span>
+            @if (!string.IsNullOrWhiteSpace(doc.SharePointUrl))
+            {
+                <a href="@doc.SharePointUrl" target="_blank" class="btn btn-secondary">
+                    ⬇ Descargar
+                </a>
+                <button class="btn btn-primary" @onclick="AbrirEditorOnline" disabled="@cargandoEditor">
+                    @(cargandoEditor ? "Cargando..." : "✏ Editar en Office")
+                </button>
+            }
+            @if (doc.Estado != "Publicado")
+            {
+                <button class="btn btn-primary" @onclick="AvanzarEstado" disabled="@procesando">
+                    @GetBotonAvance(doc.Estado)
+                </button>
+            }
+        </div>
+    </div>
+
+    <div class="detail-grid">
+        <!-- Historial de versiones -->
+        <div class="card">
+            <h3 class="card-title">Historial de versiones</h3>
+            @if (!doc.Versiones.Any())
+            {
+                <p class="text-muted">Sin versiones anteriores</p>
+            }
+            else
+            {
+                <ul class="version-list">
+                    @foreach (var v in doc.Versiones)
+                    {
+                        <li class="version-item">
+                            <span class="version-badge">v@v.NumeroVersion</span>
+                            <span class="text-muted">@v.FechaCreacion.ToString("dd/MM/yyyy HH:mm")</span>
+                        </li>
+                    }
+                </ul>
+            }
+        </div>
+
+        <!-- Flujo de aprobación -->
+        <div class="card">
+            <h3 class="card-title">Flujo de aprobación</h3>
+            @if (!doc.Flujo.Any())
+            {
+                <p class="text-muted">Sin transiciones registradas</p>
+            }
+            else
+            {
+                <ul class="timeline">
+                    @foreach (var f in doc.Flujo)
+                    {
+                        <li class="timeline-item">
+                            <div class="timeline-dot"></div>
+                            <div class="timeline-content">
+                                <span class="badge badge-secondary">@f.EstadoAnterior</span>
+                                → <span class="badge @GetEstadoClass(f.EstadoNuevo)">@f.EstadoNuevo</span>
+                                <div class="text-muted" style="font-size:.8rem;">
+                                    @f.ColaboradorNombre · @f.FechaTransicion.ToString("dd/MM/yyyy HH:mm")
+                                </div>
+                            </div>
+                        </li>
+                    }
+                </ul>
+            }
+        </div>
+    </div>
+
+    @if (doc.Estado == "Publicado")
+    {
+        <div class="card" style="margin-top:1rem;">
+            <h3 class="card-title">Proponer modificación</h3>
+            <button class="btn btn-secondary" @onclick="() => showPropuestaModal = true">
+                ✏ Proponer Cambio
+            </button>
+        </div>
+    }
+
+    <!-- Propuestas -->
+    <div class="card" style="margin-top:1rem;">
+        <h3 class="card-title">Propuestas de modificación</h3>
+        @if (!doc.Propuestas.Any())
+        {
+            <p class="text-muted">No hay propuestas para este documento</p>
+        }
+        else
+        {
+            <div class="table-wrapper">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Colaborador</th>
+                            <th>Descripción</th>
+                            <th>Archivo</th>
+                            <th>Estado</th>
+                            <th>Fecha</th>
+                            <th>Motivo rechazo</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var p in doc.Propuestas)
+                        {
+                            <tr>
+                                <td>@p.ColaboradorNombre</td>
+                                <td>@p.Descripcion</td>
+                                <td>@(p.TieneArchivo ? "Sí" : "No")</td>
+                                <td>
+                                    <span class="badge @GetPropuestaClass(p.EstadoPropuesta)">
+                                        @p.EstadoPropuesta
+                                    </span>
+                                </td>
+                                <td>@p.FechaCreacion.ToString("dd/MM/yyyy")</td>
+                                <td>@(p.MotivoRechazo ?? "—")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+}
+
+<!-- Modal Proponer Cambio -->
+@if (showPropuestaModal)
+{
+    <div class="modal-overlay" @onclick="() => showPropuestaModal = false">
+        <div class="modal" @onclick:stopPropagation>
+            <div class="modal-header">
+                <h3>Proponer Modificación</h3>
+                <button class="modal-close" @onclick="() => showPropuestaModal = false">×</button>
+            </div>
+            <div class="modal-body">
+                <EditForm Model="propuestaForm" OnValidSubmit="EnviarPropuesta">
+                    <DataAnnotationsValidator />
+                    <div class="form-group">
+                        <label>Descripción del cambio *</label>
+                        <InputTextArea class="form-control" rows="4"
+                                       @bind-Value="propuestaForm.Descripcion" />
+                        <ValidationMessage For="() => propuestaForm.Descripcion" />
+                    </div>
+                    <div class="form-group">
+                        <label>Archivo nuevo (opcional)</label>
+                        <InputFile OnChange="OnArchivoPropuesta" class="form-control" />
+                        @if (archivoPropuesta is not null)
+                        {
+                            <small class="text-muted">@archivoPropuesta.Name</small>
+                        }
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary"
+                                @onclick="() => showPropuestaModal = false">
+                            Cancelar
+                        </button>
+                        <button type="submit" class="btn btn-primary" disabled="@enviandoPropuesta">
+                            @(enviandoPropuesta ? "Enviando..." : "Enviar Propuesta")
+                        </button>
+                    </div>
+                </EditForm>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private Toast toast = null!;
+    private DocumentoDetalleDto? doc;
+    private bool loading = true;
+    private bool procesando = false;
+    private bool cargandoEditor = false;
+    private bool showPropuestaModal = false;
+    private bool enviandoPropuesta = false;
+
+    private CreatePropuestaDto propuestaForm = new();
+    private IBrowserFile? archivoPropuesta;
+
+    protected override async Task OnInitializedAsync()
+    {
+        doc = await DocumentoApi.GetByIdAsync(Id);
+        loading = false;
+        if (doc is null)
+        {
+            toast.Show("Documento no encontrado", "error");
+            await Task.Delay(1500);
+            Nav.NavigateTo("/documentos");
+        }
+    }
+
+    private async Task AbrirEditorOnline()
+    {
+        cargandoEditor = true;
+        var url = await DocumentoApi.ObtenerUrlEdicionAsync(Id);
+        cargandoEditor = false;
+        if (!string.IsNullOrWhiteSpace(url))
+            await JS.InvokeVoidAsync("open", url, "_blank");
+        else
+            toast.Show("No se pudo obtener el enlace de edición", "error");
+    }
+
+    private async Task AvanzarEstado()
+    {
+        procesando = true;
+        var ok = await DocumentoApi.AvanzarEstadoAsync(Id);
+        procesando = false;
+        if (ok)
+        {
+            toast.Show("Estado actualizado correctamente");
+            doc = await DocumentoApi.GetByIdAsync(Id);
+        }
+        else
+        {
+            toast.Show("No se pudo avanzar el estado", "error");
+        }
+    }
+
+    private void OnArchivoPropuesta(InputFileChangeEventArgs e) =>
+        archivoPropuesta = e.File;
+
+    private async Task EnviarPropuesta()
+    {
+        enviandoPropuesta = true;
+        var ok = await DocumentoApi.CrearPropuestaAsync(Id, propuestaForm, archivoPropuesta);
+        enviandoPropuesta = false;
+        if (ok)
+        {
+            toast.Show("Propuesta enviada correctamente. El jefe de área la revisará.");
+            showPropuestaModal = false;
+            propuestaForm = new();
+            archivoPropuesta = null;
+        }
+        else
+        {
+            toast.Show("Error al enviar la propuesta", "error");
+        }
+    }
+
+    private static string GetEstadoClass(string estado) => estado switch
+    {
+        "Borrador"  => "badge-secondary",
+        "Revision"  => "badge-warning",
+        "Aprobado"  => "badge-info",
+        "Publicado" => "badge-success",
+        _           => "badge-secondary"
+    };
+
+    private static string GetPropuestaClass(string estado) => estado switch
+    {
+        "PendienteRevision" => "badge-warning",
+        "Aprobada"          => "badge-success",
+        "Rechazada"         => "badge-danger",
+        _                   => "badge-secondary"
+    };
+
+    private static string GetBotonAvance(string estado) => estado switch
+    {
+        "Borrador" => "Enviar a Revisión",
+        "Revision" => "Aprobar",
+        "Aprobado" => "Publicar",
+        _          => "Avanzar"
+    };
+}

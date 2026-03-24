@@ -1,0 +1,195 @@
+@page "/documentos/propuestas"
+@attribute [Authorize]
+@inject DocumentoApiService DocumentoApi
+@inject NavigationManager Nav
+
+<Toast @ref="toast" />
+<ConfirmDialog Visible="showConfirmAprobar"
+               Message="@confirmAprobarMsg"
+               OnConfirm="EjecutarAprobacion"
+               OnCancel="() => showConfirmAprobar = false" />
+
+<div class="page-header">
+    <div>
+        <h2 class="page-title">Propuestas Pendientes</h2>
+        <p class="page-subtitle">Propuestas de modificación de tu área</p>
+    </div>
+</div>
+
+<div class="card">
+    @if (loading)
+    {
+        <div class="loading-state">Cargando propuestas...</div>
+    }
+    else if (!propuestas.Any())
+    {
+        <div class="empty-state">
+            <span class="empty-icon">✅</span>
+            <p>No hay propuestas pendientes en tu área</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-wrapper">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Documento</th>
+                        <th>Propuesto por</th>
+                        <th>Descripción</th>
+                        <th>Archivo</th>
+                        <th>Fecha</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var p in propuestas)
+                    {
+                        <tr>
+                            <td>
+                                <a href="documentos/@p.DocumentoId" class="link">
+                                    @p.DocumentoTitulo
+                                </a>
+                            </td>
+                            <td>@p.ColaboradorNombre</td>
+                            <td style="max-width:300px;">@p.Descripcion</td>
+                            <td>@(p.TieneArchivo ? "📎 Sí" : "—")</td>
+                            <td>@p.FechaCreacion.ToString("dd/MM/yyyy HH:mm")</td>
+                            <td>
+                                <button class="btn btn-sm btn-success"
+                                        @onclick="() => ConfirmarAprobacion(p)">
+                                    ✓ Aprobar
+                                </button>
+                                <button class="btn btn-sm btn-danger"
+                                        @onclick="() => AbrirRechazo(p)">
+                                    ✗ Rechazar
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+<!-- Modal Rechazo -->
+@if (showRechazoModal)
+{
+    <div class="modal-overlay" @onclick="CerrarRechazo">
+        <div class="modal" @onclick:stopPropagation>
+            <div class="modal-header">
+                <h3>Rechazar Propuesta</h3>
+                <button class="modal-close" @onclick="CerrarRechazo">×</button>
+            </div>
+            <div class="modal-body">
+                <EditForm Model="rechazoForm" OnValidSubmit="EjecutarRechazo">
+                    <DataAnnotationsValidator />
+                    <p class="text-muted" style="margin-bottom:1rem;">
+                        Propuesta de <strong>@propuestaActual?.ColaboradorNombre</strong>
+                        sobre <strong>@propuestaActual?.DocumentoTitulo</strong>
+                    </p>
+                    <div class="form-group">
+                        <label>Motivo del rechazo *</label>
+                        <InputTextArea class="form-control" rows="3"
+                                       @bind-Value="rechazoForm.MotivoRechazo" />
+                        <ValidationMessage For="() => rechazoForm.MotivoRechazo" />
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" @onclick="CerrarRechazo">
+                            Cancelar
+                        </button>
+                        <button type="submit" class="btn btn-danger" disabled="@procesando">
+                            @(procesando ? "Rechazando..." : "Confirmar Rechazo")
+                        </button>
+                    </div>
+                </EditForm>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private Toast toast = null!;
+
+    private List<PropuestaModificacionDto> propuestas = [];
+    private bool loading = true;
+    private bool procesando = false;
+    private bool showRechazoModal = false;
+    private bool showConfirmAprobar = false;
+    private string confirmAprobarMsg = string.Empty;
+
+    private PropuestaModificacionDto? propuestaActual;
+    private RechazarPropuestaDto rechazoForm = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarPropuestas();
+    }
+
+    private async Task CargarPropuestas()
+    {
+        loading = true;
+        propuestas = await DocumentoApi.GetPropuestasPendientesAsync();
+        loading = false;
+    }
+
+    private void ConfirmarAprobacion(PropuestaModificacionDto p)
+    {
+        propuestaActual = p;
+        confirmAprobarMsg = "¿Aprobar la propuesta de " + p.ColaboradorNombre + " sobre \"" + p.DocumentoTitulo + "\"?";
+        showConfirmAprobar = true;
+    }
+
+    private async Task EjecutarAprobacion()
+    {
+        showConfirmAprobar = false;
+        if (propuestaActual is null) return;
+        procesando = true;
+        var ok = await DocumentoApi.AprobarPropuestaAsync(propuestaActual.Id);
+        procesando = false;
+        if (ok)
+        {
+            toast.Show("Propuesta aprobada. El documento ha sido actualizado.");
+            await CargarPropuestas();
+        }
+        else
+        {
+            toast.Show("Error al aprobar la propuesta", "error");
+        }
+        propuestaActual = null;
+    }
+
+    private void AbrirRechazo(PropuestaModificacionDto p)
+    {
+        propuestaActual = p;
+        rechazoForm = new();
+        showRechazoModal = true;
+    }
+
+    private async Task EjecutarRechazo()
+    {
+        if (propuestaActual is null) return;
+        procesando = true;
+        var ok = await DocumentoApi.RechazarPropuestaAsync(
+            propuestaActual.Id, rechazoForm.MotivoRechazo);
+        procesando = false;
+        if (ok)
+        {
+            toast.Show("Propuesta rechazada correctamente.");
+            CerrarRechazo();
+            await CargarPropuestas();
+        }
+        else
+        {
+            toast.Show("Error al rechazar la propuesta", "error");
+        }
+    }
+
+    private void CerrarRechazo()
+    {
+        showRechazoModal = false;
+        propuestaActual = null;
+        rechazoForm = new();
+    }
+}

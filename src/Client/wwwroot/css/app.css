@@ -1300,3 +1300,7 @@ textarea { resize: vertical; min-height: 80px; }
     color: var(--text);
     border-color: var(--border-hover);
 }
+
+/* OneDrive Browser */
+.onedrive-item:hover { background: var(--hover-bg, #f3f4f6); }
+.onedrive-item-selected { background: var(--primary-light, #ede9fe) !important; }

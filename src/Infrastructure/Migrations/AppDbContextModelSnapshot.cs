@@ -211,6 +211,85 @@ namespace TalentManagement.Infrastructure.Migrations
                     b.ToTable("Colaboradores");
                 });
 
+            modelBuilder.Entity("TalentManagement.Domain.Entities.Documento", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("Activo")
+                        .HasColumnType("bit");
+
+                    b.Property<int?>("AreaId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Estado")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("SharePointItemId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("SharePointUrl")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("TipoDocumento")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Titulo")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Version")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AreaId");
+
+                    b.ToTable("Documentos");
+                });
+
+            modelBuilder.Entity("TalentManagement.Domain.Entities.FlujoAprobacionDoc", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("ColaboradorId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("DocumentoId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("EstadoAnterior")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("EstadoNuevo")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("FechaTransicion")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ColaboradorId");
+
+                    b.HasIndex("DocumentoId");
+
+                    b.ToTable("FlujosAprobacionDoc");
+                });
+
             modelBuilder.Entity("TalentManagement.Domain.Entities.Inscripcion", b =>
                 {
                     b.Property<int>("Id")
@@ -218,6 +297,9 @@ namespace TalentManagement.Infrastructure.Migrations
                         .HasColumnType("int");
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("Activo")
+                        .HasColumnType("bit");
 
                     b.Property<bool>("Asistio")
                         .HasColumnType("bit");
@@ -247,7 +329,60 @@ namespace TalentManagement.Infrastructure.Migrations
                     b.ToTable("Inscripciones");
                 });
 
-            modelBuilder.Entity("TalentManagement.Domain.Entities.RutaAprendizaje", b =>
+            modelBuilder.Entity("TalentManagement.Domain.Entities.PropuestaModificacion", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int?>("AprobadorId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("AreaId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ColaboradorId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Descripcion")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("DocumentoId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("EstadoPropuesta")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("FechaCreacion")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("FechaResolucion")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("MotivoRechazo")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("SharePointItemIdPropuesta")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AprobadorId");
+
+                    b.HasIndex("AreaId");
+
+                    b.HasIndex("ColaboradorId");
+
+                    b.HasIndex("DocumentoId");
+
+                    b.ToTable("PropuestasModificacion");
+                });
+
+            modelBuilder.Entity("TalentManagement.Domain.Entities.RecursoCapacitacion", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -258,25 +393,34 @@ namespace TalentManagement.Infrastructure.Migrations
                     b.Property<bool>("Activo")
                         .HasColumnType("bit");
 
-                    b.Property<int?>("CargoId")
+                    b.Property<int>("CapacitacionId")
                         .HasColumnType("int");
 
                     b.Property<string>("Descripcion")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("Orden")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Tipo")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Titulo")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<string>("Nombre")
+                    b.Property<string>("Url")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("CargoId");
+                    b.HasIndex("CapacitacionId");
 
-                    b.ToTable("RutasAprendizaje");
+                    b.ToTable("RecursosCapacitacion");
                 });
 
-            modelBuilder.Entity("TalentManagement.Domain.Entities.RutaCapacitacion", b =>
+            modelBuilder.Entity("TalentManagement.Domain.Entities.VersionDocumento", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -284,22 +428,25 @@ namespace TalentManagement.Infrastructure.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<int>("CapacitacionId")
+                    b.Property<int>("DocumentoId")
                         .HasColumnType("int");
 
-                    b.Property<int>("Orden")
-                        .HasColumnType("int");
+                    b.Property<DateTime>("FechaCreacion")
+                        .HasColumnType("datetime2");
 
-                    b.Property<int>("RutaAprendizajeId")
-                        .HasColumnType("int");
+                    b.Property<string>("NumeroVersion")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("SharePointItemId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("CapacitacionId");
+                    b.HasIndex("DocumentoId");
 
-                    b.HasIndex("RutaAprendizajeId");
-
-                    b.ToTable("RutaCapacitaciones");
+                    b.ToTable("VersionesDocumento");
                 });
 
             modelBuilder.Entity("TalentManagement.Domain.Entities.Area", b =>
@@ -375,6 +522,34 @@ namespace TalentManagement.Infrastructure.Migrations
                     b.Navigation("Supervisor");
                 });
 
+            modelBuilder.Entity("TalentManagement.Domain.Entities.Documento", b =>
+                {
+                    b.HasOne("TalentManagement.Domain.Entities.Area", "Area")
+                        .WithMany()
+                        .HasForeignKey("AreaId");
+
+                    b.Navigation("Area");
+                });
+
+            modelBuilder.Entity("TalentManagement.Domain.Entities.FlujoAprobacionDoc", b =>
+                {
+                    b.HasOne("TalentManagement.Domain.Entities.Colaborador", "Colaborador")
+                        .WithMany()
+                        .HasForeignKey("ColaboradorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("TalentManagement.Domain.Entities.Documento", "Documento")
+                        .WithMany("FlujoAprobacion")
+                        .HasForeignKey("DocumentoId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Colaborador");
+
+                    b.Navigation("Documento");
+                });
+
             modelBuilder.Entity("TalentManagement.Domain.Entities.Inscripcion", b =>
                 {
                     b.HasOne("TalentManagement.Domain.Entities.Capacitacion", "Capacitacion")
@@ -394,32 +569,60 @@ namespace TalentManagement.Infrastructure.Migrations
                     b.Navigation("Colaborador");
                 });
 
-            modelBuilder.Entity("TalentManagement.Domain.Entities.RutaAprendizaje", b =>
+            modelBuilder.Entity("TalentManagement.Domain.Entities.PropuestaModificacion", b =>
                 {
-                    b.HasOne("TalentManagement.Domain.Entities.Cargo", "Cargo")
-                        .WithMany("RutasAprendizaje")
-                        .HasForeignKey("CargoId");
+                    b.HasOne("TalentManagement.Domain.Entities.Colaborador", "Aprobador")
+                        .WithMany()
+                        .HasForeignKey("AprobadorId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
-                    b.Navigation("Cargo");
+                    b.HasOne("TalentManagement.Domain.Entities.Area", "Area")
+                        .WithMany()
+                        .HasForeignKey("AreaId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("TalentManagement.Domain.Entities.Colaborador", "Colaborador")
+                        .WithMany()
+                        .HasForeignKey("ColaboradorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("TalentManagement.Domain.Entities.Documento", "Documento")
+                        .WithMany("Propuestas")
+                        .HasForeignKey("DocumentoId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Aprobador");
+
+                    b.Navigation("Area");
+
+                    b.Navigation("Colaborador");
+
+                    b.Navigation("Documento");
                 });
 
-            modelBuilder.Entity("TalentManagement.Domain.Entities.RutaCapacitacion", b =>
+            modelBuilder.Entity("TalentManagement.Domain.Entities.RecursoCapacitacion", b =>
                 {
                     b.HasOne("TalentManagement.Domain.Entities.Capacitacion", "Capacitacion")
-                        .WithMany()
+                        .WithMany("Recursos")
                         .HasForeignKey("CapacitacionId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("TalentManagement.Domain.Entities.RutaAprendizaje", "RutaAprendizaje")
-                        .WithMany("RutaCapacitaciones")
-                        .HasForeignKey("RutaAprendizajeId")
+                    b.Navigation("Capacitacion");
+                });
+
+            modelBuilder.Entity("TalentManagement.Domain.Entities.VersionDocumento", b =>
+                {
+                    b.HasOne("TalentManagement.Domain.Entities.Documento", "Documento")
+                        .WithMany("Versiones")
+                        .HasForeignKey("DocumentoId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("Capacitacion");
-
-                    b.Navigation("RutaAprendizaje");
+                    b.Navigation("Documento");
                 });
 
             modelBuilder.Entity("TalentManagement.Domain.Entities.Area", b =>
@@ -432,13 +635,13 @@ namespace TalentManagement.Infrastructure.Migrations
             modelBuilder.Entity("TalentManagement.Domain.Entities.Capacitacion", b =>
                 {
                     b.Navigation("Inscripciones");
+
+                    b.Navigation("Recursos");
                 });
 
             modelBuilder.Entity("TalentManagement.Domain.Entities.Cargo", b =>
                 {
                     b.Navigation("Colaboradores");
-
-                    b.Navigation("RutasAprendizaje");
                 });
 
             modelBuilder.Entity("TalentManagement.Domain.Entities.Colaborador", b =>
@@ -448,9 +651,13 @@ namespace TalentManagement.Infrastructure.Migrations
                     b.Navigation("Inscripciones");
                 });
 
-            modelBuilder.Entity("TalentManagement.Domain.Entities.RutaAprendizaje", b =>
+            modelBuilder.Entity("TalentManagement.Domain.Entities.Documento", b =>
                 {
-                    b.Navigation("RutaCapacitaciones");
+                    b.Navigation("FlujoAprobacion");
+
+                    b.Navigation("Propuestas");
+
+                    b.Navigation("Versiones");
                 });
 #pragma warning restore 612, 618
         }

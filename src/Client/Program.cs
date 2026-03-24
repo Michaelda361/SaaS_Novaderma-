@@ -12,8 +12,15 @@ builder.RootComponents.Add<HeadOutlet>("head::after");
 builder.Services.AddMsalAuthentication(options =>
 {
     builder.Configuration.Bind("AzureAd", options.ProviderOptions.Authentication);
+    // Persistir tokens en localStorage para que sobrevivan recargas de página
+    builder.Configuration.Bind("MsalProviderOptions", options.ProviderOptions);
     options.ProviderOptions.DefaultAccessTokenScopes.Add(
         "api://60ea78c7-4add-4d9e-ba23-ac5d2c1ee4ac/access_as_user");
+    // Solicitar permisos de Graph durante el login inicial (consentimiento incremental)
+    options.ProviderOptions.AdditionalScopesToConsent.Add(
+        "https://graph.microsoft.com/Files.Read");
+    options.ProviderOptions.AdditionalScopesToConsent.Add(
+        "https://graph.microsoft.com/Files.ReadWrite");
     options.ProviderOptions.LoginMode = "redirect";
     options.ProviderOptions.Authentication.PostLogoutRedirectUri = null;
 });
@@ -42,6 +49,9 @@ builder.Services.AddScoped<AreaApiService>();
 builder.Services.AddScoped<CargoApiService>();
 builder.Services.AddScoped<InscripcionApiService>();
 builder.Services.AddScoped<RecursoApiService>();
+builder.Services.AddScoped<DocumentoApiService>();
+builder.Services.AddScoped<OneDrivePickerService>();
+builder.Services.AddScoped<OneDriveGraphService>();
 builder.Services.AddScoped<ThemeService>();
 
 await builder.Build().RunAsync();

@@ -1,0 +1,235 @@
+@inject OneDriveGraphService GraphService
+
+@if (Visible)
+{
+    <div class="modal-backdrop" style="z-index:1100;" @onclick="Cancelar">
+        <div class="modal" style="max-width:620px;max-height:82vh;display:flex;flex-direction:column;" @onclick:stopPropagation>
+            <div class="modal-header">
+                <span class="modal-title">📂 Seleccionar de OneDrive</span>
+                <button class="btn btn-icon btn-ghost" @onclick="Cancelar">✕</button>
+            </div>
+
+            @if (estado == EstadoBrowser.Consentimiento)
+            {
+                <div style="padding:1.5rem;text-align:center;">
+                    <div style="font-size:2.5rem;margin-bottom:1rem;">🔑</div>
+                    <p style="font-weight:600;margin-bottom:.5rem;">Permiso requerido</p>
+                    <p style="font-size:.875rem;color:var(--text-muted);margin-bottom:1.25rem;">
+                        Para acceder a tus archivos de OneDrive necesitas autorizar el acceso.
+                        Se abrirá una ventana emergente de Microsoft — no se recargará la página.
+                    </p>
+                    @if (errorMsg is not null)
+                    {
+                        <div class="alert alert-danger" style="margin-bottom:1rem;font-size:.8rem;">@errorMsg</div>
+                    }
+                    <button class="btn btn-primary" @onclick="AutorizarConPopup" disabled="@autorizando">
+                        @if (autorizando)
+                        {
+                            <span class="spinner" style="width:14px;height:14px;border-width:2px;margin-right:.4rem;"></span>
+                            <span>Autorizando...</span>
+                        }
+                        else
+                        {
+                            <span>🔓 Autorizar acceso a OneDrive</span>
+                        }
+                    </button>
+                </div>
+            }
+            else if (estado == EstadoBrowser.Error)
+            {
+                <div style="padding:1rem;">
+                    <div class="alert alert-danger">⚠ @errorMsg</div>
+                </div>
+            }
+            else
+            {
+                <!-- Breadcrumb -->
+                <div style="padding:.5rem 1rem;border-bottom:1px solid var(--border);display:flex;gap:.25rem;flex-wrap:wrap;align-items:center;min-height:2.5rem;">
+                    <button class="btn btn-sm btn-ghost" @onclick="IrARaiz">🏠 Inicio</button>
+                    @foreach (var (nombre, id) in breadcrumb)
+                    {
+                        <span style="color:var(--text-muted);">›</span>
+                        <button class="btn btn-sm btn-ghost" @onclick="() => NavegaA(id, nombre)">@nombre</button>
+                    }
+                </div>
+
+                <!-- Lista de archivos -->
+                <div style="flex:1;overflow-y:auto;padding:.5rem;">
+                    @if (estado == EstadoBrowser.Cargando)
+                    {
+                        <div class="loading"><div class="spinner"></div> Cargando archivos...</div>
+                    }
+                    else if (!items.Any())
+                    {
+                        <div class="empty-state">
+                            <div class="empty-state-icon">📭</div>
+                            <p>Carpeta vacía</p>
+                        </div>
+                    }
+                    else
+                    {
+                        <ul style="list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:2px;">
+                            @foreach (var item in items)
+                            {
+                                var it = item;
+                                var isSelected = seleccionado?.Id == it.Id;
+                                <li style="display:flex;align-items:center;gap:.625rem;padding:.5rem .75rem;border-radius:var(--radius);cursor:pointer;
+                                           background:@(isSelected ? "var(--primary-light)" : "transparent");
+                                           border:1px solid @(isSelected ? "var(--primary)" : "transparent");"
+                                    @onclick="() => SeleccionarItem(it)">
+                                    <span style="font-size:1.1rem;flex-shrink:0;">@(it.EsCarpeta ? "📁" : GetIcono(it.Name))</span>
+                                    <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.875rem;">@it.Name</span>
+                                    @if (!it.EsCarpeta && it.Size.HasValue)
+                                    {
+                                        <span style="font-size:.75rem;color:var(--text-muted);flex-shrink:0;">@FormatSize(it.Size.Value)</span>
+                                    }
+                                    @if (it.EsCarpeta)
+                                    {
+                                        <span style="color:var(--text-muted);font-size:.8rem;flex-shrink:0;">›</span>
+                                    }
+                                </li>
+                            }
+                        </ul>
+                    }
+                </div>
+            }
+
+            <div class="modal-footer">
+                <button class="btn btn-ghost" @onclick="Cancelar">Cancelar</button>
+                @if (estado == EstadoBrowser.Listo)
+                {
+                    <button class="btn btn-primary"
+                            disabled="@(seleccionado is null || seleccionado.EsCarpeta)"
+                            @onclick="Confirmar">
+                        Seleccionar
+                    </button>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private enum EstadoBrowser { Cargando, Listo, Consentimiento, Error }
+
+    [Parameter] public bool Visible { get; set; }
+    [Parameter] public EventCallback<OneDriveItem> OnSeleccionado { get; set; }
+    [Parameter] public EventCallback OnCancelado { get; set; }
+
+    private List<OneDriveItem> items = [];
+    private OneDriveItem? seleccionado;
+    private EstadoBrowser estado = EstadoBrowser.Cargando;
+    private string? errorMsg = null;
+    private bool autorizando = false;
+    private List<(string nombre, string? id)> breadcrumb = [];
+    private bool _prevVisible = false;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Visible && !_prevVisible)
+        {
+            items = [];
+            errorMsg = null;
+            breadcrumb = [];
+            seleccionado = null;
+            await CargarCarpeta(null);
+        }
+        _prevVisible = Visible;
+    }
+
+    private async Task CargarCarpeta(string? itemId, bool usarPopup = false)
+    {
+        estado = EstadoBrowser.Cargando;
+        seleccionado = null;
+        StateHasChanged();
+
+        var result = await GraphService.ListarCarpetaAsync(itemId, usarPopup);
+
+        if (result.NecesitaConsentimiento)
+        {
+            errorMsg = result.Error; // puede ser null (primer intento) o mensaje de error previo
+            estado = EstadoBrowser.Consentimiento;
+        }
+        else if (result.Error is not null)
+        {
+            errorMsg = result.Error;
+            estado = EstadoBrowser.Error;
+        }
+        else
+        {
+            items = [.. result.Items.Where(i => i.EsCarpeta).OrderBy(i => i.Name),
+                     .. result.Items.Where(i => !i.EsCarpeta).OrderBy(i => i.Name)];
+            errorMsg = null;
+            estado = EstadoBrowser.Listo;
+        }
+    }
+
+    private async Task AutorizarConPopup()
+    {
+        autorizando = true;
+        errorMsg = null;
+        StateHasChanged();
+
+        // Cargar con popup=true — el JS abrirá acquireTokenPopup
+        await CargarCarpeta(null, usarPopup: true);
+
+        autorizando = false;
+    }
+
+    private async Task SeleccionarItem(OneDriveItem item)
+    {
+        if (item.EsCarpeta)
+        {
+            breadcrumb.Add((item.Name, item.Id));
+            await CargarCarpeta(item.Id);
+        }
+        else
+        {
+            seleccionado = item;
+        }
+    }
+
+    private async Task IrARaiz()
+    {
+        breadcrumb.Clear();
+        await CargarCarpeta(null);
+    }
+
+    private async Task NavegaA(string? id, string nombre)
+    {
+        var idx = breadcrumb.FindIndex(b => b.id == id);
+        if (idx >= 0)
+            breadcrumb = breadcrumb.Take(idx + 1).ToList();
+        await CargarCarpeta(id);
+    }
+
+    private async Task Confirmar()
+    {
+        if (seleccionado is not null)
+            await OnSeleccionado.InvokeAsync(seleccionado);
+    }
+
+    private Task Cancelar() => OnCancelado.InvokeAsync();
+
+    private static string GetIcono(string nombre)
+    {
+        var ext = Path.GetExtension(nombre).ToLowerInvariant();
+        return ext switch
+        {
+            ".docx" or ".doc" => "📝",
+            ".xlsx" or ".xls" => "📊",
+            ".pptx" or ".ppt" => "📋",
+            ".pdf"            => "📕",
+            ".png" or ".jpg" or ".jpeg" or ".gif" => "🖼️",
+            ".zip" or ".rar"  => "🗜️",
+            _                 => "📄"
+        };
+    }
+
+    private static string FormatSize(long bytes) => bytes switch
+    {
+        < 1024             => $"{bytes} B",
+        < 1024 * 1024      => $"{bytes / 1024} KB",
+        _                  => $"{bytes / (1024 * 1024)} MB"
+    };
+}

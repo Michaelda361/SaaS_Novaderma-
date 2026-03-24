@@ -44,7 +44,7 @@ public class InscripcionRepository(AppDbContext context) : IInscripcionRepositor
     {
         var inscripcion = await context.Inscripciones.FindAsync(id);
         if (inscripcion is null) return false;
-        context.Inscripciones.Remove(inscripcion);
+        inscripcion.Activo = false;
         await context.SaveChangesAsync();
         return true;
     }
