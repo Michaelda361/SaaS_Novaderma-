@@ -1,9 +1,16 @@
 ﻿@inherits LayoutComponentBase
 @inject ThemeService Theme
 @inject DocumentoApiService DocumentoApi
+@inject AuthenticationStateProvider AuthState
 @implements IDisposable
 
-<div class="app-layout">
+<div class="app-layout @(sidebarOpen ? "sidebar-open" : "")">
+    <!-- Overlay para cerrar sidebar en móvil -->
+    @if (sidebarOpen)
+    {
+        <div class="sidebar-overlay" @onclick="CloseSidebar"></div>
+    }
+
     <aside class="sidebar">
         <div class="sidebar-brand">
             <div class="sidebar-brand-icon">
@@ -13,6 +20,7 @@
                 <h1>NovaHub</h1>
                 <span>Gestión de Talento</span>
             </div>
+            <button class="sidebar-close-btn" @onclick="CloseSidebar">✕</button>
         </div>
 
         <nav class="sidebar-nav">
@@ -50,10 +58,10 @@
 
         <div class="sidebar-footer">
             <div class="sidebar-user">
-                <div class="avatar avatar-sm" style="background:#312e81;color:#a5b4fc;">AD</div>
+                <div class="avatar avatar-sm" style="background:#312e81;color:#a5b4fc;">@userInitials</div>
                 <div class="sidebar-user-info">
-                    <div class="sidebar-user-name">Administrador</div>
-                    <div class="sidebar-user-role">Admin del sistema</div>
+                    <div class="sidebar-user-name">@userName</div>
+                    <div class="sidebar-user-role">@userEmail</div>
                 </div>
             </div>
         </div>
@@ -62,6 +70,7 @@
     <div class="main-content">
         <header class="topbar">
             <div class="topbar-left">
+                <button class="hamburger-btn" @onclick="OpenSidebar" title="Abrir menú">☰</button>
                 <span class="topbar-title">@GetPageTitle()</span>
             </div>
             <div class="topbar-right">
@@ -80,7 +89,14 @@
 @code {
     [CascadingParameter] private RouteData? RouteData { get; set; }
 
+    private bool sidebarOpen = false;
     private int propuestasPendientes = 0;
+    private string userName = "Usuario";
+    private string userEmail = "";
+    private string userInitials = "U";
+
+    private void OpenSidebar() => sidebarOpen = true;
+    private void CloseSidebar() => sidebarOpen = false;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -88,6 +104,25 @@
         {
             Theme.OnChange += StateHasChanged;
             await Theme.InitAsync();
+
+            var auth = await AuthState.GetAuthenticationStateAsync();
+            var user = auth.User;
+            if (user.Identity?.IsAuthenticated == true)
+            {
+                var name = user.FindFirst("name")?.Value
+                        ?? user.FindFirst("preferred_username")?.Value
+                        ?? user.Identity.Name
+                        ?? "Usuario";
+                userEmail = user.FindFirst("preferred_username")?.Value
+                         ?? user.FindFirst("upn")?.Value
+                         ?? "";
+                userName = name;
+                var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                userInitials = parts.Length >= 2
+                    ? $"{parts[0][0]}{parts[1][0]}".ToUpper()
+                    : name.Length > 0 ? name[0..1].ToUpper() : "U";
+            }
+
             propuestasPendientes = await DocumentoApi.GetPropuestasPendientesCountAsync();
             StateHasChanged();
         }

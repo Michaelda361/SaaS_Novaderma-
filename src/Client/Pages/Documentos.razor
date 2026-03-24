@@ -16,34 +16,34 @@
     </button>
 </div>
 
-<!-- Filtros -->
 <div class="card" style="margin-bottom:1rem;">
-    <div class="filter-row">
-        <select class="form-control" @bind="filtroTipo" @bind:after="Filtrar">
+    <div class="filter-bar">
+        <select @bind="filtroTipo" @bind:after="Filtrar">
             <option value="">Todos los tipos</option>
             @foreach (var t in tipos)
             {
                 <option value="@t">@t</option>
             }
         </select>
-        <AuthorizeView Roles="Admin">
-            <select class="form-control" @bind="filtroEstado" @bind:after="Filtrar">
-                <option value="">Todos los estados</option>
-                @foreach (var e in estados)
-                {
-                    <option value="@e">@e</option>
-                }
-            </select>
-        </AuthorizeView>
-        <select class="form-control" @bind="filtroAreaId" @bind:after="Filtrar">
+        <select @bind="filtroEstado" @bind:after="Filtrar">
+            <option value="">Todos los estados</option>
+            @foreach (var e in estados)
+            {
+                <option value="@e">@e</option>
+            }
+        </select>
+        <select @bind="filtroAreaId" @bind:after="Filtrar">
             <option value="0">Todas las áreas</option>
             @foreach (var a in areas)
             {
                 <option value="@a.Id">@a.Nombre</option>
             }
         </select>
-        <input class="form-control" placeholder="Buscar por título..."
-               @bind="filtroBusqueda" @bind:after="Filtrar" />
+        <div class="search-input-wrap">
+            <span class="search-icon">🔍</span>
+            <input placeholder="Buscar por título..."
+                   @bind="filtroBusqueda" @bind:after="Filtrar" />
+        </div>
     </div>
 </div>
 
@@ -51,12 +51,13 @@
 <div class="card">
     @if (loading)
     {
-        <div class="loading-state">Cargando documentos...</div>
+        <div class="loading"><div class="spinner"></div> Cargando...</div>
     }
     else if (!documentos.Any())
     {
         <div class="empty-state">
-            <span class="empty-icon">📄</span>
+            <div class="empty-state-icon">📄</div>
+            <h3>Sin documentos</h3>
             <p>No hay documentos que coincidan con los filtros</p>
         </div>
     }
