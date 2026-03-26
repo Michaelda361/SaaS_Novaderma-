@@ -6,10 +6,10 @@ namespace TalentManagement.Application.Services;
 
 public class ColaboradorService(IColaboradorRepository repository)
 {
-    public async Task<IEnumerable<ColaboradorDto>> GetAllAsync()
+    public async Task<List<ColaboradorDto>> GetAllAsync()
     {
         var colaboradores = await repository.GetAllAsync();
-        return colaboradores.Select(MapToDto);
+        return colaboradores.Select(MapToDto).ToList();
     }
 
     public async Task<ColaboradorDto?> GetByIdAsync(int id)
@@ -27,6 +27,10 @@ public class ColaboradorService(IColaboradorRepository repository)
             Email = dto.Email,
             Telefono = dto.Telefono,
             FechaIngreso = dto.FechaIngreso,
+            Cedula = dto.Cedula,
+            TipoContrato = dto.TipoContrato,
+            SueldoBasico = dto.SueldoBasico,
+            Ciudad = dto.Ciudad,
             AreaId = dto.AreaId,
             CargoId = dto.CargoId,
             SupervisorId = dto.SupervisorId
@@ -45,6 +49,10 @@ public class ColaboradorService(IColaboradorRepository repository)
         colaborador.Apellido = dto.Apellido;
         colaborador.Email = dto.Email;
         colaborador.Telefono = dto.Telefono;
+        colaborador.Cedula = dto.Cedula;
+        colaborador.TipoContrato = dto.TipoContrato;
+        colaborador.SueldoBasico = dto.SueldoBasico;
+        colaborador.Ciudad = dto.Ciudad;
         colaborador.AreaId = dto.AreaId;
         colaborador.CargoId = dto.CargoId;
         colaborador.SupervisorId = dto.SupervisorId;
@@ -69,6 +77,10 @@ public class ColaboradorService(IColaboradorRepository repository)
         Email = c.Email,
         Telefono = c.Telefono,
         FechaIngreso = c.FechaIngreso,
+        Cedula = c.Cedula,
+        TipoContrato = c.TipoContrato,
+        SueldoBasico = c.SueldoBasico,
+        Ciudad = c.Ciudad,
         AreaNombre = c.Area?.Nombre ?? string.Empty,
         AreaId = c.AreaId,
         CargoNombre = c.Cargo?.Nombre ?? string.Empty,

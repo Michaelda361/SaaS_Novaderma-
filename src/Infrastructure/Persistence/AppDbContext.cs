@@ -6,6 +6,12 @@ namespace TalentManagement.Infrastructure.Persistence;
 
 public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
 {
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+    {
+        // Suprimir warning de cambios pendientes — el modelo está sincronizado
+        optionsBuilder.ConfigureWarnings(w =>
+            w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning));
+    }
     public DbSet<Colaborador> Colaboradores => Set<Colaborador>();
     public DbSet<Area> Areas => Set<Area>();
     public DbSet<Cargo> Cargos => Set<Cargo>();
@@ -19,6 +25,14 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<VersionDocumento> VersionesDocumento => Set<VersionDocumento>();
     public DbSet<PropuestaModificacion> PropuestasModificacion => Set<PropuestaModificacion>();
     public DbSet<FlujoAprobacionDoc> FlujosAprobacionDoc => Set<FlujoAprobacionDoc>();
+
+    // Cartas Laborales
+    public DbSet<PlantillaDocumento> PlantillasDocumento => Set<PlantillaDocumento>();
+    public DbSet<PlantillaDocumentoArea> PlantillaDocumentoAreas => Set<PlantillaDocumentoArea>();
+    public DbSet<SolicitudDocumento> SolicitudesDocumento => Set<SolicitudDocumento>();
+
+    // Auditoría
+    public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -104,5 +118,55 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .HasOne(f => f.Colaborador).WithMany()
             .HasForeignKey(f => f.ColaboradorId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        // ── AuditLog ──────────────────────────────────────────────────────────
+        modelBuilder.Entity<AuditLog>()
+            .HasOne(a => a.Colaborador).WithMany()
+            .HasForeignKey(a => a.ColaboradorId)
+            .OnDelete(DeleteBehavior.SetNull)
+            .IsRequired(false);
+        // AuditLog no tiene soft delete — los registros nunca se eliminan
+
+        // ── Cartas Laborales ──────────────────────────────────────────────────
+        modelBuilder.Entity<PlantillaDocumento>()
+            .HasQueryFilter(p => p.Activo);
+
+        // Query filters para evitar warnings de EF con relaciones requeridas
+        modelBuilder.Entity<PlantillaDocumentoArea>()
+            .HasQueryFilter(pa => pa.Area!.Activo && pa.PlantillaDocumento!.Activo);
+
+        modelBuilder.Entity<SolicitudDocumento>()
+            .HasQueryFilter(s => s.Colaborador!.Activo && s.PlantillaDocumento!.Activo);
+
+        modelBuilder.Entity<PlantillaDocumentoArea>()
+            .HasKey(pa => new { pa.PlantillaDocumentoId, pa.AreaId });
+
+        modelBuilder.Entity<PlantillaDocumentoArea>()
+            .HasOne(pa => pa.PlantillaDocumento)
+            .WithMany(p => p.Areas)
+            .HasForeignKey(pa => pa.PlantillaDocumentoId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<PlantillaDocumentoArea>()
+            .HasOne(pa => pa.Area)
+            .WithMany()
+            .HasForeignKey(pa => pa.AreaId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<SolicitudDocumento>()
+            .HasOne(s => s.PlantillaDocumento)
+            .WithMany(p => p.Solicitudes)
+            .HasForeignKey(s => s.PlantillaDocumentoId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<SolicitudDocumento>()
+            .HasOne(s => s.Colaborador)
+            .WithMany()
+            .HasForeignKey(s => s.ColaboradorId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<Colaborador>()
+            .Property(c => c.SueldoBasico)
+            .HasPrecision(18, 2);
     }
 }

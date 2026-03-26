@@ -19,8 +19,6 @@
 
 @code {
     private void Login() => Navigation.NavigateToLogin("authentication/login");
-
-    // Cierra sesión solo en la app — NO cierra la sesión de Microsoft/Office 365
     private void LogoutLocal() => Navigation.NavigateToLogout("authentication/logout", "landing");
 
     private static string Iniciales(string? nombre)

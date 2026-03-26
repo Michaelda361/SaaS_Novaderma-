@@ -132,6 +132,28 @@
                             <InputDate @bind-Value="form.FechaIngreso" />
                         </div>
                         <div class="form-group">
+                            <label>Cédula</label>
+                            <InputText @bind-Value="form.Cedula" placeholder="Ej: 1083693175" />
+                        </div>
+                        <div class="form-group">
+                            <label>Tipo de contrato</label>
+                            <InputSelect @bind-Value="form.TipoContrato">
+                                <option value="">-- Selecciona --</option>
+                                <option value="término indefinido">Término indefinido</option>
+                                <option value="término fijo">Término fijo</option>
+                                <option value="obra o labor">Obra o labor</option>
+                                <option value="prestación de servicios">Prestación de servicios</option>
+                            </InputSelect>
+                        </div>
+                        <div class="form-group">
+                            <label>Sueldo básico</label>
+                            <InputNumber @bind-Value="form.SueldoBasico" placeholder="Ej: 3500000" />
+                        </div>
+                        <div class="form-group">
+                            <label>Ciudad</label>
+                            <InputText @bind-Value="form.Ciudad" placeholder="Ej: Bogotá" />
+                        </div>
+                        <div class="form-group">
                             <label>Área</label>
                             <InputSelect @bind-Value="form.AreaId" @bind-Value:after="OnAreaChanged">
                                 <option value="0">-- Selecciona un área --</option>

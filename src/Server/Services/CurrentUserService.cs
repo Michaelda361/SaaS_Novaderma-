@@ -5,19 +5,17 @@ namespace TalentManagement.Server.Services;
 
 /// <summary>
 /// Resuelve el email del usuario actual.
-/// En Development, si DevSettings:ImpersonateEmail está configurado, lo usa en vez del token.
+/// En Development, si DevUserStore tiene un email activo, lo usa en vez del token.
 /// </summary>
-public class CurrentUserService(IHttpContextAccessor httpContextAccessor, IConfiguration config, IWebHostEnvironment env)
+public class CurrentUserService(
+    IHttpContextAccessor httpContextAccessor,
+    IWebHostEnvironment env,
+    DevUserStore? devStore = null)
 {
     public string GetEmail()
     {
-        // Override de dev — permite probar distintos roles sin cambiar de cuenta
-        if (env.IsDevelopment())
-        {
-            var impersonate = config["DevSettings:ImpersonateEmail"];
-            if (!string.IsNullOrWhiteSpace(impersonate))
-                return impersonate;
-        }
+        if (env.IsDevelopment() && devStore?.ActiveEmail is { Length: > 0 } devEmail)
+            return devEmail;
 
         var user = httpContextAccessor.HttpContext?.User;
         return user?.FindFirstValue("preferred_username")

@@ -94,8 +94,15 @@ public class DocumentosController(DocumentoService service, CurrentUserService c
         {
             // TODO: restaurar control de roles — temporalmente usamos colaboradorId=0
             int colaboradorId = 0;
-            try { colaboradorId = (await GetColaboradorActualAsync()).Id; } catch { }
-            var result = await service.AvanzarEstadoAsync(id, colaboradorId);
+            string colaboradorNombre = "Sistema";
+            try
+            {
+                var col = await GetColaboradorActualAsync();
+                colaboradorId = col.Id;
+                colaboradorNombre = $"{col.Nombre} {col.Apellido}";
+            }
+            catch { }
+            var result = await service.AvanzarEstadoAsync(id, colaboradorId, colaboradorNombre);
             return result is null ? NotFound() : Ok(result);
         }
         catch (InvalidOperationException ex) { return UnprocessableEntity(ex.Message); }
@@ -106,6 +113,13 @@ public class DocumentosController(DocumentoService service, CurrentUserService c
     {
         var url = await service.ObtenerUrlEdicionAsync(id);
         return url is null ? NotFound() : Ok(url);
+    }
+
+    [HttpGet("{id:int}/auditoria")]
+    public async Task<IActionResult> GetAuditLog(int id)
+    {
+        var logs = await service.GetAuditLogAsync(id);
+        return Ok(logs);
     }
 
     // ── Propuestas ───────────────────────────────────────────────────────────
@@ -145,9 +159,13 @@ public class DocumentosController(DocumentoService service, CurrentUserService c
     [HttpGet("propuestas/pendientes/count")]
     public async Task<IActionResult> CountPropuestasPendientes()
     {
-        var email = GetEmail();
-        var count = await service.CountPropuestasPendientesAsync(email);
-        return Ok(count);
+        try
+        {
+            var email = GetEmail();
+            var count = await service.CountPropuestasPendientesAsync(email);
+            return Ok(count);
+        }
+        catch { return Ok(0); }
     }
 
     [HttpPost("propuestas/{propuestaId:int}/aprobar")]

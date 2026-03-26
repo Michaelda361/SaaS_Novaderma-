@@ -7,6 +7,10 @@ namespace TalentManagement.Client.Services;
 public class DocumentoApiService(HttpClient http)
 {
     private const string Base = "api/v1/documentos";
+    private static readonly System.Text.Json.JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true
+    };
 
     public async Task<List<DocumentoDto>> GetAllAsync(
         string? tipo = null, string? estado = null,
@@ -19,11 +23,19 @@ public class DocumentoApiService(HttpClient http)
         if (!string.IsNullOrWhiteSpace(busqueda)) qs.Add($"busqueda={Uri.EscapeDataString(busqueda)}");
 
         var url = qs.Count > 0 ? $"{Base}?{string.Join("&", qs)}" : Base;
-        return await http.GetFromJsonAsync<List<DocumentoDto>>(url) ?? [];
+        var response = await http.GetAsync(url);
+        response.EnsureSuccessStatusCode();
+        await using var stream = await response.Content.ReadAsStreamAsync();
+        return await System.Text.Json.JsonSerializer.DeserializeAsync<List<DocumentoDto>>(stream, JsonOptions) ?? [];
     }
 
-    public async Task<DocumentoDetalleDto?> GetByIdAsync(int id) =>
-        await http.GetFromJsonAsync<DocumentoDetalleDto>($"{Base}/{id}");
+    public async Task<DocumentoDetalleDto?> GetByIdAsync(int id)
+    {
+        var response = await http.GetAsync($"{Base}/{id}");
+        if (!response.IsSuccessStatusCode) return null;
+        await using var stream = await response.Content.ReadAsStreamAsync();
+        return await System.Text.Json.JsonSerializer.DeserializeAsync<DocumentoDetalleDto>(stream, JsonOptions);
+    }
 
     public async Task<DocumentoDto?> CreateAsync(CreateDocumentoDto dto, IBrowserFile archivo)
     {
@@ -39,7 +51,8 @@ public class DocumentoApiService(HttpClient http)
 
         var response = await http.PostAsync(Base, content);
         if (!response.IsSuccessStatusCode) return null;
-        return await response.Content.ReadFromJsonAsync<DocumentoDto>();
+        await using var stream = await response.Content.ReadAsStreamAsync();
+        return await System.Text.Json.JsonSerializer.DeserializeAsync<DocumentoDto>(stream, JsonOptions);
     }
 
     public async Task<DocumentoDto?> CreateDesdeUrlAsync(CreateDocumentoDto dto)
@@ -56,14 +69,16 @@ public class DocumentoApiService(HttpClient http)
 
         var response = await http.PostAsync(Base, content);
         if (!response.IsSuccessStatusCode) return null;
-        return await response.Content.ReadFromJsonAsync<DocumentoDto>();
+        await using var stream = await response.Content.ReadAsStreamAsync();
+        return await System.Text.Json.JsonSerializer.DeserializeAsync<DocumentoDto>(stream, JsonOptions);
     }
 
     public async Task<DocumentoDto?> UpdateMetadatosAsync(int id, UpdateDocumentoDto dto)
     {
         var response = await http.PutAsJsonAsync($"{Base}/{id}/metadatos", dto);
         if (!response.IsSuccessStatusCode) return null;
-        return await response.Content.ReadFromJsonAsync<DocumentoDto>();
+        await using var stream = await response.Content.ReadAsStreamAsync();
+        return await System.Text.Json.JsonSerializer.DeserializeAsync<DocumentoDto>(stream, JsonOptions);
     }
 
     public async Task<bool> DeleteAsync(int id)
@@ -83,7 +98,8 @@ public class DocumentoApiService(HttpClient http)
         var response = await http.PostAsync(
             $"{Base}/{id}/version?incrementoMayor={incrementoMayor}", content);
         if (!response.IsSuccessStatusCode) return null;
-        return await response.Content.ReadFromJsonAsync<DocumentoDto>();
+        await using var stream = await response.Content.ReadAsStreamAsync();
+        return await System.Text.Json.JsonSerializer.DeserializeAsync<DocumentoDto>(stream, JsonOptions);
     }
 
     public async Task<bool> AvanzarEstadoAsync(int id)
@@ -128,13 +144,24 @@ public class DocumentoApiService(HttpClient http)
         return response.IsSuccessStatusCode;
     }
 
-    public async Task<List<PropuestaModificacionDto>> GetPropuestasPendientesAsync() =>
-        await http.GetFromJsonAsync<List<PropuestaModificacionDto>>(
-            $"{Base}/propuestas/pendientes") ?? [];
+    public async Task<List<PropuestaModificacionDto>> GetPropuestasPendientesAsync()
+    {
+        var response = await http.GetAsync($"{Base}/propuestas/pendientes");
+        if (!response.IsSuccessStatusCode) return [];
+        await using var stream = await response.Content.ReadAsStreamAsync();
+        return await System.Text.Json.JsonSerializer.DeserializeAsync<List<PropuestaModificacionDto>>(stream, JsonOptions) ?? [];
+    }
 
     public async Task<int> GetPropuestasPendientesCountAsync()
     {
-        try { return await http.GetFromJsonAsync<int>($"{Base}/propuestas/pendientes/count"); }
+        try
+        {
+            var response = await http.GetAsync($"{Base}/propuestas/pendientes/count");
+            if (!response.IsSuccessStatusCode) return 0;
+            await using var stream = await response.Content.ReadAsStreamAsync();
+            var result = await System.Text.Json.JsonSerializer.DeserializeAsync<int>(stream, JsonOptions);
+            return result;
+        }
         catch { return 0; }
     }
 
@@ -151,5 +178,13 @@ public class DocumentoApiService(HttpClient http)
             $"{Base}/propuestas/{propuestaId}/rechazar",
             new RechazarPropuestaDto { MotivoRechazo = motivo });
         return response.IsSuccessStatusCode;
+    }
+
+    public async Task<List<AuditLogDto>> GetAuditLogAsync(int documentoId)
+    {
+        var response = await http.GetAsync($"{Base}/{documentoId}/auditoria");
+        if (!response.IsSuccessStatusCode) return [];
+        await using var stream = await response.Content.ReadAsStreamAsync();
+        return await System.Text.Json.JsonSerializer.DeserializeAsync<List<AuditLogDto>>(stream, JsonOptions) ?? [];
     }
 }

@@ -18,6 +18,11 @@ public class CreateColaboradorDto
     [Required]
     public DateTime FechaIngreso { get; set; } = DateTime.Today;
 
+    public string? Cedula { get; set; }
+    public string? TipoContrato { get; set; }
+    public decimal? SueldoBasico { get; set; }
+    public string? Ciudad { get; set; }
+
     [Required(ErrorMessage = "El área es requerida")]
     public int AreaId { get; set; }
 

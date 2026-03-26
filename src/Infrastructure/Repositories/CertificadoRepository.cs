@@ -22,7 +22,6 @@ public class CertificadoRepository(AppDbContext context) : ICertificadoRepositor
 
     public async Task<Certificado?> GetByIdAsync(int id) =>
         await context.Certificados
-            .Include(c => c.Colaborador)
             .FirstOrDefaultAsync(c => c.Id == id);
 
     public async Task<Certificado> CreateAsync(Certificado certificado)
@@ -49,8 +48,8 @@ public class CertificadoRepository(AppDbContext context) : ICertificadoRepositor
 
     public async Task<IEnumerable<Certificado>> GetVencidosAsync() =>
         await context.Certificados
-            .IgnoreQueryFilters()
             .Include(c => c.Colaborador)
+            .IgnoreQueryFilters()
             .Where(c => c.Activo && c.FechaVencimiento.HasValue && c.FechaVencimiento.Value < DateTime.Today)
             .AsNoTracking()
             .ToListAsync();

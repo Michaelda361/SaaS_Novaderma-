@@ -143,6 +143,52 @@ else
             </div>
         }
     </div>
+
+    <!-- Historial de auditoría -->
+    <div class="card" style="margin-top:1rem;">
+        <div class="card-header">
+            <h3 class="card-title">📋 Historial de cambios</h3>
+        </div>
+        @if (auditLogs is null)
+        {
+            <div class="loading"><div class="spinner"></div> Cargando historial...</div>
+        }
+        else if (!auditLogs.Any())
+        {
+            <div class="empty-state">
+                <div class="empty-state-icon">📋</div>
+                <p>Sin registros de auditoría</p>
+            </div>
+        }
+        else
+        {
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Hora</th>
+                            <th>Acción</th>
+                            <th>Usuario</th>
+                            <th>Observaciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var log in auditLogs)
+                        {
+                            <tr>
+                                <td>@log.FechaHora.ToLocalTime().ToString("dd/MM/yyyy")</td>
+                                <td>@log.FechaHora.ToLocalTime().ToString("HH:mm")</td>
+                                <td><span class="badge @GetAuditAccionClass(log.Accion)">@GetAuditAccionLabel(log.Accion)</span></td>
+                                <td>@log.ColaboradorNombre</td>
+                                <td class="text-muted">@(log.Observaciones ?? "—")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
 }
 
 <!-- Modal Proponer Cambio -->
@@ -199,6 +245,7 @@ else
 
     private CreatePropuestaDto propuestaForm = new();
     private IBrowserFile? archivoPropuesta;
+    private List<AuditLogDto>? auditLogs;
 
     protected override async Task OnInitializedAsync()
     {
@@ -209,7 +256,9 @@ else
             toast.Show("Documento no encontrado", "error");
             await Task.Delay(1500);
             Nav.NavigateTo("/documentos");
+            return;
         }
+        auditLogs = await DocumentoApi.GetAuditLogAsync(Id);
     }
 
     private async Task AbrirEditorOnline()
@@ -232,6 +281,7 @@ else
         {
             toast.Show("Estado actualizado correctamente");
             doc = await DocumentoApi.GetByIdAsync(Id);
+            auditLogs = await DocumentoApi.GetAuditLogAsync(Id);
         }
         else
         {
@@ -253,6 +303,7 @@ else
             showPropuestaModal = false;
             propuestaForm = new();
             archivoPropuesta = null;
+            doc = await DocumentoApi.GetByIdAsync(Id);
         }
         else
         {
@@ -283,5 +334,27 @@ else
         "Revision" => "Aprobar",
         "Aprobado" => "Publicar",
         _          => "Avanzar"
+    };
+
+    private static string GetAuditAccionClass(string accion) => accion switch
+    {
+        "Creado"             => "badge-info",
+        "EstadoCambiado"     => "badge-warning",
+        "NuevaVersion"       => "badge-purple",
+        "PropuestaEnviada"   => "badge-gray",
+        "PropuestaAprobada"  => "badge-success",
+        "PropuestaRechazada" => "badge-danger",
+        _                    => "badge-gray"
+    };
+
+    private static string GetAuditAccionLabel(string accion) => accion switch
+    {
+        "Creado"             => "Creado",
+        "EstadoCambiado"     => "Estado cambiado",
+        "NuevaVersion"       => "Nueva versión",
+        "PropuestaEnviada"   => "Propuesta enviada",
+        "PropuestaAprobada"  => "Propuesta aprobada",
+        "PropuestaRechazada" => "Propuesta rechazada",
+        _                    => accion
     };
 }

@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using TalentManagement.Domain.Common;
 
 namespace TalentManagement.Domain.Entities;
@@ -10,6 +11,8 @@ public class Area : BaseEntity
     public int? JefeId { get; set; }
     public Colaborador? Jefe { get; set; }
 
+    [JsonIgnore]
     public ICollection<Colaborador> Colaboradores { get; set; } = [];
+    [JsonIgnore]
     public ICollection<Cargo> Cargos { get; set; } = [];
 }

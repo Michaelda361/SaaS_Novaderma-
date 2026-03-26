@@ -52,6 +52,44 @@
         window.getMsalInstance = function() {
             return window._msalInstance;
         };
+
+        // Descarga de PDF generado desde bytes base64
+        window.descargarPdf = function(base64, fileName) {
+            const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+            const blob = new Blob([bytes], { type: 'application/pdf' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        };
+
+        // Editor de plantillas
+        window.setEditorContent = function(element, html) {
+            if (element && element.innerHTML !== undefined) {
+                element.innerHTML = html || '';
+            }
+        };
+
+        window.getEditorContent = function(element) {
+            if (element && element.innerHTML !== undefined) {
+                return element.innerHTML;
+            }
+            return '';
+        };
+
+        window.execEditorCommand = function(command, value) {
+            document.execCommand(command, false, value);
+        };
+
+        window.insertAtCursor = function(element, text) {
+            if (!element) return;
+            element.focus();
+            document.execCommand('insertText', false, text);
+        };
     </script>
 </body>
 

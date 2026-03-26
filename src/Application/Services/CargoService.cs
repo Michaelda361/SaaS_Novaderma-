@@ -6,16 +6,16 @@ namespace TalentManagement.Application.Services;
 
 public class CargoService(ICargoRepository repository)
 {
-    public async Task<IEnumerable<CargoDto>> GetAllAsync()
+    public async Task<List<CargoDto>> GetAllAsync()
     {
         var cargos = await repository.GetAllAsync();
-        return cargos.Select(MapToDto);
+        return cargos.Select(MapToDto).ToList();
     }
 
-    public async Task<IEnumerable<CargoDto>> GetByAreaAsync(int areaId)
+    public async Task<List<CargoDto>> GetByAreaAsync(int areaId)
     {
         var cargos = await repository.GetByAreaAsync(areaId);
-        return cargos.Select(MapToDto);
+        return cargos.Select(MapToDto).ToList();
     }
 
     public async Task<CargoDto?> GetByIdAsync(int id)

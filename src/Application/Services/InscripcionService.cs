@@ -6,16 +6,16 @@ namespace TalentManagement.Application.Services;
 
 public class InscripcionService(IInscripcionRepository repository)
 {
-    public async Task<IEnumerable<InscripcionDto>> GetByCapacitacionAsync(int capacitacionId)
+    public async Task<List<InscripcionDto>> GetByCapacitacionAsync(int capacitacionId)
     {
         var items = await repository.GetByCapacitacionAsync(capacitacionId);
-        return items.Select(MapToDto);
+        return items.Select(MapToDto).ToList();
     }
 
-    public async Task<IEnumerable<InscripcionDto>> GetByColaboradorAsync(int colaboradorId)
+    public async Task<List<InscripcionDto>> GetByColaboradorAsync(int colaboradorId)
     {
         var items = await repository.GetByColaboradorAsync(colaboradorId);
-        return items.Select(MapToDto);
+        return items.Select(MapToDto).ToList();
     }
 
     public async Task<InscripcionDto?> GetByIdAsync(int id)

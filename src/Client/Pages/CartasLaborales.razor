@@ -1,0 +1,140 @@
+@page "/cartas"
+@attribute [Authorize]
+@inject PlantillaDocumentoApiService ApiService
+@inject IJSRuntime JS
+
+<Toast @ref="toast" />
+
+<div class="page-header">
+    <div>
+        <h2 class="page-title">Mis Cartas Laborales</h2>
+        <p class="page-subtitle">Descarga tus documentos laborales al instante</p>
+    </div>
+    <a href="cartas/admin" class="btn btn-ghost btn-sm">⚙️ Gestionar plantillas</a>
+</div>
+
+@if (cargando)
+{
+    <div class="loading"><div class="spinner"></div> Cargando...</div>
+}
+else if (!plantillas.Any())
+{
+    <div class="empty-state">
+        <div class="empty-state-icon">📄</div>
+        <h3>Sin documentos disponibles</h3>
+        <p>No hay cartas laborales disponibles para tu área en este momento.</p>
+    </div>
+}
+else
+{
+    <div class="cartas-grid">
+        @foreach (var p in plantillas)
+        {
+            var pid = p.Id;
+            <div class="carta-card">
+                <div class="carta-icon">📄</div>
+                <div class="carta-info">
+                    <div class="carta-nombre">@p.Nombre</div>
+                    @if (!string.IsNullOrWhiteSpace(p.Descripcion))
+                    {
+                        <div class="carta-desc">@p.Descripcion</div>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(p.NombreFirmante))
+                    {
+                        <div class="carta-firmante">
+                            Firmado por: @p.NombreFirmante
+                            @if (!string.IsNullOrWhiteSpace(p.CargoFirmante))
+                            {
+                                <span> · @p.CargoFirmante</span>
+                            }
+                        </div>
+                    }
+                </div>
+                <button class="btn btn-primary btn-sm"
+                        disabled="@descargando.Contains(pid)"
+                        @onclick="() => Descargar(pid, p.Nombre)">
+                    @if (descargando.Contains(pid))
+                    {
+                        <span>Generando...</span>
+                    }
+                    else
+                    {
+                        <span>⬇ Descargar PDF</span>
+                    }
+                </button>
+            </div>
+        }
+    </div>
+}
+
+@if (solicitudes.Any())
+{
+    <div class="card" style="margin-top:1.5rem;">
+        <div class="card-header">
+            <span class="card-title">📋 Mis solicitudes recientes</span>
+        </div>
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Documento</th>
+                        <th>Fecha</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var s in solicitudes.Take(10))
+                    {
+                        <tr>
+                            <td>@s.PlantillaNombre</td>
+                            <td class="text-muted text-sm">
+                                @s.FechaSolicitud.ToLocalTime().ToString("dd/MM/yyyy HH:mm")
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+@code {
+    private Toast toast = null!;
+    private List<PlantillaDocumentoDto> plantillas = [];
+    private List<SolicitudDocumentoDto> solicitudes = [];
+    private HashSet<int> descargando = [];
+    private bool cargando = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var t1 = ApiService.GetDisponiblesAsync();
+        var t2 = ApiService.GetMisSolicitudesAsync();
+        await Task.WhenAll(t1, t2);
+        plantillas = t1.Result;
+        solicitudes = t2.Result;
+        cargando = false;
+    }
+
+    private async Task Descargar(int id, string nombre)
+    {
+        descargando.Add(id);
+        StateHasChanged();
+
+        var (bytes, fileName) = await ApiService.GenerarPdfAsync(id);
+
+        descargando.Remove(id);
+
+        if (bytes is null)
+        {
+            await toast.Show("No se pudo generar el documento. Verifica que tu perfil tenga todos los datos completos.", "error");
+            return;
+        }
+
+        // Trigger descarga en el navegador via JS
+        var base64 = Convert.ToBase64String(bytes);
+        await JS.InvokeVoidAsync("descargarPdf", base64, fileName ?? $"{nombre}.pdf");
+
+        // Refrescar historial
+        solicitudes = await ApiService.GetMisSolicitudesAsync();
+        await toast.Show("Documento generado correctamente.");
+    }
+}

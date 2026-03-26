@@ -19,18 +19,16 @@ public class CapacitacionApiService(HttpClient http)
     public Task<List<CapacitacionDto>?> GetByColaboradorAsync(int colaboradorId) =>
         http.GetFromJsonAsync<List<CapacitacionDto>>($"{Base}/colaborador/{colaboradorId}");
 
+    public async Task<CapacitacionDto?> CreateAsync(CreateCapacitacionDto dto)
+    {
+        var r = await http.PostAsJsonAsync(Base, dto);
+        return r.IsSuccessStatusCode ? await r.Content.ReadFromJsonAsync<CapacitacionDto>() : null;
+    }
+
     public async Task<CapacitacionDto?> UpdateAsync(int id, CreateCapacitacionDto dto)
     {
         var r = await http.PutAsJsonAsync($"{Base}/{id}", dto);
         return r.IsSuccessStatusCode ? await r.Content.ReadFromJsonAsync<CapacitacionDto>() : null;
-    }
-
-    public async Task<CapacitacionDto?> CreateAsync(CreateCapacitacionDto dto)
-    {
-        var response = await http.PostAsJsonAsync(Base, dto);
-        return response.IsSuccessStatusCode
-            ? await response.Content.ReadFromJsonAsync<CapacitacionDto>()
-            : null;
     }
 
     public Task<bool> DeleteAsync(int id) =>

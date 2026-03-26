@@ -1,0 +1,71 @@
+@page "/dev-login"
+@layout EmptyLayout
+@inject DevAuthService DevAuth
+@inject NavigationManager Nav
+@inject IConfiguration Config
+
+@if (!DevAuth.IsDevMode)
+{
+    <p>Solo disponible en Development.</p>
+    return;
+}
+
+<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg-secondary);">
+    <div class="card" style="width:380px;padding:2rem;text-align:center;">
+        <div style="font-size:2.5rem;margin-bottom:.5rem;">🛠️</div>
+        <h2 style="margin-bottom:.25rem;">Modo desarrollo</h2>
+        <p style="color:var(--text-muted);font-size:.875rem;margin-bottom:1.5rem;">
+            Selecciona un usuario de prueba o inicia sesión con Microsoft.
+        </p>
+
+        <div style="display:flex;flex-direction:column;gap:.75rem;margin-bottom:1.5rem;">
+            @foreach (var u in DevUsers)
+            {
+                <button class="btn @(selected == u.Email ? "btn-primary" : "btn-secondary")"
+                        @onclick="() => selected = u.Email">
+                    <span style="font-size:1.1rem;">@u.Icon</span>
+                    <span style="margin-left:.5rem;">
+                        <strong>@u.Label</strong>
+                        <br />
+                        <small style="opacity:.7;">@u.Email</small>
+                    </span>
+                </button>
+            }
+        </div>
+
+        <button class="btn btn-primary" style="width:100%;margin-bottom:.75rem;"
+                @onclick="EntrarComoDevAsync" disabled="@(selected is null)">
+            Entrar como usuario dev
+        </button>
+
+        <hr style="margin:.75rem 0;border-color:var(--border);" />
+
+        <button class="btn btn-secondary" style="width:100%;" @onclick="EntrarConMicrosoft">
+            <span style="margin-right:.5rem;">🏢</span> Iniciar sesión con Microsoft
+        </button>
+    </div>
+</div>
+
+@code {
+    private string? selected;
+
+    private static readonly (string Email, string Label, string Icon)[] DevUsers =
+    [
+        ("dev.colaborador@test.local", "Dev Colaborador",  "👤"),
+        ("dev.jefe@test.local",        "Dev Jefe Tech",    "👔"),
+        ("dev.jeferrhh@test.local",    "Dev Jefe RRHH",    "🧑‍💼"),
+    ];
+
+    private async Task EntrarComoDevAsync()
+    {
+        if (selected is null) return;
+        await DevAuth.SetEmailAsync(selected);
+        Nav.NavigateTo("/", forceLoad: true);
+    }
+
+    private void EntrarConMicrosoft()
+    {
+        // Navegar a la ruta de autenticación MSAL — el servidor usa JWT normal
+        Nav.NavigateTo("authentication/login", forceLoad: true);
+    }
+}

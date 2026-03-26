@@ -6,10 +6,10 @@ namespace TalentManagement.Application.Services;
 
 public class CapacitacionService(ICapacitacionRepository repository)
 {
-    public async Task<IEnumerable<CapacitacionDto>> GetAllAsync()
+    public async Task<List<CapacitacionDto>> GetAllAsync()
     {
         var capacitaciones = await repository.GetAllAsync();
-        return capacitaciones.Select(MapToDto);
+        return capacitaciones.Select(MapToDto).ToList();
     }
 
     public async Task<CapacitacionDto?> GetByIdAsync(int id)
@@ -18,16 +18,16 @@ public class CapacitacionService(ICapacitacionRepository repository)
         return cap is null ? null : MapToDto(cap);
     }
 
-    public async Task<IEnumerable<CapacitacionDto>> GetByAreaAsync(int areaId)
+    public async Task<List<CapacitacionDto>> GetByAreaAsync(int areaId)
     {
         var items = await repository.GetByAreaAsync(areaId);
-        return items.Select(MapToDto);
+        return items.Select(MapToDto).ToList();
     }
 
-    public async Task<IEnumerable<CapacitacionDto>> GetByColaboradorAsync(int colaboradorId)
+    public async Task<List<CapacitacionDto>> GetByColaboradorAsync(int colaboradorId)
     {
         var items = await repository.GetByColaboradorAsync(colaboradorId);
-        return items.Select(MapToDto);
+        return items.Select(MapToDto).ToList();
     }
 
     public async Task<CapacitacionDto> CreateAsync(CreateCapacitacionDto dto)
@@ -80,7 +80,7 @@ public class CapacitacionService(ICapacitacionRepository repository)
         DuracionHoras = c.DuracionHoras,
         FechaInicio = c.FechaInicio,
         FechaFin = c.FechaFin,
-        TotalInscritos = c.Inscripciones?.Count ?? 0,
+        TotalInscritos = 0,
         AreaId = c.AreaId,
         AreaNombre = c.Area?.Nombre,
         ColaboradorId = c.ColaboradorId,

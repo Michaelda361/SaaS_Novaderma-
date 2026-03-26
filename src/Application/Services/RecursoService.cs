@@ -7,10 +7,10 @@ namespace TalentManagement.Application.Services;
 
 public class RecursoService(IRecursoRepository repository)
 {
-    public async Task<IEnumerable<RecursoDto>> GetByCapacitacionAsync(int capacitacionId)
+    public async Task<List<RecursoDto>> GetByCapacitacionAsync(int capacitacionId)
     {
         var items = await repository.GetByCapacitacionAsync(capacitacionId);
-        return items.Select(MapToDto);
+        return items.Select(MapToDto).ToList();
     }
 
     public async Task<RecursoDto> CreateAsync(CreateRecursoDto dto)

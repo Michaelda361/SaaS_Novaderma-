@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using TalentManagement.Domain.Common;
 
 namespace TalentManagement.Domain.Entities;
@@ -17,6 +18,8 @@ public class Capacitacion : BaseEntity
     public int? ColaboradorId { get; set; }
     public Colaborador? Colaborador { get; set; }
 
+    [JsonIgnore]
     public ICollection<Inscripcion> Inscripciones { get; set; } = [];
+    [JsonIgnore]
     public ICollection<RecursoCapacitacion> Recursos { get; set; } = [];
 }

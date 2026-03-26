@@ -9,7 +9,6 @@ public class CapacitacionRepository(AppDbContext context) : ICapacitacionReposit
 {
     private IQueryable<Capacitacion> WithIncludes() =>
         context.Capacitaciones
-            .Include(c => c.Inscripciones)
             .Include(c => c.Area)
             .Include(c => c.Colaborador);
 

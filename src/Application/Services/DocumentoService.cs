@@ -9,7 +9,9 @@ public class DocumentoService(
     IDocumentoRepository repository,
     IColaboradorRepository colaboradorRepository,
     IAreaRepository areaRepository,
-    ISharePointService sharePoint)
+    ISharePointService sharePoint,
+    IAuditLogRepository auditRepository,
+    IAuditExcelService auditExcel)
 {
     // ── Resolución de identidad ──────────────────────────────────────────────
 
@@ -29,14 +31,14 @@ public class DocumentoService(
 
     // ── Listado ──────────────────────────────────────────────────────────────
 
-    public async Task<IEnumerable<DocumentoDto>> GetAllAsync(
+    public async Task<List<DocumentoDto>> GetAllAsync(
         string? tipo, string? estado, int? areaId, string? busqueda, bool esAdmin)
     {
         var docs = esAdmin
             ? await repository.GetAllAsync(tipo, estado, areaId, busqueda)
             : await repository.GetPublicadosAsync(tipo, areaId, busqueda);
 
-        return docs.Select(MapToDto);
+        return docs.Select(MapToDto).ToList();
     }
 
     public async Task<DocumentoDetalleDto?> GetByIdAsync(int id, bool esAdmin)
@@ -50,7 +52,8 @@ public class DocumentoService(
     // ── CRUD Admin ───────────────────────────────────────────────────────────
 
     public async Task<DocumentoDto> CreateAsync(
-        CreateDocumentoDto dto, Stream? archivo, string? nombreArchivo)
+        CreateDocumentoDto dto, Stream? archivo, string? nombreArchivo,
+        string colaboradorNombre = "Sistema", int? colaboradorId = null)
     {
         if (!Enum.TryParse<TipoDocumento>(dto.TipoDocumento, out var tipo))
             throw new ArgumentException("Tipo de documento inválido");
@@ -59,7 +62,6 @@ public class DocumentoService(
 
         if (!string.IsNullOrWhiteSpace(dto.UrlExterna))
         {
-            // Documento vinculado desde OneDrive/SharePoint — no se sube archivo
             itemId = dto.UrlExterna;
             url = dto.UrlExterna;
         }
@@ -84,6 +86,9 @@ public class DocumentoService(
         };
 
         var created = await repository.CreateAsync(doc);
+        await RegistrarAuditAsync(created.Id, created.Titulo, "Creado",
+            colaboradorId, colaboradorNombre,
+            $"Tipo: {tipo}, Versión: 1.0");
         return MapToDto(created);
     }
 
@@ -115,12 +120,12 @@ public class DocumentoService(
     }
 
     public async Task<DocumentoDto?> SubirNuevaVersionAsync(
-        int id, Stream archivo, string nombreArchivo, bool incrementoMayor)
+        int id, Stream archivo, string nombreArchivo, bool incrementoMayor,
+        string colaboradorNombre = "Sistema", int? colaboradorId = null)
     {
         var doc = await repository.GetByIdAsync(id);
         if (doc is null) return null;
 
-        // Guardar versión anterior
         var versionAnterior = new VersionDocumento
         {
             DocumentoId = doc.Id,
@@ -130,30 +135,33 @@ public class DocumentoService(
         };
         await repository.CreateVersionAsync(versionAnterior);
 
-        // Subir nuevo archivo
         var (itemId, url) = await sharePoint.SubirArchivoOficialAsync(
             archivo, nombreArchivo, doc.TipoDocumento);
 
-        // Incrementar versión
+        var versionVieja = doc.Version;
         doc.Version = IncrementarVersion(doc.Version, incrementoMayor);
         doc.SharePointItemId = itemId;
         doc.SharePointUrl = url;
 
-        // Si estaba publicado, vuelve a borrador
         if (doc.Estado == EstadoDocumento.Publicado)
             doc.Estado = EstadoDocumento.Borrador;
 
         var updated = await repository.UpdateAsync(doc);
+        await RegistrarAuditAsync(doc.Id, doc.Titulo, "NuevaVersion",
+            colaboradorId, colaboradorNombre,
+            $"Versión: {versionVieja} → {doc.Version}");
         return MapToDto(updated);
     }
 
     // ── Flujo de aprobación Admin ────────────────────────────────────────────
 
-    public async Task<DocumentoDto?> AvanzarEstadoAsync(int id, int colaboradorId)
+    public async Task<DocumentoDto?> AvanzarEstadoAsync(int id, int colaboradorId,
+        string colaboradorNombre = "Sistema")
     {
         var doc = await repository.GetByIdAsync(id);
         if (doc is null) return null;
 
+        var estadoAnterior = doc.Estado;
         var estadoNuevo = doc.Estado switch
         {
             EstadoDocumento.Borrador  => EstadoDocumento.Revision,
@@ -175,6 +183,11 @@ public class DocumentoService(
         doc.Estado = estadoNuevo;
         await repository.UpdateAsync(doc);
         await repository.CreateFlujoAsync(flujo);
+
+        await RegistrarAuditAsync(doc.Id, doc.Titulo, "EstadoCambiado",
+            colaboradorId == 0 ? null : colaboradorId, colaboradorNombre,
+            $"Estado: {estadoAnterior} → {estadoNuevo}",
+            $"{{\"Estado\":{{\"de\":\"{estadoAnterior}\",\"a\":\"{estadoNuevo}\"}}}}");
 
         return MapToDto(doc);
     }
@@ -218,14 +231,18 @@ public class DocumentoService(
         };
 
         var created = await repository.CreatePropuestaAsync(propuesta);
-        // Recargar con includes
         var full = await repository.GetPropuestaByIdAsync(created.Id);
+
+        await RegistrarAuditAsync(doc.Id, doc.Titulo, "PropuestaEnviada",
+            colaborador.Id, $"{colaborador.Nombre} {colaborador.Apellido}",
+            dto.Descripcion);
+
         return MapToPropuestaDto(full!);
     }
 
     // ── Propuestas JefeArea ──────────────────────────────────────────────────
 
-    public async Task<IEnumerable<PropuestaModificacionDto>> GetPropuestasPendientesAsync(
+    public async Task<List<PropuestaModificacionDto>> GetPropuestasPendientesAsync(
         string email)
     {
         var colaborador = await ResolverColaboradorAsync(email);
@@ -233,7 +250,7 @@ public class DocumentoService(
         if (!esJefe) return [];
 
         var propuestas = await repository.GetPropuestasPendientesPorAreaAsync(areaId);
-        return propuestas.Select(MapToPropuestaDto);
+        return propuestas.Select(MapToPropuestaDto).ToList();
     }
 
     public async Task<int> CountPropuestasPendientesAsync(string email)
@@ -305,6 +322,10 @@ public class DocumentoService(
         propuesta.AprobadorId = colaborador.Id;
         propuesta.FechaResolucion = DateTime.UtcNow;
         await repository.UpdatePropuestaAsync(propuesta);
+
+        await RegistrarAuditAsync(doc.Id, doc.Titulo, "PropuestaAprobada",
+            colaborador.Id, $"{colaborador.Nombre} {colaborador.Apellido}",
+            $"Propuesta de {propuesta.Colaborador?.Nombre}: {propuesta.Descripcion}");
     }
 
     public async Task RechazarPropuestaAsync(int propuestaId, string motivo, string email)
@@ -331,6 +352,11 @@ public class DocumentoService(
         propuesta.MotivoRechazo = motivo;
         propuesta.FechaResolucion = DateTime.UtcNow;
         await repository.UpdatePropuestaAsync(propuesta);
+
+        await RegistrarAuditAsync(propuesta.DocumentoId,
+            propuesta.Documento?.Titulo ?? "—", "PropuestaRechazada",
+            colaborador.Id, $"{colaborador.Nombre} {colaborador.Apellido}",
+            $"Motivo: {motivo}");
     }
 
     // ── Edición Online ───────────────────────────────────────────────────────
@@ -341,6 +367,48 @@ public class DocumentoService(
         if (doc is null) return null;
         return await sharePoint.ObtenerUrlEdicionAsync(
             doc.SharePointItemId, doc.SharePointUrl);
+    }
+
+    // ── Auditoría ────────────────────────────────────────────────────────────
+
+    public async Task<List<AuditLogDto>> GetAuditLogAsync(int documentoId)
+    {
+        var logs = await auditRepository.GetByEntidadAsync("Documento", documentoId);
+        return logs.Select(l => new AuditLogDto
+        {
+            Id = l.Id,
+            EntidadTipo = l.EntidadTipo,
+            EntidadId = l.EntidadId,
+            EntidadNombre = l.EntidadNombre,
+            Accion = l.Accion,
+            ColaboradorNombre = l.ColaboradorNombre,
+            FechaHora = l.FechaHora,
+            Observaciones = l.Observaciones,
+            CamposModificados = l.CamposModificados
+        }).ToList();
+    }
+
+    private async Task RegistrarAuditAsync(
+        int entidadId, string entidadNombre, string accion,
+        int? colaboradorId, string colaboradorNombre,
+        string? observaciones = null, string? camposModificados = null)
+    {
+        var log = new AuditLog
+        {
+            EntidadTipo = "Documento",
+            EntidadId = entidadId,
+            EntidadNombre = entidadNombre,
+            Accion = accion,
+            ColaboradorId = colaboradorId,
+            ColaboradorNombre = colaboradorNombre,
+            FechaHora = DateTime.UtcNow,
+            Observaciones = observaciones,
+            CamposModificados = camposModificados
+        };
+
+        await auditRepository.CreateAsync(log);
+        // Fire-and-forget al Excel — no bloquea si falla
+        _ = auditExcel.AppendRowAsync(log);
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────

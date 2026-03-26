@@ -12,8 +12,8 @@ using TalentManagement.Infrastructure.Persistence;
 namespace TalentManagement.Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260324212416_CleanupSoftDeletes")]
-    partial class CleanupSoftDeletes
+    [Migration("20260326190837_AddCartasLaborales")]
+    partial class AddCartasLaborales
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -52,6 +52,55 @@ namespace TalentManagement.Infrastructure.Migrations
                     b.HasIndex("JefeId");
 
                     b.ToTable("Areas");
+                });
+
+            modelBuilder.Entity("TalentManagement.Domain.Entities.AuditLog", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Accion")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("Activo")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("CamposModificados")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int?>("ColaboradorId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ColaboradorNombre")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("EntidadId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("EntidadNombre")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("EntidadTipo")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("FechaHora")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Observaciones")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ColaboradorId");
+
+                    b.ToTable("AuditLogs");
                 });
 
             modelBuilder.Entity("TalentManagement.Domain.Entities.Capacitacion", b =>
@@ -185,6 +234,12 @@ namespace TalentManagement.Infrastructure.Migrations
                     b.Property<int>("CargoId")
                         .HasColumnType("int");
 
+                    b.Property<string>("Cedula")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Ciudad")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("Email")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -196,11 +251,18 @@ namespace TalentManagement.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<decimal?>("SueldoBasico")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<int?>("SupervisorId")
                         .HasColumnType("int");
 
                     b.Property<string>("Telefono")
                         .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("TipoContrato")
                         .HasColumnType("nvarchar(max)");
 
                     b.HasKey("Id");
@@ -332,6 +394,60 @@ namespace TalentManagement.Infrastructure.Migrations
                     b.ToTable("Inscripciones");
                 });
 
+            modelBuilder.Entity("TalentManagement.Domain.Entities.PlantillaDocumento", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("Activo")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("AplicaTodasAreas")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("CargoFirmante")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ContenidoHtml")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Descripcion")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("FirmaImagenBase64")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Nombre")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("NombreFirmante")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("PlantillasDocumento");
+                });
+
+            modelBuilder.Entity("TalentManagement.Domain.Entities.PlantillaDocumentoArea", b =>
+                {
+                    b.Property<int>("PlantillaDocumentoId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("AreaId")
+                        .HasColumnType("int");
+
+                    b.HasKey("PlantillaDocumentoId", "AreaId");
+
+                    b.HasIndex("AreaId");
+
+                    b.ToTable("PlantillaDocumentoAreas");
+                });
+
             modelBuilder.Entity("TalentManagement.Domain.Entities.PropuestaModificacion", b =>
                 {
                     b.Property<int>("Id")
@@ -423,6 +539,32 @@ namespace TalentManagement.Infrastructure.Migrations
                     b.ToTable("RecursosCapacitacion");
                 });
 
+            modelBuilder.Entity("TalentManagement.Domain.Entities.SolicitudDocumento", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("ColaboradorId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("FechaSolicitud")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("PlantillaDocumentoId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ColaboradorId");
+
+                    b.HasIndex("PlantillaDocumentoId");
+
+                    b.ToTable("SolicitudesDocumento");
+                });
+
             modelBuilder.Entity("TalentManagement.Domain.Entities.VersionDocumento", b =>
                 {
                     b.Property<int>("Id")
@@ -460,6 +602,16 @@ namespace TalentManagement.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.SetNull);
 
                     b.Navigation("Jefe");
+                });
+
+            modelBuilder.Entity("TalentManagement.Domain.Entities.AuditLog", b =>
+                {
+                    b.HasOne("TalentManagement.Domain.Entities.Colaborador", "Colaborador")
+                        .WithMany()
+                        .HasForeignKey("ColaboradorId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Colaborador");
                 });
 
             modelBuilder.Entity("TalentManagement.Domain.Entities.Capacitacion", b =>
@@ -572,6 +724,25 @@ namespace TalentManagement.Infrastructure.Migrations
                     b.Navigation("Colaborador");
                 });
 
+            modelBuilder.Entity("TalentManagement.Domain.Entities.PlantillaDocumentoArea", b =>
+                {
+                    b.HasOne("TalentManagement.Domain.Entities.Area", "Area")
+                        .WithMany()
+                        .HasForeignKey("AreaId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("TalentManagement.Domain.Entities.PlantillaDocumento", "PlantillaDocumento")
+                        .WithMany("Areas")
+                        .HasForeignKey("PlantillaDocumentoId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Area");
+
+                    b.Navigation("PlantillaDocumento");
+                });
+
             modelBuilder.Entity("TalentManagement.Domain.Entities.PropuestaModificacion", b =>
                 {
                     b.HasOne("TalentManagement.Domain.Entities.Colaborador", "Aprobador")
@@ -615,6 +786,25 @@ namespace TalentManagement.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("Capacitacion");
+                });
+
+            modelBuilder.Entity("TalentManagement.Domain.Entities.SolicitudDocumento", b =>
+                {
+                    b.HasOne("TalentManagement.Domain.Entities.Colaborador", "Colaborador")
+                        .WithMany()
+                        .HasForeignKey("ColaboradorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("TalentManagement.Domain.Entities.PlantillaDocumento", "PlantillaDocumento")
+                        .WithMany("Solicitudes")
+                        .HasForeignKey("PlantillaDocumentoId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Colaborador");
+
+                    b.Navigation("PlantillaDocumento");
                 });
 
             modelBuilder.Entity("TalentManagement.Domain.Entities.VersionDocumento", b =>
@@ -661,6 +851,13 @@ namespace TalentManagement.Infrastructure.Migrations
                     b.Navigation("Propuestas");
 
                     b.Navigation("Versiones");
+                });
+
+            modelBuilder.Entity("TalentManagement.Domain.Entities.PlantillaDocumento", b =>
+                {
+                    b.Navigation("Areas");
+
+                    b.Navigation("Solicitudes");
                 });
 #pragma warning restore 612, 618
         }

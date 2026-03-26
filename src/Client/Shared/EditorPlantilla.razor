@@ -1,0 +1,146 @@
+@inject IJSRuntime JS
+
+<div class="editor-container">
+    <div class="editor-toolbar">
+        <button type="button" class="toolbar-btn" @onclick='() => ExecCommand("bold")' title="Negrita">
+            <strong>B</strong>
+        </button>
+        <button type="button" class="toolbar-btn" @onclick='() => ExecCommand("italic")' title="Cursiva">
+            <em>I</em>
+        </button>
+        <button type="button" class="toolbar-btn" @onclick='() => ExecCommand("underline")' title="Subrayado">
+            <u>U</u>
+        </button>
+        <div class="toolbar-separator"></div>
+        <button type="button" class="toolbar-btn" @onclick='() => ExecCommand("justifyLeft")' title="Alinear izquierda">
+            =
+        </button>
+        <button type="button" class="toolbar-btn" @onclick='() => ExecCommand("justifyCenter")' title="Centrar">
+            =
+        </button>
+        <button type="button" class="toolbar-btn" @onclick='() => ExecCommand("justifyRight")' title="Alinear derecha">
+            =
+        </button>
+        <div class="toolbar-separator"></div>
+        <button type="button" class="toolbar-btn" @onclick='() => ExecCommand("insertUnorderedList")' title="Vi&ntilde;etas">
+            *
+        </button>
+        <button type="button" class="toolbar-btn" @onclick='() => ExecCommand("insertOrderedList")' title="Numeraci&oacute;n">
+            1.
+        </button>
+    </div>
+
+    <div class="editor-body">
+        <div class="editor-main">
+            <div class="editor-label">Contenido</div>
+            <div class="editor-wrapper">
+                <div @ref="editorRef" 
+                     class="editor-content" 
+                     contenteditable="true"
+                     @oninput="OnInput"
+                     @onblur="OnBlur">
+                </div>
+            </div>
+        </div>
+
+        <div class="editor-sidebar">
+            <div class="editor-label">Variables disponibles</div>
+            <p class="editor-hint">Haz clic para insertar</p>
+            <div class="variables-list">
+                @foreach (var v in Variables)
+                {
+                    <button type="button" class="variable-btn" @onclick="() => InsertVariable(v.Key)">
+                        <code>@v.Key</code>
+                        <span>@v.Value</span>
+                    </button>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private ElementReference editorRef;
+    private string _htmlContent = string.Empty;
+
+    [Parameter]
+    public string HtmlContent
+    {
+        get => _htmlContent;
+        set
+        {
+            if (_htmlContent != value)
+            {
+                _htmlContent = value;
+                _ = SetContentAsync(value);
+            }
+        }
+    }
+
+    [Parameter]
+    public EventCallback<string> HtmlContentChanged { get; set; }
+
+    private static readonly Dictionary<string, string> Variables = new()
+    {
+        ["{{nombre_completo}}"]  = "Nombre completo",
+        ["{{nombre}}"]           = "Nombre",
+        ["{{apellido}}"]         = "Apellido",
+        ["{{cedula}}"]           = "Cédula",
+        ["{{cargo}}"]            = "Cargo",
+        ["{{area}}"]             = "Área",
+        ["{{fecha_ingreso}}"]    = "Fecha ingreso",
+        ["{{tipo_contrato}}"]    = "Tipo contrato",
+        ["{{sueldo_basico}}"]    = "Sueldo básico",
+        ["{{ciudad}}"]           = "Ciudad",
+        ["{{fecha_expedicion}}"] = "Fecha actual",
+        ["{{nombre_firmante}}"]  = "Firmante",
+        ["{{cargo_firmante}}"]   = "Cargo firmante",
+    };
+
+    private async Task SetContentAsync(string html)
+    {
+        if (string.IsNullOrWhiteSpace(html))
+        {
+            await JS.InvokeVoidAsync("setEditorContent", editorRef, "");
+            return;
+        }
+        await JS.InvokeVoidAsync("setEditorContent", editorRef, html);
+    }
+
+    private async Task OnInput()
+    {
+        var html = await JS.InvokeAsync<string>("getEditorContent", editorRef);
+        _htmlContent = html;
+        await HtmlContentChanged.InvokeAsync(html);
+    }
+
+    private async Task OnBlur()
+    {
+        var html = await JS.InvokeAsync<string>("getEditorContent", editorRef);
+        _htmlContent = html;
+        await HtmlContentChanged.InvokeAsync(html);
+    }
+
+    private async Task ExecCommand(string command)
+    {
+        string value = null;
+        if (command == "justifyCenter" || command == "justifyLeft" || command == "justifyRight")
+            value = command;
+        
+        await JS.InvokeVoidAsync("execEditorCommand", command, value);
+    }
+
+    private async Task InsertVariable(string variable)
+    {
+        await JS.InvokeVoidAsync("insertAtCursor", editorRef, variable);
+        await OnInput();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !string.IsNullOrWhiteSpace(_htmlContent))
+        {
+            await JS.InvokeVoidAsync("setEditorContent", editorRef, _htmlContent);
+        }
+    }
+}

@@ -6,16 +6,16 @@ namespace TalentManagement.Application.Services;
 
 public class CertificadoService(ICertificadoRepository repository)
 {
-    public async Task<IEnumerable<CertificadoDto>> GetAllAsync()
+    public async Task<List<CertificadoDto>> GetAllAsync()
     {
         var certs = await repository.GetAllAsync();
-        return certs.Select(MapToDto);
+        return certs.Select(MapToDto).ToList();
     }
 
-    public async Task<IEnumerable<CertificadoDto>> GetByColaboradorAsync(int colaboradorId)
+    public async Task<List<CertificadoDto>> GetByColaboradorAsync(int colaboradorId)
     {
         var certs = await repository.GetByColaboradorAsync(colaboradorId);
-        return certs.Select(MapToDto);
+        return certs.Select(MapToDto).ToList();
     }
 
     public async Task<CertificadoDto?> GetByIdAsync(int id)
@@ -52,16 +52,16 @@ public class CertificadoService(ICertificadoRepository repository)
         return MapToDto(updated);
     }
 
-    public async Task<IEnumerable<CertificadoDto>> GetVencidosAsync()
+    public async Task<List<CertificadoDto>> GetVencidosAsync()
     {
         var certs = await repository.GetVencidosAsync();
-        return certs.Select(MapToDto);
+        return certs.Select(MapToDto).ToList();
     }
 
-    public async Task<IEnumerable<CertificadoDto>> GetProximosAVencerAsync(int dias = 30)
+    public async Task<List<CertificadoDto>> GetProximosAVencerAsync(int dias = 30)
     {
         var certs = await repository.GetProximosAVencerAsync(dias);
-        return certs.Select(MapToDto);
+        return certs.Select(MapToDto).ToList();
     }
 
     public async Task<bool> DeleteAsync(int id)

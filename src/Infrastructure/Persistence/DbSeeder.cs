@@ -42,17 +42,22 @@ public static class DbSeeder
         // Emails usables via DevSettings:ImpersonateEmail en appsettings.Development.json
         var colaboradores = new List<Colaborador>
         {
-            // Colaborador en Finanzas — sin ser jefe de área
+            // Colaborador en Tecnología — usado para probar el flujo de cartas laborales
             new() { Nombre = "Dev",    Apellido = "Colaborador", Email = "dev.colaborador@test.local",
-                    CargoId = cargos[0].Id, AreaId = areas[0].Id },
+                    CargoId = cargos[0].Id, AreaId = areas[0].Id,
+                    Cedula = "1234567890", Ciudad = "Bogotá",
+                    TipoContrato = "Indefinido", SueldoBasico = 3_500_000m,
+                    FechaIngreso = new DateTime(2022, 3, 1) },
 
             // Jefe de área Tecnología — puede aprobar/rechazar propuestas
             new() { Nombre = "Dev",    Apellido = "JefeTech",  Email = "dev.jefe@test.local",
-                    CargoId = cargos[2].Id, AreaId = areas[0].Id },
+                    CargoId = cargos[2].Id, AreaId = areas[0].Id,
+                    FechaIngreso = new DateTime(2020, 1, 15) },
 
             // Jefe de área RRHH
             new() { Nombre = "Dev",    Apellido = "JefeRRHH",  Email = "dev.jeferrhh@test.local",
-                    CargoId = cargos[4].Id, AreaId = areas[1].Id },
+                    CargoId = cargos[4].Id, AreaId = areas[1].Id,
+                    FechaIngreso = new DateTime(2019, 6, 1) },
         };
 
         db.Colaboradores.AddRange(colaboradores);

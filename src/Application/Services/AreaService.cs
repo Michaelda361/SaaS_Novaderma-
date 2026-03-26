@@ -6,10 +6,10 @@ namespace TalentManagement.Application.Services;
 
 public class AreaService(IAreaRepository repository)
 {
-    public async Task<IEnumerable<AreaDto>> GetAllAsync()
+    public async Task<List<AreaDto>> GetAllAsync()
     {
         var areas = await repository.GetAllAsync();
-        return areas.Select(MapToDto);
+        return areas.Select(MapToDto).ToList();
     }
 
     public async Task<AreaDto?> GetByIdAsync(int id)

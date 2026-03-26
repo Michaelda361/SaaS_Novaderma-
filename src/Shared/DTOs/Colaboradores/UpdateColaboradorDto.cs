@@ -15,6 +15,11 @@ public class UpdateColaboradorDto
 
     public string Telefono { get; set; } = string.Empty;
 
+    public string? Cedula { get; set; }
+    public string? TipoContrato { get; set; }
+    public decimal? SueldoBasico { get; set; }
+    public string? Ciudad { get; set; }
+
     [Required]
     public int AreaId { get; set; }
 
