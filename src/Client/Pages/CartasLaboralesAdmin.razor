@@ -167,6 +167,33 @@ else
 
                     @if (form.TipoPlantilla == "html")
                     {
+                        <!-- Instructivo HTML -->
+                        <div class="instructivo-box">
+                            <button type="button" class="instructivo-toggle"
+                                    @onclick="() => showInstructivoHtml = !showInstructivoHtml">
+                                <span>💡 ¿Cómo usar variables en el editor HTML?</span>
+                                <span>@(showInstructivoHtml ? "▲" : "▼")</span>
+                            </button>
+                            @if (showInstructivoHtml)
+                            {
+                                <div class="instructivo-body">
+                                    <p>Escribe el contenido de la carta normalmente. Donde quieras insertar un dato del colaborador, usa una <strong>variable</strong> con el formato <code>&#123;&#123;nombre_variable&#125;&#125;</code>.</p>
+                                    <p style="margin-top:.5rem;">Puedes hacer clic en cualquier variable del panel derecho del editor para insertarla en la posición del cursor.</p>
+                                    <div class="instructivo-ejemplo">
+                                        <div class="instructivo-ejemplo-label">Ejemplo de uso en el texto:</div>
+                                        <code>
+                                            La empresa certifica que <strong>&#123;&#123;nombre_completo&#125;&#125;</strong> identificado con cédula
+                                            <strong>&#123;&#123;cedula&#125;&#125;</strong>, se desempeña en el cargo de <strong>&#123;&#123;cargo&#125;&#125;</strong>
+                                            desde el <strong>&#123;&#123;fecha_ingreso&#125;&#125;</strong>.
+                                        </code>
+                                    </div>
+                                    <p style="margin-top:.5rem;color:var(--text-muted);font-size:.8rem;">
+                                        Al generar el PDF, cada variable se reemplaza automáticamente con los datos del perfil del colaborador que solicita la carta.
+                                    </p>
+                                </div>
+                            }
+                        </div>
+
                         <div class="form-group">
                             <label>Contenido de la carta</label>
                             <EditorPlantilla @bind-HtmlContent="form.ContenidoHtml" />
@@ -174,23 +201,56 @@ else
                     }
                     else
                     {
+                        <!-- Instructivo DOCX -->
+                        <div class="instructivo-box">
+                            <button type="button" class="instructivo-toggle"
+                                    @onclick="() => showInstructivoDocx = !showInstructivoDocx">
+                                <span>💡 ¿Cómo preparar el archivo Word con variables?</span>
+                                <span>@(showInstructivoDocx ? "▲" : "▼")</span>
+                            </button>
+                            @if (showInstructivoDocx)
+                            {
+                                <div class="instructivo-body">
+                                    <ol class="instructivo-steps">
+                                        <li>Abre tu documento Word (.docx) normalmente.</li>
+                                        <li>
+                                            Donde quieras que aparezca un dato del colaborador, escribe la variable
+                                            con doble llave: <code>&#123;&#123;nombre_variable&#125;&#125;</code>
+                                        </li>
+                                        <li>
+                                            <strong>Importante:</strong> escribe la variable completa de un solo trazo,
+                                            sin interrupciones. Si copias y pegas partes, Word puede dividirla en
+                                            fragmentos internos y no se reemplazará correctamente.
+                                        </li>
+                                        <li>Guarda el archivo como <strong>.docx</strong> (no .doc ni .pdf).</li>
+                                        <li>Sube el archivo aquí y el sistema reemplazará las variables al generar cada carta.</li>
+                                    </ol>
+                                    <div class="instructivo-ejemplo">
+                                        <div class="instructivo-ejemplo-label">Variables disponibles para usar en Word:</div>
+                                        <div style="display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.4rem;">
+                                            @foreach (var v in Variables)
+                                            {
+                                                <span style="display:inline-flex;align-items:center;gap:.3rem;background:var(--bg-secondary);border:1px solid var(--border);border-radius:4px;padding:.15rem .4rem;font-size:.75rem;">
+                                                    <code>@v.Key</code>
+                                                    <span class="text-muted">@v.Value</span>
+                                                </span>
+                                            }
+                                        </div>
+                                    </div>
+                                    <p style="margin-top:.75rem;color:var(--warning, #b45309);font-size:.8rem;background:var(--warning-bg, #fef3c7);padding:.5rem .75rem;border-radius:6px;">
+                                        ⚠️ Si una variable no se reemplaza, verifica que esté escrita exactamente igual (incluyendo las llaves dobles y sin espacios extra).
+                                    </p>
+                                </div>
+                            }
+                        </div>
+
                         <div class="form-group">
-                            <label>
-                                Archivo Word (.docx) *
-                                <button type="button" class="btn btn-ghost btn-sm"
-                                        style="margin-left:.5rem;"
-                                        @onclick="MostrarVariables">
-                                    Ver variables
-                                </button>
-                            </label>
+                            <label>Archivo Word (.docx) *</label>
                             <InputFile OnChange="OnDocxSeleccionado" accept=".docx" />
                             @if (!string.IsNullOrWhiteSpace(form.ArchivoDocxBase64))
                             {
                                 <small class="text-muted">✅ Archivo cargado correctamente</small>
                             }
-                            <small class="text-muted" style="display:block;margin-top:.25rem;">
-                                Usa {{variables}} directamente en el texto del documento Word.
-                            </small>
                         </div>
                     }
 
@@ -245,6 +305,31 @@ else
                             </div>
                         }
                     </div>
+
+                    <div class="form-group">
+                        <label>
+                            Campos editables por el colaborador
+                            <span class="text-muted text-sm" style="font-weight:400;margin-left:.25rem;">
+                                — el colaborador podrá personalizar estos valores antes de descargar
+                            </span>
+                        </label>
+                        <div class="areas-check-list">
+                            @foreach (var v in VariablesEditablesOpciones)
+                            {
+                                var key = v.Key;
+                                <label style="display:flex;align-items:center;gap:.4rem;cursor:pointer;">
+                                    <input type="checkbox"
+                                           checked="@form.VariablesEditables.Contains(key)"
+                                           @onchange="e => ToggleVariableEditable(key, (bool)e.Value!)" />
+                                    <code style="font-size:.8rem;">@("{{" + key + "}}")</code>
+                                    <span class="text-muted text-sm">@v.Value</span>
+                                </label>
+                            }
+                        </div>
+                        <small class="text-muted">
+                            Las variables no marcadas se rellenan automáticamente con los datos del perfil.
+                        </small>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-ghost" @onclick="CerrarModal">Cancelar</button>
@@ -266,6 +351,8 @@ else
     private bool showVariables = false;
     private bool showConfirm = false;
     private bool guardando = false;
+    private bool showInstructivoHtml = false;
+    private bool showInstructivoDocx = true; // abierto por defecto en docx
     private int? editandoId;
     private string confirmMsg = string.Empty;
     private PlantillaDocumentoDto? aEliminar;
@@ -289,6 +376,18 @@ else
         ["{{cargo_firmante}}"]   = "Cargo del firmante",
     };
 
+    // Variables que el admin puede marcar como editables por el colaborador
+    private static readonly Dictionary<string, string> VariablesEditablesOpciones = new()
+    {
+        ["destinatario"]     = "A quién va dirigida la carta",
+        ["motivo"]           = "Motivo o propósito de la carta",
+        ["entidad"]          = "Entidad o empresa destinataria",
+        ["nombre_completo"]  = "Nombre completo (si el colaborador quiere ajustarlo)",
+        ["cargo"]            = "Cargo (si difiere del perfil)",
+        ["ciudad"]           = "Ciudad de expedición",
+        ["fecha_expedicion"] = "Fecha de expedición",
+    };
+
     protected override async Task OnInitializedAsync()
     {
         var t1 = ApiService.GetAllAsync();
@@ -303,6 +402,8 @@ else
     {
         form = new CreatePlantillaDocumentoDto();
         editandoId = null;
+        showInstructivoHtml = false;
+        showInstructivoDocx = true;
         showModal = true;
     }
 
@@ -312,12 +413,14 @@ else
         {
             Nombre = p.Nombre,
             Descripcion = p.Descripcion,
+            TipoPlantilla = p.TipoPlantilla,
             ContenidoHtml = p.ContenidoHtml,
             FirmaImagenBase64 = p.FirmaImagenBase64,
             NombreFirmante = p.NombreFirmante,
             CargoFirmante = p.CargoFirmante,
             AplicaTodasAreas = p.AplicaTodasAreas,
-            AreaIds = [..p.AreaIds]
+            AreaIds = [..p.AreaIds],
+            VariablesEditables = [..p.VariablesEditables],
         };
         editandoId = p.Id;
         showModal = true;
@@ -412,6 +515,12 @@ else
     {
         if (checked_) form.AreaIds.Add(areaId);
         else form.AreaIds.Remove(areaId);
+    }
+
+    private void ToggleVariableEditable(string key, bool checked_)
+    {
+        if (checked_) { if (!form.VariablesEditables.Contains(key)) form.VariablesEditables.Add(key); }
+        else form.VariablesEditables.Remove(key);
     }
 
     private void MostrarVariables() => showVariables = true;

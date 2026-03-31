@@ -190,23 +190,70 @@ public class PdfGeneratorService
 
     private static void RenderHtmlSimple(ColumnDescriptor col, string html)
     {
-        var texto = html
+        // Normalizar saltos de línea
+        var normalizado = html
+            .Replace("\r\n", "\n").Replace("\r", "\n")
             .Replace("<br/>", "\n").Replace("<br />", "\n").Replace("<br>", "\n")
-            .Replace("</p>", "\n").Replace("<p>", "")
-            .Replace("</div>", "\n").Replace("<div>", "")
-            .Replace("&nbsp;", " ");
+            .Replace("</p>", "\n").Replace("</div>", "\n")
+            .Replace("&nbsp;", " ").Replace("&amp;", "&")
+            .Replace("&lt;", "<").Replace("&gt;", ">").Replace("&quot;", "\"");
 
-        var lineas = System.Text.RegularExpressions.Regex
-            .Replace(texto, "<[^>]+>", "")
-            .Split('\n');
+        // Extraer bloques de texto preservando negrita/cursiva/subrayado
+        var bloques = ParsearBloques(normalizado);
 
-        foreach (var linea in lineas)
+        foreach (var (texto, negrita, cursiva, subrayado) in bloques)
         {
-            var trimmed = linea.Trim();
+            var trimmed = texto.Trim('\n');
             if (string.IsNullOrEmpty(trimmed))
-                col.Item().PaddingTop(6);
-            else
-                col.Item().Text(trimmed).FontSize(11);
+            {
+                col.Item().PaddingTop(4);
+                continue;
+            }
+            foreach (var linea in trimmed.Split('\n'))
+            {
+                var l = linea.Trim();
+                if (string.IsNullOrEmpty(l)) { col.Item().PaddingTop(4); continue; }
+                col.Item().Text(t =>
+                {
+                    var span = t.Span(l).FontSize(11);
+                    if (negrita) span.Bold();
+                    if (cursiva) span.Italic();
+                    if (subrayado) span.Underline();
+                });
+            }
         }
+    }
+
+    private static List<(string texto, bool negrita, bool cursiva, bool subrayado)> ParsearBloques(string html)
+    {
+        var result = new List<(string, bool, bool, bool)>();
+        var regex = new System.Text.RegularExpressions.Regex(
+            @"<(b|strong|i|em|u|/b|/strong|/i|/em|/u)>|<[^>]+>|([^<]+)",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+        bool negrita = false, cursiva = false, subrayado = false;
+        foreach (System.Text.RegularExpressions.Match m in regex.Matches(html))
+        {
+            if (m.Groups[2].Success) // texto plano
+            {
+                var txt = m.Groups[2].Value;
+                if (!string.IsNullOrEmpty(txt))
+                    result.Add((txt, negrita, cursiva, subrayado));
+            }
+            else if (m.Groups[1].Success) // etiqueta de formato
+            {
+                var tag = m.Groups[1].Value.ToLower();
+                switch (tag)
+                {
+                    case "b": case "strong": negrita = true; break;
+                    case "/b": case "/strong": negrita = false; break;
+                    case "i": case "em": cursiva = true; break;
+                    case "/i": case "/em": cursiva = false; break;
+                    case "u": subrayado = true; break;
+                    case "/u": subrayado = false; break;
+                }
+            }
+        }
+        return result;
     }
 }

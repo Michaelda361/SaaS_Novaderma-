@@ -31,9 +31,10 @@ builder.Services.AddSingleton(new System.Text.Json.JsonSerializerOptions
 
 // HttpClient con Bearer token
 builder.Services.AddScoped<ApiAuthorizationMessageHandler>();
+builder.Services.AddScoped<DevAwareAuthorizationMessageHandler>();
 builder.Services.AddScoped(sp =>
 {
-    var handler = sp.GetRequiredService<ApiAuthorizationMessageHandler>();
+    var handler = sp.GetRequiredService<DevAwareAuthorizationMessageHandler>();
     handler.InnerHandler = new HttpClientHandler();
     var http = new HttpClient(handler) { BaseAddress = new Uri("http://localhost:5194/") };
     http.DefaultRequestHeaders.Add("Accept", "application/json");

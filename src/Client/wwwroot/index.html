@@ -53,6 +53,15 @@
             return window._msalInstance;
         };
 
+        // Inyecta HTML completo en un iframe aislado
+        window.setIframeContent = function(iframe, html) {
+            if (!iframe) return;
+            const doc = iframe.contentDocument || iframe.contentWindow.document;
+            doc.open();
+            doc.write(html);
+            doc.close();
+        };
+
         // Descarga de PDF generado desde bytes base64
         window.descargarPdf = function(base64, fileName) {
             const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));

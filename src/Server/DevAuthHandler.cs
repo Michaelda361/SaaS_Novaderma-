@@ -6,24 +6,36 @@ using Microsoft.Extensions.Options;
 namespace TalentManagement.Server;
 
 /// <summary>
-/// Solo activo en Development. Si el request trae el header X-Dev-User con un email,
-/// crea un ClaimsPrincipal autenticado con ese email — sin validar ningún token.
+/// Solo activo en Development. Autentica el request si:
+/// - El header X-Dev-User tiene un email válido, O
+/// - DevUserStore tiene un usuario activo (permite requests sin token desde el cliente Blazor)
 /// </summary>
 public class DevAuthHandler(
     IOptionsMonitor<AuthenticationSchemeOptions> options,
     ILoggerFactory logger,
-    UrlEncoder encoder)
+    UrlEncoder encoder,
+    TalentManagement.Server.Services.DevUserStore devStore)
     : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
 {
     protected override Task<AuthenticateResult> HandleAuthenticateAsync()
     {
-        if (!Request.Headers.TryGetValue("X-Dev-User", out var emailValues))
-            return Task.FromResult(AuthenticateResult.NoResult());
+        // Prioridad 1: header explícito X-Dev-User
+        if (Request.Headers.TryGetValue("X-Dev-User", out var emailValues))
+        {
+            var email = emailValues.ToString().Trim();
+            if (!string.IsNullOrWhiteSpace(email))
+                return Task.FromResult(AuthenticateResult.Success(BuildTicket(email)));
+        }
 
-        var email = emailValues.ToString().Trim();
-        if (string.IsNullOrWhiteSpace(email))
-            return Task.FromResult(AuthenticateResult.NoResult());
+        // Prioridad 2: usuario activo en el store (cliente sin token MSAL)
+        if (devStore.ActiveEmail is { Length: > 0 } storeEmail)
+            return Task.FromResult(AuthenticateResult.Success(BuildTicket(storeEmail)));
 
+        return Task.FromResult(AuthenticateResult.NoResult());
+    }
+
+    private AuthenticationTicket BuildTicket(string email)
+    {
         var claims = new[]
         {
             new Claim("preferred_username", email),
@@ -32,8 +44,6 @@ public class DevAuthHandler(
         };
         var identity  = new ClaimsIdentity(claims, Scheme.Name);
         var principal = new ClaimsPrincipal(identity);
-        var ticket    = new AuthenticationTicket(principal, Scheme.Name);
-
-        return Task.FromResult(AuthenticateResult.Success(ticket));
+        return new AuthenticationTicket(principal, Scheme.Name);
     }
 }

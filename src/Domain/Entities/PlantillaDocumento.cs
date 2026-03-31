@@ -24,6 +24,12 @@ public class PlantillaDocumento : BaseEntity
     /// <summary>true = visible para todos los colaboradores</summary>
     public bool AplicaTodasAreas { get; set; } = true;
 
+    /// <summary>
+    /// Variables que el colaborador puede editar antes de generar el PDF.
+    /// JSON array de strings, ej: ["destinatario","motivo"]
+    /// </summary>
+    public string? VariablesEditables { get; set; }
+
     public ICollection<PlantillaDocumentoArea> Areas { get; set; } = [];
     public ICollection<SolicitudDocumento> Solicitudes { get; set; } = [];
 }

@@ -13,7 +13,7 @@ public class DevUserStore
         "dev.jeferrhh@test.local",
     ];
 
-    public string? ActiveEmail { get; private set; } = KnownUsers[0];
+    public string? ActiveEmail { get; private set; } = null; // null = usar token real de MSAL
 
     public IReadOnlyList<string> Users => KnownUsers;
 

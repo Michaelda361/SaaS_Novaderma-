@@ -35,9 +35,17 @@ public class PlantillaDocumentoApiService(HttpClient http)
     public async Task<bool> DeleteAsync(int id) =>
         (await http.DeleteAsync($"{Base}/{id}")).IsSuccessStatusCode;
 
-    public async Task<(byte[]? bytes, string? fileName)> GenerarPdfAsync(int id)
+    public async Task<PrevisualizarDto?> PrevisualizarAsync(int id, GenerarPdfDto dto)
     {
-        var response = await http.PostAsync($"{Base}/{id}/generar", null);
+        var r = await http.PostAsJsonAsync($"{Base}/{id}/previsualizar", dto);
+        if (!r.IsSuccessStatusCode) return null;
+        return await r.Content.ReadFromJsonAsync<PrevisualizarDto>();
+    }
+
+    public async Task<(byte[]? bytes, string? fileName)> GenerarPdfAsync(int id, Dictionary<string, string>? extras = null)
+    {
+        var dto = new GenerarPdfDto { Extras = extras ?? [] };
+        var response = await http.PostAsJsonAsync($"{Base}/{id}/generar", dto);
         if (!response.IsSuccessStatusCode) return (null, null);
         var bytes = await response.Content.ReadAsByteArrayAsync();
         var fileName = response.Content.Headers.ContentDisposition?.FileNameStar

@@ -23,4 +23,6 @@ public class CreatePlantillaDocumentoDto
 
     public bool AplicaTodasAreas { get; set; } = true;
     public List<int> AreaIds { get; set; } = [];
+    /// <summary>Variables que el colaborador puede editar antes de generar, ej: ["destinatario","motivo"]</summary>
+    public List<string> VariablesEditables { get; set; } = [];
 }

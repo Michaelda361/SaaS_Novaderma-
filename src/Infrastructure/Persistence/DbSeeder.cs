@@ -42,22 +42,26 @@ public static class DbSeeder
         // Emails usables via DevSettings:ImpersonateEmail en appsettings.Development.json
         var colaboradores = new List<Colaborador>
         {
-            // Colaborador en Tecnología — usado para probar el flujo de cartas laborales
-            new() { Nombre = "Dev",    Apellido = "Colaborador", Email = "dev.colaborador@test.local",
+            // Colaborador en Tecnología
+            new() { Nombre = "Andrés",   Apellido = "Martínez Rojas",  Email = "dev.colaborador@test.local",
                     CargoId = cargos[0].Id, AreaId = areas[0].Id,
-                    Cedula = "1234567890", Ciudad = "Bogotá",
-                    TipoContrato = "Indefinido", SueldoBasico = 3_500_000m,
+                    Cedula = "1018456789", Ciudad = "Bogotá",
+                    TipoContrato = "Indefinido", SueldoBasico = 4_800_000m,
                     FechaIngreso = new DateTime(2022, 3, 1) },
 
-            // Jefe de área Tecnología — puede aprobar/rechazar propuestas
-            new() { Nombre = "Dev",    Apellido = "JefeTech",  Email = "dev.jefe@test.local",
+            // Jefe de área Tecnología
+            new() { Nombre = "Carlos",   Apellido = "Herrera Ospina",  Email = "dev.jefe@test.local",
                     CargoId = cargos[2].Id, AreaId = areas[0].Id,
-                    FechaIngreso = new DateTime(2020, 1, 15) },
+                    Cedula = "79654321",  Ciudad = "Medellín",
+                    TipoContrato = "Indefinido", SueldoBasico = 9_200_000m,
+                    FechaIngreso = new DateTime(2018, 7, 15) },
 
             // Jefe de área RRHH
-            new() { Nombre = "Dev",    Apellido = "JefeRRHH",  Email = "dev.jeferrhh@test.local",
+            new() { Nombre = "Francy",   Apellido = "Gutiérrez Ramírez", Email = "dev.jeferrhh@test.local",
                     CargoId = cargos[4].Id, AreaId = areas[1].Id,
-                    FechaIngreso = new DateTime(2019, 6, 1) },
+                    Cedula = "52789012",  Ciudad = "Bogotá",
+                    TipoContrato = "Indefinido", SueldoBasico = 7_500_000m,
+                    FechaIngreso = new DateTime(2016, 2, 1) },
         };
 
         db.Colaboradores.AddRange(colaboradores);

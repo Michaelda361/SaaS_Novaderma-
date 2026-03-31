@@ -30,7 +30,7 @@ else
     <div class="cartas-grid">
         @foreach (var p in plantillas)
         {
-            var pid = p.Id;
+            var plantilla = p;
             <div class="carta-card">
                 <div class="carta-icon">📄</div>
                 <div class="carta-info">
@@ -44,23 +44,14 @@ else
                         <div class="carta-firmante">
                             Firmado por: @p.NombreFirmante
                             @if (!string.IsNullOrWhiteSpace(p.CargoFirmante))
-                            {
-                                <span> · @p.CargoFirmante</span>
-                            }
+                            { <span> · @p.CargoFirmante</span> }
                         </div>
                     }
                 </div>
                 <button class="btn btn-primary btn-sm"
-                        disabled="@descargando.Contains(pid)"
-                        @onclick="() => Descargar(pid, p.Nombre)">
-                    @if (descargando.Contains(pid))
-                    {
-                        <span>Generando...</span>
-                    }
-                    else
-                    {
-                        <span>⬇ Descargar PDF</span>
-                    }
+                        disabled="@cargandoPreview"
+                        @onclick="() => AbrirPreview(plantilla)">
+                    👁 Vista previa
                 </button>
             </div>
         }
@@ -75,12 +66,7 @@ else
         </div>
         <div class="table-wrapper">
             <table>
-                <thead>
-                    <tr>
-                        <th>Documento</th>
-                        <th>Fecha</th>
-                    </tr>
-                </thead>
+                <thead><tr><th>Documento</th><th>Fecha</th></tr></thead>
                 <tbody>
                     @foreach (var s in solicitudes.Take(10))
                     {
@@ -97,12 +83,87 @@ else
     </div>
 }
 
+<!-- Modal de vista previa + edición -->
+@if (plantillaSeleccionada is not null)
+{
+    <div class="modal-backdrop" @onclick="CerrarModal">
+        <div class="modal" style="max-width:860px;width:95vw;" @onclick:stopPropagation>
+            <div class="modal-header">
+                <span class="modal-title">📄 @plantillaSeleccionada.Nombre</span>
+                <button class="btn btn-ghost btn-sm btn-icon" @onclick="CerrarModal">✕</button>
+            </div>
+
+            <div class="modal-body" style="display:grid;grid-template-columns:1fr 2fr;gap:1.5rem;min-height:420px;">
+
+                <!-- Panel izquierdo: campos editables -->
+                <div style="display:flex;flex-direction:column;gap:1rem;">
+                    <div>
+                        <p style="font-size:.8rem;color:var(--text-muted);margin-bottom:.75rem;">
+                            Los campos marcados con ✏️ puedes editarlos. El resto se toma de tu perfil.
+                        </p>
+                        @foreach (var key in plantillaSeleccionada.VariablesEditables)
+                        {
+                            <div class="form-group" style="margin-bottom:.75rem;">
+                                <label style="font-size:.8rem;">✏️ @EtiquetaVariable(key)</label>
+                                <input class="form-control" type="text"
+                                       style="font-size:.875rem;"
+                                       value="@(extrasActuales.GetValueOrDefault(key, ""))"
+                                       placeholder="@PlaceholderVariable(key)"
+                                       @oninput="async e => { extrasActuales[key] = e.Value?.ToString() ?? string.Empty; await RefrescarPreviewAsync(); }" />
+                            </div>
+                        }
+                        @if (!plantillaSeleccionada.VariablesEditables.Any())
+                        {
+                            <p style="font-size:.8rem;color:var(--text-muted);">
+                                Esta carta se genera automáticamente con los datos de tu perfil.
+                            </p>
+                        }
+                    </div>
+                </div>
+
+                <!-- Panel derecho: preview del documento en iframe aislado -->
+                <div style="border:1px solid var(--border);border-radius:8px;overflow:hidden;background:#fff;min-height:420px;max-height:520px;">
+                    @if (cargandoPreview)
+                    {
+                        <div class="loading" style="min-height:200px;"><div class="spinner"></div></div>
+                    }
+                    else
+                    {
+                        <iframe @ref="iframeRef"
+                                style="width:100%;height:520px;border:none;display:block;"
+                                title="Vista previa del documento"></iframe>
+                    }
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button class="btn btn-ghost" @onclick="CerrarModal">Cerrar</button>
+                <button class="btn btn-primary"
+                        disabled="@descargando"
+                        @onclick="DescargarDesdeModal">
+                    @(descargando ? "Generando PDF..." : "⬇ Descargar PDF")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     private Toast toast = null!;
     private List<PlantillaDocumentoDto> plantillas = [];
     private List<SolicitudDocumentoDto> solicitudes = [];
-    private HashSet<int> descargando = [];
     private bool cargando = true;
+    private bool descargando = false;
+    private bool cargandoPreview = false;
+
+    private PlantillaDocumentoDto? plantillaSeleccionada;
+    private Dictionary<string, string> extrasActuales = [];
+    private PrevisualizarDto? preview;
+    private ElementReference iframeRef;
+    private string? htmlPendiente; // HTML a inyectar en el próximo render
+
+    // Debounce para no llamar al API en cada tecla
+    private CancellationTokenSource? _debounce;
 
     protected override async Task OnInitializedAsync()
     {
@@ -114,27 +175,150 @@ else
         cargando = false;
     }
 
-    private async Task Descargar(int id, string nombre)
+    private async Task AbrirPreview(PlantillaDocumentoDto p)
     {
-        descargando.Add(id);
+        plantillaSeleccionada = p;
+        extrasActuales = p.VariablesEditables.ToDictionary(k => k, _ => string.Empty);
+        preview = null;
+        await CargarPreviewAsync();
+    }
+
+    private void CerrarModal()
+    {
+        plantillaSeleccionada = null;
+        preview = null;
+        extrasActuales = [];
+        _debounce?.Cancel();
+    }
+
+    private async Task CargarPreviewAsync()
+    {
+        if (plantillaSeleccionada is null) return;
+        cargandoPreview = true;
+        htmlPendiente = null;
         StateHasChanged();
 
-        var (bytes, fileName) = await ApiService.GenerarPdfAsync(id);
+        var dto = new GenerarPdfDto { Extras = new(extrasActuales) };
+        preview = await ApiService.PrevisualizarAsync(plantillaSeleccionada.Id, dto);
 
-        descargando.Remove(id);
+        cargandoPreview = false;
+        if (preview is not null)
+            htmlPendiente = BuildPreviewHtml(preview);
+
+        StateHasChanged(); // garantiza que OnAfterRenderAsync se dispare para inyectar el iframe
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (htmlPendiente is not null)
+        {
+            var html = htmlPendiente;
+            htmlPendiente = null;
+            await JS.InvokeVoidAsync("setIframeContent", iframeRef, html);
+        }
+    }
+
+    private async Task RefrescarPreviewAsync()
+    {
+        _debounce?.Cancel();
+        _debounce = new CancellationTokenSource();
+        var token = _debounce.Token;
+        try
+        {
+            await Task.Delay(600, token);
+            if (!token.IsCancellationRequested)
+                await CargarPreviewAsync();
+        }
+        catch (TaskCanceledException) { }
+    }
+
+    private async Task DescargarDesdeModal()
+    {
+        if (plantillaSeleccionada is null) return;
+        descargando = true;
+        StateHasChanged();
+
+        var (bytes, fileName) = await ApiService.GenerarPdfAsync(
+            plantillaSeleccionada.Id,
+            extrasActuales.Count > 0 ? extrasActuales : null);
+
+        descargando = false;
 
         if (bytes is null)
         {
             await toast.Show("No se pudo generar el documento. Verifica que tu perfil tenga todos los datos completos.", "error");
+            StateHasChanged();
             return;
         }
 
-        // Trigger descarga en el navegador via JS
         var base64 = Convert.ToBase64String(bytes);
-        await JS.InvokeVoidAsync("descargarPdf", base64, fileName ?? $"{nombre}.pdf");
+        await JS.InvokeVoidAsync("descargarPdf", base64, fileName ?? $"{plantillaSeleccionada.Nombre}.pdf");
 
-        // Refrescar historial
+        CerrarModal();
         solicitudes = await ApiService.GetMisSolicitudesAsync();
         await toast.Show("Documento generado correctamente.");
     }
+
+    private static string BuildPreviewHtml(PrevisualizarDto p)
+    {
+        var imgTag = !string.IsNullOrWhiteSpace(p.FirmaImagenBase64)
+            ? $"<img src=\"{p.FirmaImagenBase64}\" style=\"max-height:70px;display:block;margin-bottom:6px;\" />"
+            : string.Empty;
+
+        var cargoTag = !string.IsNullOrWhiteSpace(p.CargoFirmante)
+            ? $"<div style=\"font-size:9pt;color:#555;\">{p.CargoFirmante}</div>"
+            : string.Empty;
+
+        var firma = !string.IsNullOrWhiteSpace(p.NombreFirmante)
+            ? $"<div style=\"margin-top:3rem;\">{imgTag}<div style=\"border-top:1px solid #555;padding-top:4px;width:220px;\"><strong style=\"font-size:10pt;\">{p.NombreFirmante}</strong>{cargoTag}</div></div>"
+            : string.Empty;
+
+        // CSS que replica fielmente el editor contenteditable y el PDF generado
+        const string css =
+            "html, body { margin:0; padding:0; }" +
+            "body {" +
+            "  font-family: Arial, Helvetica, sans-serif;" +
+            "  font-size: 11pt;" +
+            "  line-height: 1.6;" +
+            "  color: #111;" +
+            "  background: #fff;" +
+            "  padding: 2cm 2.5cm;" +
+            "}" +
+            "p, div { margin: 0 0 .4em 0; }" +
+            "b, strong { font-weight: bold; }" +
+            "i, em { font-style: italic; }" +
+            "u { text-decoration: underline; }" +
+            "ul { list-style: disc; margin-left: 1.5em; margin-bottom: .5em; }" +
+            "ol { list-style: decimal; margin-left: 1.5em; margin-bottom: .5em; }" +
+            "li { margin-bottom: .2em; }" +
+            "br { display: block; margin-bottom: .2em; }";
+
+        return "<!DOCTYPE html><html lang=\"es\"><head><meta charset=\"utf-8\"/>"
+             + $"<style>{css}</style></head><body>"
+             + p.Html
+             + firma
+             + "</body></html>";
+    }
+
+    private static string EtiquetaVariable(string key) => key switch
+    {
+        "destinatario"     => "A quién va dirigida",
+        "motivo"           => "Motivo de la carta",
+        "entidad"          => "Entidad o empresa destinataria",
+        "nombre_completo"  => "Nombre completo",
+        "cargo"            => "Cargo",
+        "ciudad"           => "Ciudad de expedición",
+        "fecha_expedicion" => "Fecha de expedición",
+        _                  => key.Replace("_", " "),
+    };
+
+    private static string PlaceholderVariable(string key) => key switch
+    {
+        "destinatario"     => "Ej: Banco de Bogotá",
+        "motivo"           => "Ej: Solicitud de crédito",
+        "entidad"          => "Ej: Ministerio de Educación",
+        "ciudad"           => "Ej: Bogotá",
+        "fecha_expedicion" => "Ej: 31 de marzo de 2026",
+        _                  => string.Empty,
+    };
 }

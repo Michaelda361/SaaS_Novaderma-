@@ -4,6 +4,7 @@ using TalentManagement.Application.Services;
 using TalentManagement.Infrastructure.Services;
 using TalentManagement.Server.Services;
 using TalentManagement.Shared.DTOs.PlantillasDocumento;
+using TalentManagement.Application.Services;
 
 namespace TalentManagement.Server.Controllers;
 
@@ -64,15 +65,39 @@ public class PlantillasDocumentoController(
         catch (Exception ex) { return StatusCode(500, ex.Message); }
     }
 
-    // ── Generación de PDF ─────────────────────────────────────────────────────
+    // ── Previsualización (HTML resuelto, sin registrar solicitud) ────────────
 
-    [HttpPost("{id:int}/generar")]
-    public async Task<IActionResult> GenerarPdf(int id)
+    [HttpPost("{id:int}/previsualizar")]
+    public async Task<IActionResult> Previsualizar(int id, [FromBody] GenerarPdfDto? dto = null)
     {
         try
         {
             var email = currentUser.GetEmail();
-            var (htmlResuelto, plantilla, _) = await service.ResolverPlantillaAsync(id, email);
+            var (htmlResuelto, plantilla) = await service.PrevisualizarAsync(id, email, dto?.Extras);
+            return Ok(new
+            {
+                html = htmlResuelto,
+                nombreFirmante = plantilla.NombreFirmante,
+                cargoFirmante = plantilla.CargoFirmante,
+                firmaImagenBase64 = plantilla.FirmaImagenBase64,
+                tipoPlantilla = plantilla.TipoPlantilla,
+            });
+        }
+        catch (KeyNotFoundException ex) { return NotFound(ex.Message); }
+        catch (UnauthorizedAccessException ex) { return Forbid(ex.Message); }
+        catch (Exception ex) { return StatusCode(500, ex.Message); }
+    }
+
+    // ── Generación de PDF ─────────────────────────────────────────────────────
+
+    [HttpPost("{id:int}/generar")]
+    public async Task<IActionResult> GenerarPdf(int id, [FromBody] GenerarPdfDto? dto = null)
+    {
+        try
+        {
+            var email = currentUser.GetEmail();
+            var extras = dto?.Extras;
+            var (htmlResuelto, plantilla, _) = await service.ResolverPlantillaAsync(id, email, extras);
             var pdfBytes = pdfGenerator.Generar(htmlResuelto, plantilla);
             var nombreArchivo = $"{plantilla.Nombre.Replace(" ", "_")}_{DateTime.Today:yyyyMMdd}.pdf";
             return File(pdfBytes, "application/pdf", nombreArchivo);

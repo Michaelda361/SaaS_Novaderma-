@@ -71,6 +71,25 @@ app.UseStaticFiles();
 if (app.Environment.IsDevelopment())
     app.MapRazorPages(); // sirve /dev
 
+// Endpoints dev — gestión de usuario activo desde el cliente Blazor
+if (app.Environment.IsDevelopment())
+{
+    app.MapGet("/api/v1/dev/usuario-activo", (TalentManagement.Server.Services.DevUserStore store) =>
+        Results.Ok(new { email = store.ActiveEmail, activo = store.ActiveEmail != null }))
+        .AllowAnonymous();
+
+    app.MapPost("/api/v1/dev/usuario-activo", (
+        TalentManagement.Server.Services.DevUserStore store,
+        DevUsuarioRequest req) =>
+    {
+        if (string.IsNullOrWhiteSpace(req.Email))
+            store.ClearUser();
+        else
+            store.SetUser(req.Email);
+        return Results.Ok(new { email = store.ActiveEmail, activo = store.ActiveEmail != null });
+    }).AllowAnonymous();
+}
+
 if (!app.Environment.IsDevelopment())
     app.UseHttpsRedirection();
 app.UseAuthentication();
@@ -78,3 +97,5 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
+
+record DevUsuarioRequest(string? Email);

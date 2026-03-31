@@ -3,8 +3,8 @@
 @inject DocumentoApiService DocumentoApi
 @inject AuthenticationStateProvider AuthState
 @inject IConfiguration Config
+@inject HttpClient Http
 @inject NavigationManager Nav
-@inject IJSRuntime JS
 @implements IDisposable
 
 <div class="app-layout @(sidebarOpen ? "sidebar-open" : "")">
@@ -75,10 +75,20 @@
             </div>
             @if (isDevMode)
             {
-                <button class="btn btn-ghost btn-sm" style="width:100%;margin-top:.5rem;font-size:.75rem;"
-                        @onclick="CambiarUsuarioDevAsync">
-                    🔄 Cambiar usuario dev
-                </button>
+                @if (devUserActivo)
+                {
+                    <button class="btn btn-ghost btn-sm" style="width:100%;margin-top:.5rem;font-size:.75rem;"
+                            @onclick="VolverAMicrosoftAsync">
+                        🔙 Volver a cuenta Microsoft
+                    </button>
+                }
+                else
+                {
+                    <button class="btn btn-ghost btn-sm" style="width:100%;margin-top:.5rem;font-size:.75rem;"
+                            @onclick="CambiarADevColaboradorAsync">
+                        🔄 Cambiar a usuario dev
+                    </button>
+                }
             }
         </div>
     </aside>
@@ -111,6 +121,7 @@
     private string userEmail = "";
     private string userInitials = "U";
     private bool isDevMode;
+    private bool devUserActivo; // true cuando el servidor está impersonando un usuario dev
 
     private void OpenSidebar() => sidebarOpen = true;
     private void CloseSidebar() => sidebarOpen = false;
@@ -123,19 +134,31 @@
             Theme.OnChange += StateHasChanged;
             await Theme.InitAsync();
 
-            // Leer identidad — en dev desde localStorage, en prod desde el token MSAL
             if (isDevMode)
             {
-                var devEmail = await JS.InvokeAsync<string?>("localStorage.getItem", "dev_user_email");
-                if (!string.IsNullOrWhiteSpace(devEmail))
+                // Consultar al servidor qué usuario dev está activo
+                try
                 {
-                    userEmail = devEmail;
-                    userName = devEmail.Split('@')[0].Replace('.', ' ');
-                    var parts = userName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-                    userInitials = parts.Length >= 2
-                        ? $"{parts[0][0]}{parts[1][0]}".ToUpper()
-                        : userName.Length > 0 ? userName[0..1].ToUpper() : "U";
+                    var devInfo = await Http.GetFromJsonAsync<DevUsuarioActivoDto>(
+                        "api/v1/dev/usuario-activo");
+                    if (devInfo?.Activo == true && !string.IsNullOrWhiteSpace(devInfo.Email))
+                    {
+                        devUserActivo = true;
+                        userEmail = devInfo.Email;
+                        userName = devInfo.Email switch
+                        {
+                            "dev.colaborador@test.local" => "Andrés Martínez",
+                            "dev.jefe@test.local"        => "Carlos Herrera",
+                            "dev.jeferrhh@test.local"    => "Francy Gutiérrez",
+                            _                            => devInfo.Email.Split('@')[0]
+                        };
+                        var parts = userName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                        userInitials = parts.Length >= 2
+                            ? $"{parts[0][0]}{parts[1][0]}".ToUpper()
+                            : userName[0..1].ToUpper();
+                    }
                 }
+                catch { /* silencioso */ }
             }
             else
             {
@@ -164,7 +187,7 @@
             }
             catch (AccessTokenNotAvailableException ex)
             {
-                ex.Redirect();
+                if (!isDevMode) ex.Redirect();
                 return;
             }
             catch { /* silencioso — no crítico */ }
@@ -173,11 +196,28 @@
         }
     }
 
-    private async Task CambiarUsuarioDevAsync()
+    private async Task CambiarADevColaboradorAsync()
     {
-        await JS.InvokeVoidAsync("localStorage.removeItem", "dev_user_email");
-        Nav.NavigateTo("dev-login", forceLoad: true);
+        try
+        {
+            await Http.PostAsJsonAsync("api/v1/dev/usuario-activo",
+                new { email = "dev.colaborador@test.local" });
+            Nav.NavigateTo(Nav.Uri, forceLoad: true);
+        }
+        catch { /* silencioso */ }
     }
+
+    private async Task VolverAMicrosoftAsync()
+    {
+        try
+        {
+            await Http.PostAsJsonAsync("api/v1/dev/usuario-activo", new { email = (string?)null });
+            Nav.NavigateTo(Nav.Uri, forceLoad: true);
+        }
+        catch { /* silencioso */ }
+    }
+
+    private record DevUsuarioActivoDto(string? Email, bool Activo);
 
     private async Task ToggleTheme() => await Theme.ToggleAsync();
 
