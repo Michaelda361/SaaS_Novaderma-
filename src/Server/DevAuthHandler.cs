@@ -19,6 +19,11 @@ public class DevAuthHandler(
 {
     protected override Task<AuthenticateResult> HandleAuthenticateAsync()
     {
+        // Si hay un Bearer token real, ceder al esquema JWT — no interferir
+        if (Request.Headers.TryGetValue("Authorization", out var authHeader) &&
+            authHeader.ToString().StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+            return Task.FromResult(AuthenticateResult.NoResult());
+
         // Prioridad 1: header explícito X-Dev-User
         if (Request.Headers.TryGetValue("X-Dev-User", out var emailValues))
         {

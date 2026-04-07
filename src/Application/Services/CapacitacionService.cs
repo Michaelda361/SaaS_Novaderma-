@@ -4,7 +4,9 @@ using TalentManagement.Shared.DTOs.Capacitaciones;
 
 namespace TalentManagement.Application.Services;
 
-public class CapacitacionService(ICapacitacionRepository repository)
+public class CapacitacionService(
+    ICapacitacionRepository repository,
+    IInscripcionRepository inscripcionRepository)
 {
     public async Task<List<CapacitacionDto>> GetAllAsync()
     {
@@ -44,6 +46,19 @@ public class CapacitacionService(ICapacitacionRepository repository)
         };
 
         var created = await repository.CreateAsync(capacitacion);
+
+        // Si se asignó a un colaborador específico, inscribirlo automáticamente
+        if (dto.ColaboradorId.HasValue)
+        {
+            var inscripcion = new Inscripcion
+            {
+                ColaboradorId = dto.ColaboradorId.Value,
+                CapacitacionId = created.Id,
+                FechaInscripcion = dto.FechaInicio
+            };
+            await inscripcionRepository.CreateAsync(inscripcion);
+        }
+
         return MapToDto(created);
     }
 

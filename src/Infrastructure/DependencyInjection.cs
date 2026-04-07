@@ -31,6 +31,7 @@ public static class DependencyInjection
         services.AddScoped<IDocumentoRepository, DocumentoRepository>();
         services.AddScoped<IAuditLogRepository, AuditLogRepository>();
         services.AddScoped<IPlantillaDocumentoRepository, PlantillaDocumentoRepository>();
+        services.AddScoped<ICuestionarioRepository, CuestionarioRepository>();
 
         // Servicios de aplicación
         services.AddScoped<ColaboradorService>();
@@ -42,6 +43,7 @@ public static class DependencyInjection
         services.AddScoped<RecursoService>();
         services.AddScoped<DocumentoService>();
         services.AddScoped<PlantillaDocumentoService>();
+        services.AddScoped<CuestionarioService>();
         services.AddScoped<PdfGeneratorService>();
 
         // SharePoint — mock en Development, real en producción

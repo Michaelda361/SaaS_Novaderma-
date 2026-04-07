@@ -11,4 +11,5 @@ public interface IColaboradorRepository
     Task<Colaborador> UpdateAsync(Colaborador colaborador);
     Task DeleteAsync(int id);
     Task<bool> ExistsAsync(int id);
+    Task<bool> EsJefeDeAreaAsync(int colaboradorId);
 }

@@ -1,0 +1,31 @@
+using System.ComponentModel.DataAnnotations;
+
+namespace TalentManagement.Shared.DTOs.Cuestionarios;
+
+/// <summary>Payload que envía el colaborador al responder.</summary>
+public class ResponderCuestionarioDto
+{
+    [Required]
+    public int CuestionarioId { get; set; }
+
+    [Required]
+    public int InscripcionId { get; set; }
+
+    public List<RespuestaPreguntaDto> Respuestas { get; set; } = [];
+}
+
+public class RespuestaPreguntaDto
+{
+    public int PreguntaId { get; set; }
+    public int OpcionElegidaId { get; set; }
+}
+
+/// <summary>Resultado devuelto al colaborador tras responder.</summary>
+public class ResultadoCuestionarioDto
+{
+    public decimal Puntaje { get; set; }
+    public bool Aprobado { get; set; }
+    public int PuntajeAprobacion { get; set; }
+    public int TotalPreguntas { get; set; }
+    public int Correctas { get; set; }
+}

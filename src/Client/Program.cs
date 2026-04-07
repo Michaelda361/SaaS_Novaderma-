@@ -53,5 +53,7 @@ builder.Services.AddScoped<PlantillaDocumentoApiService>();
 builder.Services.AddScoped<OneDrivePickerService>();
 builder.Services.AddScoped<OneDriveGraphService>();
 builder.Services.AddScoped<ThemeService>();
+builder.Services.AddScoped<AuthInfoService>();
+builder.Services.AddScoped<CuestionarioApiService>();
 
 await builder.Build().RunAsync();

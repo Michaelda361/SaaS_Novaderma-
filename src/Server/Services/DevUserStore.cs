@@ -13,11 +13,17 @@ public class DevUserStore
         "dev.jeferrhh@test.local",
     ];
 
-    public string? ActiveEmail { get; private set; } = null; // null = usar token real de MSAL
+    public string? ActiveEmail { get; private set; }
 
     public IReadOnlyList<string> Users => KnownUsers;
 
+    public DevUserStore(IConfiguration config)
+    {
+        // Arranca con el usuario definido en appsettings.Development.json
+        ActiveEmail = config["DevSettings:DefaultDevUser"];
+    }
+
     public void SetUser(string email) => ActiveEmail = email;
 
-    public void ClearUser() => ActiveEmail = null; // null = usar token real de MSAL
+    public void ClearUser() => ActiveEmail = null;
 }

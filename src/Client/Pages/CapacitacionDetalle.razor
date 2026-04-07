@@ -4,8 +4,8 @@
 @inject CapacitacionApiService CapacitacionService
 @inject ColaboradorApiService ColaboradorService
 @inject RecursoApiService RecursoService
+@inject CuestionarioApiService CuestionarioService
 @inject NavigationManager Nav
-
 <Toast @ref="toast" />
 
 <div class="page-header" style="margin-bottom:1.5rem;display:flex;align-items:center;gap:1rem;flex-wrap:wrap;">
@@ -32,7 +32,10 @@
 <div class="card" style="margin-bottom:1.5rem;">
     <div class="card-header">
         <span class="card-title">📎 Materiales y recursos (@recursos.Count)</span>
-        <button class="btn btn-primary btn-sm" @onclick="AbrirModalRecurso">+ Agregar recurso</button>
+        @if (EsMicrosoftUser)
+        {
+            <button class="btn btn-primary btn-sm" @onclick="AbrirModalRecurso">+ Agregar recurso</button>
+        }
     </div>
 
     @if (recursos.Count == 0)
@@ -59,10 +62,13 @@
                     </div>
                     <div class="flex gap-2" style="margin-left:auto;">
                         <a href="@r.Url" target="_blank" class="btn btn-primary btn-sm">Abrir →</a>
-                        <button class="btn btn-ghost btn-sm btn-icon"
-                                @onclick="() => AbrirEditarRecurso(r)" title="Editar">✏️</button>
-                        <button class="btn btn-danger btn-sm btn-icon"
-                                @onclick="() => EliminarRecurso(r.Id)" title="Eliminar">🗑️</button>
+                        @if (EsMicrosoftUser)
+                        {
+                            <button class="btn btn-ghost btn-sm btn-icon"
+                                    @onclick="() => AbrirEditarRecurso(r)" title="Editar">✏️</button>
+                            <button class="btn btn-danger btn-sm btn-icon"
+                                    @onclick="() => EliminarRecurso(r.Id)" title="Eliminar">🗑️</button>
+                        }
                     </div>
                 </div>
             }
@@ -71,10 +77,15 @@
 </div>
 
 <!-- INSCRITOS -->
+@if (!EsSoloColaborador || EsMicrosoftUser)
+{
 <div class="card">
     <div class="card-header">
         <span class="card-title">👥 Inscritos (@inscripciones.Count)</span>
-        <button class="btn btn-primary btn-sm" @onclick="AbrirModal">+ Inscribir colaborador</button>
+        @if (EsMicrosoftUser)
+        {
+            <button class="btn btn-primary btn-sm" @onclick="AbrirModal">+ Inscribir colaborador</button>
+        }
     </div>
 
     @if (cargando)
@@ -151,19 +162,22 @@
                             </td>
                             <td>
                                 <div class="flex gap-2">
-                                    @if (editandoId == i.Id)
+                                    @if (EsMicrosoftUser)
                                     {
-                                        <button class="btn btn-primary btn-sm btn-icon"
-                                                @onclick="() => GuardarEdicion(i.Id)" title="Guardar">💾</button>
-                                        <button class="btn btn-ghost btn-sm btn-icon"
-                                                @onclick="CancelarEdicion" title="Cancelar">✕</button>
-                                    }
-                                    else
-                                    {
-                                        <button class="btn btn-ghost btn-sm btn-icon"
-                                                @onclick="() => IniciarEdicion(i)" title="Editar">✏️</button>
-                                        <button class="btn btn-danger btn-sm btn-icon"
-                                                @onclick="() => Desinscribir(i.Id)" title="Eliminar">🗑️</button>
+                                        @if (editandoId == i.Id)
+                                        {
+                                            <button class="btn btn-primary btn-sm btn-icon"
+                                                    @onclick="() => GuardarEdicion(i.Id)" title="Guardar">💾</button>
+                                            <button class="btn btn-ghost btn-sm btn-icon"
+                                                    @onclick="CancelarEdicion" title="Cancelar">✕</button>
+                                        }
+                                        else
+                                        {
+                                            <button class="btn btn-ghost btn-sm btn-icon"
+                                                    @onclick="() => IniciarEdicion(i)" title="Editar">✏️</button>
+                                            <button class="btn btn-danger btn-sm btn-icon"
+                                                    @onclick="() => Desinscribir(i.Id)" title="Eliminar">🗑️</button>
+                                        }
                                     }
                                 </div>
                             </td>
@@ -171,6 +185,110 @@
                     }
                 </tbody>
             </table>
+        </div>
+    }
+</div>
+}
+
+<!-- CUESTIONARIO -->
+<div class="card" style="margin-bottom:1.5rem;margin-top:1.5rem;">
+    <div class="card-header">
+        <span class="card-title">📝 Cuestionario</span>
+        @if (EsMicrosoftUser)
+        {
+            @if (cuestionario is null)
+            {
+                <button class="btn btn-primary btn-sm" @onclick="AbrirModalCuestionario">+ Crear cuestionario</button>
+            }
+            else
+            {
+                <div class="flex gap-2">
+                    <button class="btn btn-ghost btn-sm" @onclick="AbrirModalCuestionario">✏️ Editar</button>
+                    <button class="btn btn-danger btn-sm" @onclick="EliminarCuestionario">🗑️</button>
+                </div>
+            }
+        }
+    </div>
+
+    @if (cuestionario is null)
+    {
+        <div class="empty-state" style="padding:1.5rem;">
+            <div class="empty-state-icon">📝</div>
+            <h3>Sin cuestionario</h3>
+            <p>@(EsMicrosoftUser ? "Crea un cuestionario para evaluar a los inscritos." : "Esta capacitación no tiene cuestionario aún.")</p>
+        </div>
+    }
+    else if (resultadoPropio is not null)
+    {
+        <!-- Ya respondió — mostrar resultado -->
+        <div style="padding:1.5rem;text-align:center;">
+            <div style="font-size:3rem;margin-bottom:.5rem;">
+                @(resultadoPropio.Aprobado ? "✅" : "❌")
+            </div>
+            <div style="font-size:1.5rem;font-weight:700;color:@(resultadoPropio.Aprobado ? "var(--success)" : "var(--danger)")">
+                @resultadoPropio.Puntaje.ToString("0.#")%
+            </div>
+            <div class="text-muted text-sm" style="margin-top:.25rem;">
+                @resultadoPropio.Correctas de @resultadoPropio.TotalPreguntas correctas
+                · Mínimo: @resultadoPropio.PuntajeAprobacion%
+            </div>
+            <div style="margin-top:.75rem;">
+                <span class="badge @(resultadoPropio.Aprobado ? "badge-success" : "badge-danger")">
+                    @(resultadoPropio.Aprobado ? "Aprobado" : "No aprobado")
+                </span>
+            </div>
+        </div>
+    }
+    else if (EsSoloColaborador && inscripcionPropia is not null)
+    {
+        <!-- Colaborador puede responder -->
+        <div style="padding:1rem;">
+            <p class="text-sm text-muted" style="margin-bottom:1rem;">
+                @cuestionario.Titulo — @cuestionario.Preguntas.Count pregunta(s) · Mínimo @cuestionario.PuntajeAprobacion% para aprobar
+            </p>
+            @if (!respondiendo)
+            {
+                <button class="btn btn-primary" @onclick="IniciarCuestionario">Responder cuestionario →</button>
+            }
+            else
+            {
+                <div style="display:flex;flex-direction:column;gap:1.5rem;">
+                    @foreach (var (pregunta, idx) in cuestionario.Preguntas.Select((p, i) => (p, i)))
+                    {
+                        <div class="card" style="padding:1rem;border:1px solid var(--border);">
+                            <div class="font-medium" style="margin-bottom:.75rem;">
+                                @(idx + 1). @pregunta.Enunciado
+                            </div>
+                            <div style="display:flex;flex-direction:column;gap:.5rem;">
+                                @foreach (var opcion in pregunta.Opciones)
+                                {
+                                    var seleccionada = respuestasColaborador.TryGetValue(pregunta.Id, out var sel) && sel == opcion.Id;
+                                    <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;padding:.5rem;border-radius:var(--radius);border:1px solid @(seleccionada ? "var(--primary)" : "var(--border)");background:@(seleccionada ? "var(--primary-light)" : "transparent")">
+                                        <input type="radio" name="p@(pregunta.Id)"
+                                               checked="@seleccionada"
+                                               @onchange="() => SeleccionarOpcion(pregunta.Id, opcion.Id)"
+                                               style="accent-color:var(--primary)" />
+                                        @opcion.Texto
+                                    </label>
+                                }
+                            </div>
+                        </div>
+                    }
+                    <div class="flex gap-2">
+                        <button class="btn btn-primary" @onclick="EnviarCuestionario" disabled="@enviandoCuestionario">
+                            @(enviandoCuestionario ? "Enviando..." : "Enviar respuestas")
+                        </button>
+                        <button class="btn btn-ghost" @onclick="() => respondiendo = false">Cancelar</button>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+    else if (EsMicrosoftUser)
+    {
+        <!-- Admin ve resumen del cuestionario -->
+        <div style="padding:1rem;">
+            <p class="text-sm text-muted">@cuestionario.Titulo · @cuestionario.Preguntas.Count pregunta(s) · Mínimo @cuestionario.PuntajeAprobacion%</p>
         </div>
     }
 </div>
@@ -265,8 +383,85 @@
     </div>
 }
 
+<!-- MODAL CUESTIONARIO (admin) -->
+@if (mostrarModalCuestionario)
+{
+    <div class="modal-backdrop" @onclick="CerrarModalCuestionario">
+        <div class="modal" style="max-width:680px;width:95%;" @onclick:stopPropagation>
+            <div class="modal-header">
+                <span class="modal-title">@(cuestionario is null ? "Crear cuestionario" : "Editar cuestionario")</span>
+                <button class="btn btn-ghost btn-sm btn-icon" @onclick="CerrarModalCuestionario">✕</button>
+            </div>
+            <div class="modal-body" style="max-height:70vh;overflow-y:auto;">
+                <div class="form-group">
+                    <label>Título</label>
+                    <input class="form-control" @bind="cForm.Titulo" placeholder="Ej: Evaluación final" />
+                </div>
+                <div class="form-group">
+                    <label>Descripción (opcional)</label>
+                    <input class="form-control" @bind="cForm.Descripcion" placeholder="Instrucciones..." />
+                </div>
+                <div class="form-group">
+                    <label>Puntaje mínimo para aprobar (%)</label>
+                    <input type="number" min="1" max="100" class="form-control" @bind="cForm.PuntajeAprobacion" style="width:100px" />
+                </div>
+
+                <div style="margin-top:1rem;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem;">
+                        <span class="font-medium">Preguntas (@cForm.Preguntas.Count)</span>
+                        <button class="btn btn-ghost btn-sm" @onclick="AgregarPregunta">+ Pregunta</button>
+                    </div>
+
+                    @foreach (var (p, pi) in cForm.Preguntas.Select((x, i) => (x, i)))
+                    {
+                        <div style="border:1px solid var(--border);border-radius:var(--radius);padding:1rem;margin-bottom:.75rem;">
+                            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:.5rem;">
+                                <div class="form-group" style="flex:1;margin-bottom:.5rem;">
+                                    <label style="font-size:.8rem;">Pregunta @(pi + 1)</label>
+                                    <input class="form-control" @bind="p.Enunciado" placeholder="Escribe la pregunta..." />
+                                </div>
+                                <button class="btn btn-danger btn-sm btn-icon" style="margin-top:1.4rem;"
+                                        @onclick="() => EliminarPregunta(pi)">🗑️</button>
+                            </div>
+
+                            <div style="margin-top:.5rem;">
+                                @foreach (var (o, oi) in p.Opciones.Select((x, i) => (x, i)))
+                                {
+                                    <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.4rem;">
+                                        <input type="radio" name="correcta_@pi"
+                                               checked="@o.EsCorrecta"
+                                               @onchange="() => MarcarCorrecta(pi, oi)"
+                                               title="Marcar como correcta"
+                                               style="accent-color:var(--success);flex-shrink:0" />
+                                        <input class="form-control" @bind="o.Texto" placeholder="Opción @(oi + 1)..." style="flex:1" />
+                                        @if (p.Opciones.Count > 2)
+                                        {
+                                            <button class="btn btn-ghost btn-sm btn-icon"
+                                                    @onclick="() => EliminarOpcion(pi, oi)">✕</button>
+                                        }
+                                    </div>
+                                }
+                                <button class="btn btn-ghost btn-sm" style="margin-top:.25rem;"
+                                        @onclick="() => AgregarOpcion(pi)">+ Opción</button>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-ghost" @onclick="CerrarModalCuestionario">Cancelar</button>
+                <button class="btn btn-primary" @onclick="GuardarCuestionario" disabled="@guardandoCuestionario">
+                    @(guardandoCuestionario ? "Guardando..." : "Guardar")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     [Parameter] public int Id { get; set; }
+    [CascadingParameter(Name = "EsMicrosoftUser")] private bool EsMicrosoftUser { get; set; }
+    [CascadingParameter(Name = "EsSoloColaborador")] private bool EsSoloColaborador { get; set; }
 
     private CapacitacionDto? capacitacion;
     private List<InscripcionDto> inscripciones = [];
@@ -289,10 +484,21 @@
     private int? editandoRecursoId;
     private CreateRecursoDto recursoForm = new();
 
+    // Cuestionario
+    private CuestionarioDto? cuestionario;
+    private bool mostrarModalCuestionario = false;
+    private bool guardandoCuestionario = false;
+    private CreateCuestionarioDto cForm = new();
+    private bool respondiendo = false;
+    private bool enviandoCuestionario = false;
+    private Dictionary<int, int> respuestasColaborador = new(); // preguntaId -> opcionId
+    private ResultadoCuestionarioDto? resultadoPropio;
+    private InscripcionDto? inscripcionPropia;
+
     protected override async Task OnInitializedAsync()
     {
         capacitacion = await CapacitacionService.GetByIdAsync(Id);
-        await Task.WhenAll(Cargar(), CargarRecursos());
+        await Task.WhenAll(Cargar(), CargarRecursos(), CargarCuestionario());
     }
 
     private async Task Cargar()
@@ -394,4 +600,137 @@
         "Presentacion" => "📊",
         _ => "🔗"
     };
+
+    // --- Cuestionario ---
+    private async Task CargarCuestionario()
+    {
+        try { cuestionario = await CuestionarioService.GetByCapacitacionAsync(Id); } catch { }
+        if (cuestionario is not null && EsSoloColaborador)
+        {
+            // Buscar inscripción propia y resultado previo
+            var todas = await InscripcionService.GetByCapacitacionAsync(Id);
+            // inscripcionPropia se detecta por el colaborador del perfil — usamos la primera disponible en dev
+            inscripcionPropia = todas.FirstOrDefault();
+            if (inscripcionPropia is not null)
+            {
+                try { resultadoPropio = await CuestionarioService.GetResultadoAsync(cuestionario.Id, inscripcionPropia.Id); } catch { }
+            }
+        }
+    }
+
+    private void AbrirModalCuestionario()
+    {
+        if (cuestionario is not null)
+        {
+            cForm = new CreateCuestionarioDto
+            {
+                Titulo = cuestionario.Titulo,
+                Descripcion = cuestionario.Descripcion,
+                PuntajeAprobacion = cuestionario.PuntajeAprobacion,
+                CapacitacionId = Id,
+                Preguntas = cuestionario.Preguntas.Select(p => new CreatePreguntaDto
+                {
+                    Enunciado = p.Enunciado,
+                    Orden = p.Orden,
+                    Opciones = p.Opciones.Select(o => new CreateOpcionDto
+                    {
+                        Texto = o.Texto,
+                        EsCorrecta = o.EsCorrecta,
+                        Orden = o.Orden
+                    }).ToList()
+                }).ToList()
+            };
+        }
+        else
+        {
+            cForm = new CreateCuestionarioDto
+            {
+                CapacitacionId = Id,
+                PuntajeAprobacion = 70,
+                Preguntas = [new CreatePreguntaDto
+                {
+                    Enunciado = "",
+                    Opciones = [new CreateOpcionDto(), new CreateOpcionDto()]
+                }]
+            };
+        }
+        mostrarModalCuestionario = true;
+    }
+
+    private void CerrarModalCuestionario() => mostrarModalCuestionario = false;
+
+    private void AgregarPregunta() =>
+        cForm.Preguntas.Add(new CreatePreguntaDto
+        {
+            Orden = cForm.Preguntas.Count + 1,
+            Opciones = [new CreateOpcionDto(), new CreateOpcionDto()]
+        });
+
+    private void EliminarPregunta(int idx) => cForm.Preguntas.RemoveAt(idx);
+
+    private void AgregarOpcion(int pi) =>
+        cForm.Preguntas[pi].Opciones.Add(new CreateOpcionDto { Orden = cForm.Preguntas[pi].Opciones.Count + 1 });
+
+    private void EliminarOpcion(int pi, int oi) => cForm.Preguntas[pi].Opciones.RemoveAt(oi);
+
+    private void MarcarCorrecta(int pi, int oi)
+    {
+        for (int i = 0; i < cForm.Preguntas[pi].Opciones.Count; i++)
+            cForm.Preguntas[pi].Opciones[i].EsCorrecta = i == oi;
+    }
+
+    private async Task GuardarCuestionario()
+    {
+        if (string.IsNullOrWhiteSpace(cForm.Titulo) || !cForm.Preguntas.Any()) return;
+        guardandoCuestionario = true;
+        bool ok;
+        if (cuestionario is null)
+            ok = (await CuestionarioService.CreateAsync(cForm)) is not null;
+        else
+            ok = (await CuestionarioService.UpdateAsync(cuestionario.Id, cForm)) is not null;
+        guardandoCuestionario = false;
+        if (ok) { CerrarModalCuestionario(); await CargarCuestionario(); await toast.Show("Cuestionario guardado."); }
+        else await toast.Show("Error al guardar.", "error");
+    }
+
+    private async Task EliminarCuestionario()
+    {
+        if (cuestionario is null) return;
+        if (await CuestionarioService.DeleteAsync(cuestionario.Id))
+        { cuestionario = null; await toast.Show("Cuestionario eliminado."); }
+        else await toast.Show("Error al eliminar.", "error");
+    }
+
+    private void IniciarCuestionario()
+    {
+        respuestasColaborador = new();
+        respondiendo = true;
+    }
+
+    private void SeleccionarOpcion(int preguntaId, int opcionId) =>
+        respuestasColaborador[preguntaId] = opcionId;
+
+    private async Task EnviarCuestionario()
+    {
+        if (cuestionario is null || inscripcionPropia is null) return;
+        if (respuestasColaborador.Count < cuestionario.Preguntas.Count)
+        { await toast.Show("Responde todas las preguntas antes de enviar.", "error"); return; }
+
+        enviandoCuestionario = true;
+        var dto = new ResponderCuestionarioDto
+        {
+            CuestionarioId = cuestionario.Id,
+            InscripcionId = inscripcionPropia.Id,
+            Respuestas = respuestasColaborador.Select(r => new RespuestaPreguntaDto
+            {
+                PreguntaId = r.Key,
+                OpcionElegidaId = r.Value
+            }).ToList()
+        };
+        resultadoPropio = await CuestionarioService.ResponderAsync(dto);
+        enviandoCuestionario = false;
+        respondiendo = false;
+        if (resultadoPropio is not null)
+            await toast.Show(resultadoPropio.Aprobado ? "¡Aprobaste el cuestionario!" : "No alcanzaste el puntaje mínimo.");
+    }
 }

@@ -96,6 +96,41 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 
+// Endpoint para que el cliente sepa si el usuario actual es Microsoft (Bearer) o dev
+app.MapGet("/api/v1/auth/es-microsoft", (HttpContext ctx) =>
+{
+    var esMicrosoft = !ctx.User.Identities.Any(i => i.AuthenticationType == "DevUser");
+    return Results.Ok(new { esMicrosoft });
+}).RequireAuthorization();
+
+// Perfil del usuario actual: rol dentro de la app
+app.MapGet("/api/v1/auth/perfil", async (
+    HttpContext ctx,
+    TalentManagement.Server.Services.CurrentUserService currentUser,
+    TalentManagement.Application.Interfaces.IColaboradorRepository colaboradorRepo) =>
+{
+    try
+    {
+        var esDevUser = ctx.User.Identities.Any(i => i.AuthenticationType == "DevUser");
+        var email = currentUser.GetEmail();
+        var colaborador = await colaboradorRepo.GetByEmailAsync(email);
+        var esJefe = colaborador is not null &&
+                     await colaboradorRepo.EsJefeDeAreaAsync(colaborador.Id);
+        return Results.Ok(new
+        {
+            email,
+            esColaborador = colaborador is not null,
+            esJefe,
+            colaboradorId = colaborador?.Id,
+            esDevUser
+        });
+    }
+    catch
+    {
+        return Results.Ok(new { email = "", esColaborador = false, esJefe = false, colaboradorId = (int?)null, esDevUser = false });
+    }
+}).RequireAuthorization();
+
 app.Run();
 
 record DevUsuarioRequest(string? Email);

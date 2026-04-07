@@ -51,4 +51,7 @@ public class ColaboradorRepository(AppDbContext context) : IColaboradorRepositor
 
     public async Task<bool> ExistsAsync(int id) =>
         await context.Colaboradores.AnyAsync(c => c.Id == id);
+
+    public async Task<bool> EsJefeDeAreaAsync(int colaboradorId) =>
+        await context.Areas.AnyAsync(a => a.JefeId == colaboradorId);
 }

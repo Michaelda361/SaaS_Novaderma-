@@ -4,7 +4,6 @@
 @inject AreaApiService AreaService
 @inject ColaboradorApiService ColaboradorService
 @inject NavigationManager Nav
-
 <Toast @ref="toast" />
 <ConfirmDialog Visible="confirmVisible"
                Message="¿Seguro que deseas eliminar esta capacitación? Esta acción no se puede deshacer."
@@ -14,7 +13,10 @@
 <div class="card">
     <div class="card-header">
         <span class="card-title">Capacitaciones</span>
-        <button class="btn btn-primary btn-sm" @onclick="AbrirModal">+ Nueva capacitación</button>
+        @if (EsMicrosoftUser)
+        {
+            <button class="btn btn-primary btn-sm" @onclick="AbrirModal">+ Nueva capacitación</button>
+        }
     </div>
 
     <div class="filter-bar">
@@ -103,10 +105,13 @@
                                 <div class="flex gap-2">
                                     <button class="btn btn-ghost btn-sm btn-icon"
                                             @onclick="() => VerDetalle(c.Id)" title="Ver detalle">👁️</button>
-                                    <button class="btn btn-ghost btn-sm btn-icon"
-                                            @onclick="() => AbrirEditar(c)" title="Editar">✏️</button>
-                                    <button class="btn btn-danger btn-sm btn-icon"
-                                            @onclick="() => PedirConfirmacion(c.Id)" title="Eliminar">🗑️</button>
+                                    @if (EsMicrosoftUser)
+                                    {
+                                        <button class="btn btn-ghost btn-sm btn-icon"
+                                                @onclick="() => AbrirEditar(c)" title="Editar">✏️</button>
+                                        <button class="btn btn-danger btn-sm btn-icon"
+                                                @onclick="() => PedirConfirmacion(c.Id)" title="Eliminar">🗑️</button>
+                                    }
                                 </div>
                             </td>
                         </tr>
@@ -201,6 +206,8 @@
 }
 
 @code {
+    [CascadingParameter(Name = "EsMicrosoftUser")] private bool EsMicrosoftUser { get; set; }
+
     private List<CapacitacionDto>? capacitaciones;
     private List<AreaDto> areas = [];
     private List<ColaboradorDto> colaboradores = [];

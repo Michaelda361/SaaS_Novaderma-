@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using TalentManagement.Infrastructure.Persistence;
 
@@ -11,9 +12,11 @@ using TalentManagement.Infrastructure.Persistence;
 namespace TalentManagement.Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260407200942_AddActivoToMissingTables")]
+    partial class AddActivoToMissingTables
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -273,37 +276,6 @@ namespace TalentManagement.Infrastructure.Migrations
                     b.ToTable("Colaboradores");
                 });
 
-            modelBuilder.Entity("TalentManagement.Domain.Entities.Cuestionario", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<bool>("Activo")
-                        .HasColumnType("bit");
-
-                    b.Property<int>("CapacitacionId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("Descripcion")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<int>("PuntajeAprobacion")
-                        .HasColumnType("int");
-
-                    b.Property<string>("Titulo")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CapacitacionId");
-
-                    b.ToTable("Cuestionarios");
-                });
-
             modelBuilder.Entity("TalentManagement.Domain.Entities.Documento", b =>
                 {
                     b.Property<int>("Id")
@@ -422,37 +394,6 @@ namespace TalentManagement.Infrastructure.Migrations
                     b.ToTable("Inscripciones");
                 });
 
-            modelBuilder.Entity("TalentManagement.Domain.Entities.OpcionRespuesta", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<bool>("Activo")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("EsCorrecta")
-                        .HasColumnType("bit");
-
-                    b.Property<int>("Orden")
-                        .HasColumnType("int");
-
-                    b.Property<int>("PreguntaId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("Texto")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("PreguntaId");
-
-                    b.ToTable("OpcionesRespuesta");
-                });
-
             modelBuilder.Entity("TalentManagement.Domain.Entities.PlantillaDocumento", b =>
                 {
                     b.Property<int>("Id")
@@ -514,34 +455,6 @@ namespace TalentManagement.Infrastructure.Migrations
                     b.HasIndex("AreaId");
 
                     b.ToTable("PlantillaDocumentoAreas");
-                });
-
-            modelBuilder.Entity("TalentManagement.Domain.Entities.Pregunta", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<bool>("Activo")
-                        .HasColumnType("bit");
-
-                    b.Property<int>("CuestionarioId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("Enunciado")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<int>("Orden")
-                        .HasColumnType("int");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CuestionarioId");
-
-                    b.ToTable("Preguntas");
                 });
 
             modelBuilder.Entity("TalentManagement.Domain.Entities.PropuestaModificacion", b =>
@@ -633,73 +546,6 @@ namespace TalentManagement.Infrastructure.Migrations
                     b.HasIndex("CapacitacionId");
 
                     b.ToTable("RecursosCapacitacion");
-                });
-
-            modelBuilder.Entity("TalentManagement.Domain.Entities.RespuestaCuestionario", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<bool>("Activo")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("Aprobado")
-                        .HasColumnType("bit");
-
-                    b.Property<int>("CuestionarioId")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime>("FechaRespuesta")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int>("InscripcionId")
-                        .HasColumnType("int");
-
-                    b.Property<decimal>("Puntaje")
-                        .HasPrecision(5, 2)
-                        .HasColumnType("decimal(5,2)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CuestionarioId");
-
-                    b.HasIndex("InscripcionId");
-
-                    b.ToTable("RespuestasCuestionario");
-                });
-
-            modelBuilder.Entity("TalentManagement.Domain.Entities.RespuestaPregunta", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<bool>("Activo")
-                        .HasColumnType("bit");
-
-                    b.Property<int>("OpcionElegidaId")
-                        .HasColumnType("int");
-
-                    b.Property<int>("PreguntaId")
-                        .HasColumnType("int");
-
-                    b.Property<int>("RespuestaCuestionarioId")
-                        .HasColumnType("int");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("OpcionElegidaId");
-
-                    b.HasIndex("PreguntaId");
-
-                    b.HasIndex("RespuestaCuestionarioId");
-
-                    b.ToTable("RespuestasPregunta");
                 });
 
             modelBuilder.Entity("TalentManagement.Domain.Entities.SolicitudDocumento", b =>
@@ -840,17 +686,6 @@ namespace TalentManagement.Infrastructure.Migrations
                     b.Navigation("Supervisor");
                 });
 
-            modelBuilder.Entity("TalentManagement.Domain.Entities.Cuestionario", b =>
-                {
-                    b.HasOne("TalentManagement.Domain.Entities.Capacitacion", "Capacitacion")
-                        .WithMany()
-                        .HasForeignKey("CapacitacionId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Capacitacion");
-                });
-
             modelBuilder.Entity("TalentManagement.Domain.Entities.Documento", b =>
                 {
                     b.HasOne("TalentManagement.Domain.Entities.Area", "Area")
@@ -898,17 +733,6 @@ namespace TalentManagement.Infrastructure.Migrations
                     b.Navigation("Colaborador");
                 });
 
-            modelBuilder.Entity("TalentManagement.Domain.Entities.OpcionRespuesta", b =>
-                {
-                    b.HasOne("TalentManagement.Domain.Entities.Pregunta", "Pregunta")
-                        .WithMany("Opciones")
-                        .HasForeignKey("PreguntaId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Pregunta");
-                });
-
             modelBuilder.Entity("TalentManagement.Domain.Entities.PlantillaDocumentoArea", b =>
                 {
                     b.HasOne("TalentManagement.Domain.Entities.Area", "Area")
@@ -926,17 +750,6 @@ namespace TalentManagement.Infrastructure.Migrations
                     b.Navigation("Area");
 
                     b.Navigation("PlantillaDocumento");
-                });
-
-            modelBuilder.Entity("TalentManagement.Domain.Entities.Pregunta", b =>
-                {
-                    b.HasOne("TalentManagement.Domain.Entities.Cuestionario", "Cuestionario")
-                        .WithMany("Preguntas")
-                        .HasForeignKey("CuestionarioId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Cuestionario");
                 });
 
             modelBuilder.Entity("TalentManagement.Domain.Entities.PropuestaModificacion", b =>
@@ -982,52 +795,6 @@ namespace TalentManagement.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("Capacitacion");
-                });
-
-            modelBuilder.Entity("TalentManagement.Domain.Entities.RespuestaCuestionario", b =>
-                {
-                    b.HasOne("TalentManagement.Domain.Entities.Cuestionario", "Cuestionario")
-                        .WithMany("Respuestas")
-                        .HasForeignKey("CuestionarioId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("TalentManagement.Domain.Entities.Inscripcion", "Inscripcion")
-                        .WithMany()
-                        .HasForeignKey("InscripcionId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Cuestionario");
-
-                    b.Navigation("Inscripcion");
-                });
-
-            modelBuilder.Entity("TalentManagement.Domain.Entities.RespuestaPregunta", b =>
-                {
-                    b.HasOne("TalentManagement.Domain.Entities.OpcionRespuesta", "OpcionElegida")
-                        .WithMany()
-                        .HasForeignKey("OpcionElegidaId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("TalentManagement.Domain.Entities.Pregunta", "Pregunta")
-                        .WithMany()
-                        .HasForeignKey("PreguntaId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("TalentManagement.Domain.Entities.RespuestaCuestionario", "RespuestaCuestionario")
-                        .WithMany("Respuestas")
-                        .HasForeignKey("RespuestaCuestionarioId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("OpcionElegida");
-
-                    b.Navigation("Pregunta");
-
-                    b.Navigation("RespuestaCuestionario");
                 });
 
             modelBuilder.Entity("TalentManagement.Domain.Entities.SolicitudDocumento", b =>
@@ -1086,13 +853,6 @@ namespace TalentManagement.Infrastructure.Migrations
                     b.Navigation("Inscripciones");
                 });
 
-            modelBuilder.Entity("TalentManagement.Domain.Entities.Cuestionario", b =>
-                {
-                    b.Navigation("Preguntas");
-
-                    b.Navigation("Respuestas");
-                });
-
             modelBuilder.Entity("TalentManagement.Domain.Entities.Documento", b =>
                 {
                     b.Navigation("FlujoAprobacion");
@@ -1107,16 +867,6 @@ namespace TalentManagement.Infrastructure.Migrations
                     b.Navigation("Areas");
 
                     b.Navigation("Solicitudes");
-                });
-
-            modelBuilder.Entity("TalentManagement.Domain.Entities.Pregunta", b =>
-                {
-                    b.Navigation("Opciones");
-                });
-
-            modelBuilder.Entity("TalentManagement.Domain.Entities.RespuestaCuestionario", b =>
-                {
-                    b.Navigation("Respuestas");
                 });
 #pragma warning restore 612, 618
         }

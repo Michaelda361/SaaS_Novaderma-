@@ -34,6 +34,13 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     // Auditoría
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
 
+    // Cuestionarios
+    public DbSet<Cuestionario> Cuestionarios => Set<Cuestionario>();
+    public DbSet<Pregunta> Preguntas => Set<Pregunta>();
+    public DbSet<OpcionRespuesta> OpcionesRespuesta => Set<OpcionRespuesta>();
+    public DbSet<RespuestaCuestionario> RespuestasCuestionario => Set<RespuestaCuestionario>();
+    public DbSet<RespuestaPregunta> RespuestasPregunta => Set<RespuestaPregunta>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -43,7 +50,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .Property(i => i.Calificacion)
             .HasPrecision(5, 2);
 
-        // Soft delete filters
+        // Soft delete filters — solo entidades que heredan BaseEntity (tienen columna Activo)
         modelBuilder.Entity<Colaborador>().HasQueryFilter(c => c.Activo);
         modelBuilder.Entity<Area>().HasQueryFilter(a => a.Activo);
         modelBuilder.Entity<Cargo>().HasQueryFilter(c => c.Activo);
@@ -52,13 +59,6 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         modelBuilder.Entity<Inscripcion>().HasQueryFilter(i => i.Activo);
         modelBuilder.Entity<RecursoCapacitacion>().HasQueryFilter(r => r.Activo);
         modelBuilder.Entity<Documento>().HasQueryFilter(d => d.Activo);
-
-        // Filtros en entidades dependientes para evitar warnings de EF
-        modelBuilder.Entity<Inscripcion>().HasQueryFilter(i => i.Capacitacion!.Activo);
-        modelBuilder.Entity<RecursoCapacitacion>().HasQueryFilter(r => r.Capacitacion!.Activo);
-        modelBuilder.Entity<FlujoAprobacionDoc>().HasQueryFilter(f => f.Colaborador!.Activo);
-        modelBuilder.Entity<VersionDocumento>().HasQueryFilter(v => v.Documento!.Activo);
-        modelBuilder.Entity<PropuestaModificacion>().HasQueryFilter(p => p.Area!.Activo);
 
         // Evitar múltiples cascade paths en Colaborador
         modelBuilder.Entity<Colaborador>()
@@ -168,5 +168,53 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         modelBuilder.Entity<Colaborador>()
             .Property(c => c.SueldoBasico)
             .HasPrecision(18, 2);
+
+        // ── Cuestionarios ─────────────────────────────────────────────────────
+        modelBuilder.Entity<Cuestionario>().HasQueryFilter(c => c.Activo);
+        modelBuilder.Entity<Pregunta>().HasQueryFilter(p => p.Activo);
+        modelBuilder.Entity<OpcionRespuesta>().HasQueryFilter(o => o.Activo);
+
+        modelBuilder.Entity<RespuestaCuestionario>()
+            .Property(r => r.Puntaje).HasPrecision(5, 2);
+
+        modelBuilder.Entity<Cuestionario>()
+            .HasOne(c => c.Capacitacion).WithMany()
+            .HasForeignKey(c => c.CapacitacionId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<Pregunta>()
+            .HasOne(p => p.Cuestionario).WithMany(c => c.Preguntas)
+            .HasForeignKey(p => p.CuestionarioId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<OpcionRespuesta>()
+            .HasOne(o => o.Pregunta).WithMany(p => p.Opciones)
+            .HasForeignKey(o => o.PreguntaId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<RespuestaCuestionario>()
+            .HasOne(r => r.Inscripcion).WithMany()
+            .HasForeignKey(r => r.InscripcionId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<RespuestaCuestionario>()
+            .HasOne(r => r.Cuestionario).WithMany(c => c.Respuestas)
+            .HasForeignKey(r => r.CuestionarioId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<RespuestaPregunta>()
+            .HasOne(r => r.RespuestaCuestionario).WithMany(rc => rc.Respuestas)
+            .HasForeignKey(r => r.RespuestaCuestionarioId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<RespuestaPregunta>()
+            .HasOne(r => r.Pregunta).WithMany()
+            .HasForeignKey(r => r.PreguntaId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<RespuestaPregunta>()
+            .HasOne(r => r.OpcionElegida).WithMany()
+            .HasForeignKey(r => r.OpcionElegidaId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }

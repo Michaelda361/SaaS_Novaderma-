@@ -10,6 +10,13 @@ namespace TalentManagement.Server.Controllers;
 [Route("api/v1/[controller]")]
 public class CapacitacionesController(CapacitacionService service) : ControllerBase
 {
+    // Solo usuarios autenticados con Microsoft pueden escribir (no dev users)
+    private bool EsMicrosoftUser =>
+        !User.Identities.Any(i => i.AuthenticationType == "DevUser");
+
+    private IActionResult SoloMicrosoft() =>
+        StatusCode(403, new { message = "Solo usuarios con cuenta Microsoft pueden realizar esta acción." });
+
     [HttpGet]
     public async Task<IActionResult> GetAll() =>
         Ok(await service.GetAllAsync());
@@ -32,6 +39,7 @@ public class CapacitacionesController(CapacitacionService service) : ControllerB
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreateCapacitacionDto dto)
     {
+        if (!EsMicrosoftUser) return SoloMicrosoft();
         var created = await service.CreateAsync(dto);
         return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
     }
@@ -39,6 +47,7 @@ public class CapacitacionesController(CapacitacionService service) : ControllerB
     [HttpPut("{id:int}")]
     public async Task<IActionResult> Update(int id, [FromBody] CreateCapacitacionDto dto)
     {
+        if (!EsMicrosoftUser) return SoloMicrosoft();
         var result = await service.UpdateAsync(id, dto);
         return result is null ? NotFound() : Ok(result);
     }
@@ -46,6 +55,7 @@ public class CapacitacionesController(CapacitacionService service) : ControllerB
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> Delete(int id)
     {
+        if (!EsMicrosoftUser) return SoloMicrosoft();
         var deleted = await service.DeleteAsync(id);
         return deleted ? NoContent() : NotFound();
     }
