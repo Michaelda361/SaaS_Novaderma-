@@ -15,7 +15,12 @@
 
 @if (cargando)
 {
-    <div class="loading"><div class="spinner"></div> Cargando...</div>
+    <div class="cartas-skeleton">
+        @for (int i = 0; i < 3; i++)
+        {
+            <div class="skeleton-card" style="height:100px;"></div>
+        }
+    </div>
 }
 else if (!plantillas.Any())
 {
@@ -31,28 +36,46 @@ else
         @foreach (var p in plantillas)
         {
             var plantilla = p;
-            <div class="carta-card">
-                <div class="carta-icon">📄</div>
-                <div class="carta-info">
-                    <div class="carta-nombre">@p.Nombre</div>
+            <div class="carta-card @(plantillaSeleccionada?.Id == p.Id ? "carta-card--active" : "")">
+                <div class="carta-card-icon">
+                    <span>@(p.TipoPlantilla == "docx" ? "📝" : "📄")</span>
+                </div>
+                <div class="carta-card-body">
+                    <div class="carta-card-nombre">@p.Nombre</div>
                     @if (!string.IsNullOrWhiteSpace(p.Descripcion))
                     {
-                        <div class="carta-desc">@p.Descripcion</div>
+                        <div class="carta-card-desc">@p.Descripcion</div>
                     }
                     @if (!string.IsNullOrWhiteSpace(p.NombreFirmante))
                     {
-                        <div class="carta-firmante">
-                            Firmado por: @p.NombreFirmante
+                        <div class="carta-card-firmante">
+                            <span class="carta-firmante-icon">✍️</span>
+                            @p.NombreFirmante
                             @if (!string.IsNullOrWhiteSpace(p.CargoFirmante))
-                            { <span> · @p.CargoFirmante</span> }
+                            { <span class="text-muted"> · @p.CargoFirmante</span> }
+                        </div>
+                    }
+                    @if (p.VariablesEditables.Any())
+                    {
+                        <div class="carta-card-badge">
+                            <span class="badge badge-info">✏️ Personalizable</span>
                         </div>
                     }
                 </div>
-                <button class="btn btn-primary btn-sm"
-                        disabled="@cargandoPreview"
-                        @onclick="() => AbrirPreview(plantilla)">
-                    👁 Vista previa
-                </button>
+                <div class="carta-card-actions">
+                    <button class="btn btn-primary btn-sm"
+                            disabled="@(cargandoPreview && plantillaSeleccionada?.Id == p.Id)"
+                            @onclick="() => AbrirPreview(plantilla)">
+                        @if (cargandoPreview && plantillaSeleccionada?.Id == p.Id)
+                        {
+                            <span class="spinner" style="width:.9rem;height:.9rem;border-width:2px;"></span>
+                        }
+                        else
+                        {
+                            <span>👁 Ver y descargar</span>
+                        }
+                    </button>
+                </div>
             </div>
         }
     </div>
@@ -62,11 +85,16 @@ else
 {
     <div class="card" style="margin-top:1.5rem;">
         <div class="card-header">
-            <span class="card-title">📋 Mis solicitudes recientes</span>
+            <span class="card-title">📋 Mis descargas recientes</span>
         </div>
         <div class="table-wrapper">
             <table>
-                <thead><tr><th>Documento</th><th>Fecha</th></tr></thead>
+                <thead>
+                    <tr>
+                        <th>Documento</th>
+                        <th>Fecha</th>
+                    </tr>
+                </thead>
                 <tbody>
                     @foreach (var s in solicitudes.Take(10))
                     {
@@ -83,28 +111,34 @@ else
     </div>
 }
 
-<!-- Modal de vista previa + edición -->
+<!-- Modal de vista previa + descarga -->
 @if (plantillaSeleccionada is not null)
 {
     <div class="modal-backdrop" @onclick="CerrarModal">
-        <div class="modal" style="max-width:860px;width:95vw;" @onclick:stopPropagation>
+        <div class="modal carta-modal" @onclick:stopPropagation>
             <div class="modal-header">
-                <span class="modal-title">📄 @plantillaSeleccionada.Nombre</span>
+                <div style="display:flex;align-items:center;gap:.625rem;">
+                    <span style="font-size:1.25rem;">📄</span>
+                    <span class="modal-title">@plantillaSeleccionada.Nombre</span>
+                </div>
                 <button class="btn btn-ghost btn-sm btn-icon" @onclick="CerrarModal">✕</button>
             </div>
 
-            <div class="modal-body" style="display:grid;grid-template-columns:1fr 2fr;gap:1.5rem;min-height:420px;">
-
+            <div class="carta-modal-body">
                 <!-- Panel izquierdo: campos editables -->
-                <div style="display:flex;flex-direction:column;gap:1rem;">
-                    <div>
-                        <p style="font-size:.8rem;color:var(--text-muted);margin-bottom:.75rem;">
-                            Los campos marcados con ✏️ puedes editarlos. El resto se toma de tu perfil.
+                @if (plantillaSeleccionada.VariablesEditables.Any())
+                {
+                    <div class="carta-modal-sidebar">
+                        <div class="carta-modal-sidebar-title">
+                            <span>✏️ Personalizar carta</span>
+                        </div>
+                        <p class="carta-modal-sidebar-hint">
+                            Completa los campos para personalizar tu carta antes de descargarla.
                         </p>
                         @foreach (var key in plantillaSeleccionada.VariablesEditables)
                         {
                             <div class="form-group" style="margin-bottom:.75rem;">
-                                <label style="font-size:.8rem;">✏️ @EtiquetaVariable(key)</label>
+                                <label style="font-size:.8rem;">@EtiquetaVariable(key)</label>
                                 <input class="form-control" type="text"
                                        style="font-size:.875rem;"
                                        value="@(extrasActuales.GetValueOrDefault(key, ""))"
@@ -112,25 +146,29 @@ else
                                        @oninput="async e => { extrasActuales[key] = e.Value?.ToString() ?? string.Empty; await RefrescarPreviewAsync(); }" />
                             </div>
                         }
-                        @if (!plantillaSeleccionada.VariablesEditables.Any())
-                        {
-                            <p style="font-size:.8rem;color:var(--text-muted);">
-                                Esta carta se genera automáticamente con los datos de tu perfil.
-                            </p>
-                        }
                     </div>
-                </div>
+                }
 
-                <!-- Panel derecho: preview del documento en iframe aislado -->
-                <div style="border:1px solid var(--border);border-radius:8px;overflow:hidden;background:#fff;min-height:420px;max-height:520px;">
+                <!-- Panel derecho: preview -->
+                <div class="carta-modal-preview">
                     @if (cargandoPreview)
                     {
-                        <div class="loading" style="min-height:200px;"><div class="spinner"></div></div>
+                        <div class="loading" style="min-height:300px;">
+                            <div class="spinner"></div>
+                            <span>Generando vista previa...</span>
+                        </div>
+                    }
+                    else if (preview is null)
+                    {
+                        <div class="carta-preview-error">
+                            <span>⚠️</span>
+                            <p>No se pudo cargar la vista previa. Verifica que tu perfil tenga todos los datos completos.</p>
+                        </div>
                     }
                     else
                     {
                         <iframe @ref="iframeRef"
-                                style="width:100%;height:520px;border:none;display:block;"
+                                class="carta-preview-iframe"
                                 title="Vista previa del documento"></iframe>
                     }
                 </div>
@@ -139,9 +177,17 @@ else
             <div class="modal-footer">
                 <button class="btn btn-ghost" @onclick="CerrarModal">Cerrar</button>
                 <button class="btn btn-primary"
-                        disabled="@descargando"
+                        disabled="@(descargando || preview is null)"
                         @onclick="DescargarDesdeModal">
-                    @(descargando ? "Generando PDF..." : "⬇ Descargar PDF")
+                    @if (descargando)
+                    {
+                        <span class="spinner" style="width:.9rem;height:.9rem;border-width:2px;border-color:rgba(255,255,255,.3);border-top-color:#fff;"></span>
+                        <span>Generando PDF...</span>
+                    }
+                    else
+                    {
+                        <span>⬇ Descargar PDF</span>
+                    }
                 </button>
             </div>
         </div>
@@ -160,9 +206,7 @@ else
     private Dictionary<string, string> extrasActuales = [];
     private PrevisualizarDto? preview;
     private ElementReference iframeRef;
-    private string? htmlPendiente; // HTML a inyectar en el próximo render
-
-    // Debounce para no llamar al API en cada tecla
+    private string? htmlPendiente;
     private CancellationTokenSource? _debounce;
 
     protected override async Task OnInitializedAsync()
@@ -205,7 +249,7 @@ else
         if (preview is not null)
             htmlPendiente = BuildPreviewHtml(preview);
 
-        StateHasChanged(); // garantiza que OnAfterRenderAsync se dispare para inyectar el iframe
+        StateHasChanged();
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -256,7 +300,7 @@ else
 
         CerrarModal();
         solicitudes = await ApiService.GetMisSolicitudesAsync();
-        await toast.Show("Documento generado correctamente.");
+        await toast.Show("Documento descargado correctamente.");
     }
 
     private static string BuildPreviewHtml(PrevisualizarDto p)
@@ -273,25 +317,16 @@ else
             ? $"<div style=\"margin-top:3rem;\">{imgTag}<div style=\"border-top:1px solid #555;padding-top:4px;width:220px;\"><strong style=\"font-size:10pt;\">{p.NombreFirmante}</strong>{cargoTag}</div></div>"
             : string.Empty;
 
-        // CSS que replica fielmente el editor contenteditable y el PDF generado
         const string css =
-            "html, body { margin:0; padding:0; }" +
-            "body {" +
-            "  font-family: Arial, Helvetica, sans-serif;" +
-            "  font-size: 11pt;" +
-            "  line-height: 1.6;" +
-            "  color: #111;" +
-            "  background: #fff;" +
-            "  padding: 2cm 2.5cm;" +
-            "}" +
-            "p, div { margin: 0 0 .4em 0; }" +
-            "b, strong { font-weight: bold; }" +
-            "i, em { font-style: italic; }" +
-            "u { text-decoration: underline; }" +
-            "ul { list-style: disc; margin-left: 1.5em; margin-bottom: .5em; }" +
-            "ol { list-style: decimal; margin-left: 1.5em; margin-bottom: .5em; }" +
-            "li { margin-bottom: .2em; }" +
-            "br { display: block; margin-bottom: .2em; }";
+            "html,body{margin:0;padding:0}" +
+            "body{font-family:Arial,Helvetica,sans-serif;font-size:11pt;line-height:1.6;color:#111;background:#fff;padding:2cm 2.5cm;}" +
+            "p,div{margin:0 0 .4em 0}" +
+            "b,strong{font-weight:bold}" +
+            "i,em{font-style:italic}" +
+            "u{text-decoration:underline}" +
+            "ul{list-style:disc;margin-left:1.5em;margin-bottom:.5em}" +
+            "ol{list-style:decimal;margin-left:1.5em;margin-bottom:.5em}" +
+            "li{margin-bottom:.2em}";
 
         return "<!DOCTYPE html><html lang=\"es\"><head><meta charset=\"utf-8\"/>"
              + $"<style>{css}</style></head><body>"
@@ -302,7 +337,7 @@ else
 
     private static string EtiquetaVariable(string key) => key switch
     {
-        "destinatario"     => "A quién va dirigida",
+        "destinatario"     => "¿A quién va dirigida?",
         "motivo"           => "Motivo de la carta",
         "entidad"          => "Entidad o empresa destinataria",
         "nombre_completo"  => "Nombre completo",
@@ -318,7 +353,7 @@ else
         "motivo"           => "Ej: Solicitud de crédito",
         "entidad"          => "Ej: Ministerio de Educación",
         "ciudad"           => "Ej: Bogotá",
-        "fecha_expedicion" => "Ej: 31 de marzo de 2026",
+        "fecha_expedicion" => "Ej: 8 de abril de 2026",
         _                  => string.Empty,
     };
 }

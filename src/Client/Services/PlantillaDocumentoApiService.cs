@@ -60,4 +60,11 @@ public class PlantillaDocumentoApiService(HttpClient http)
         if (!response.IsSuccessStatusCode) return [];
         return await response.Content.ReadFromJsonAsync<List<SolicitudDocumentoDto>>() ?? [];
     }
+
+    public async Task<List<SolicitudDocumentoDto>> GetTodasSolicitudesAsync()
+    {
+        var response = await http.GetAsync($"{Base}/solicitudes");
+        if (!response.IsSuccessStatusCode) return [];
+        return await response.Content.ReadFromJsonAsync<List<SolicitudDocumentoDto>>() ?? [];
+    }
 }

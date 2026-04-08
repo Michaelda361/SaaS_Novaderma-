@@ -12,4 +12,5 @@ public interface IPlantillaDocumentoRepository
     Task DeleteAsync(int id);
     Task<SolicitudDocumento> CreateSolicitudAsync(SolicitudDocumento solicitud);
     Task<IEnumerable<SolicitudDocumento>> GetSolicitudesByColaboradorAsync(int colaboradorId);
+    Task<IEnumerable<SolicitudDocumento>> GetTodasSolicitudesAsync();
 }

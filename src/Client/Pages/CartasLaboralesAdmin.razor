@@ -2,6 +2,7 @@
 @attribute [Authorize]
 @inject PlantillaDocumentoApiService ApiService
 @inject AreaApiService AreaApi
+@inject AuthInfoService AuthInfo
 
 <Toast @ref="toast" />
 <ConfirmDialog Visible="showConfirm"
@@ -9,108 +10,223 @@
                OnConfirm="EliminarConfirmado"
                OnCancel="() => showConfirm = false" />
 
-<div class="page-header">
-    <div>
-        <h2 class="page-title">Plantillas de Cartas Laborales</h2>
-        <p class="page-subtitle">Gestiona las plantillas disponibles para los colaboradores</p>
-    </div>
-    <div class="flex gap-2">
-        <a href="cartas" class="btn btn-ghost btn-sm">👁 Ver como colaborador</a>
-        <button class="btn btn-primary" @onclick="AbrirNueva">+ Nueva plantilla</button>
-    </div>
-</div>
-
 @if (cargando)
 {
     <div class="loading"><div class="spinner"></div> Cargando...</div>
 }
-else if (!plantillas.Any())
+else if (AuthInfo.EsSoloColaborador)
 {
     <div class="empty-state">
-        <div class="empty-state-icon">📄</div>
-        <h3>Sin plantillas</h3>
-        <p>Crea la primera plantilla para que los colaboradores puedan descargar sus cartas.</p>
+        <div class="empty-state-icon">🔒</div>
+        <h3>Acceso restringido</h3>
+        <p>Solo los administradores y jefes de área pueden gestionar plantillas.</p>
+        <a href="cartas" class="btn btn-primary" style="margin-top:1rem;">Ir a mis cartas</a>
     </div>
 }
 else
 {
-    <div class="card">
-        <div class="table-wrapper">
-            <table>
-                <thead>
-                    <tr>
-                        <th>Nombre</th>
-                        <th>Firmante</th>
-                        <th>Áreas</th>
-                        <th>Variables disponibles</th>
-                        <th></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var p in plantillas)
-                    {
-                        <tr>
-                            <td>
-                                <strong>@p.Nombre</strong>
-                                @if (!string.IsNullOrWhiteSpace(p.Descripcion))
-                                {
-                                    <div class="text-muted text-sm">@p.Descripcion</div>
-                                }
-                            </td>
-                            <td class="text-sm">
-                                @(p.NombreFirmante ?? "—")
-                                @if (!string.IsNullOrWhiteSpace(p.CargoFirmante))
-                                {
-                                    <div class="text-muted">@p.CargoFirmante</div>
-                                }
-                            </td>
-                            <td>
-                                @if (p.AplicaTodasAreas)
-                                {
-                                    <span class="badge badge-success">Todas</span>
-                                }
-                                else
-                                {
-                                    @foreach (var nombre in p.AreaNombres)
-                                    {
-                                        <span class="badge badge-info" style="margin:.1rem;">@nombre</span>
-                                    }
-                                }
-                            </td>
-                            <td>
-                                <button class="btn btn-ghost btn-sm"
-                                        @onclick="() => MostrarVariables()">
-                                    Ver variables
-                                </button>
-                            </td>
-                            <td>
-                                <div class="flex gap-2">
-                                    <button class="btn btn-ghost btn-sm btn-icon"
-                                            @onclick="() => AbrirEditar(p)" title="Editar">✏️</button>
-                                    <button class="btn btn-danger btn-sm btn-icon"
-                                            @onclick="() => PedirConfirmacion(p)" title="Eliminar">🗑️</button>
-                                </div>
-                            </td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
+    <div class="page-header">
+        <div>
+            <h2 class="page-title">Plantillas de Cartas Laborales</h2>
+            <p class="page-subtitle">Gestiona las plantillas disponibles para los colaboradores</p>
+        </div>
+        <div class="flex gap-2">
+            <a href="cartas" class="btn btn-ghost btn-sm">👁 Ver como colaborador</a>
+            <button class="btn btn-primary" @onclick="AbrirNueva">+ Nueva plantilla</button>
         </div>
     </div>
+
+    <!-- Tabs -->
+    <div class="admin-tabs">
+        <button class="admin-tab @(tabActiva == "plantillas" ? "admin-tab--active" : "")"
+                @onclick='() => tabActiva = "plantillas"'>
+            📄 Plantillas <span class="admin-tab-count">@plantillas.Count</span>
+        </button>
+        <button class="admin-tab @(tabActiva == "historial" ? "admin-tab--active" : "")"
+                @onclick='() => { tabActiva = "historial"; _ = CargarHistorial(); }'>
+            📋 Historial de descargas
+            @if (solicitudes.Any())
+            {
+                <span class="admin-tab-count">@solicitudes.Count</span>
+            }
+        </button>
+    </div>
+
+    @if (tabActiva == "plantillas")
+    {
+        @if (!plantillas.Any())
+        {
+            <div class="empty-state">
+                <div class="empty-state-icon">📄</div>
+                <h3>Sin plantillas</h3>
+                <p>Crea la primera plantilla para que los colaboradores puedan descargar sus cartas.</p>
+                <button class="btn btn-primary" style="margin-top:1rem;" @onclick="AbrirNueva">+ Nueva plantilla</button>
+            </div>
+        }
+        else
+        {
+            <div class="card">
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Plantilla</th>
+                                <th>Firmante</th>
+                                <th>Disponible para</th>
+                                <th>Tipo</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var p in plantillas)
+                            {
+                                <tr>
+                                    <td>
+                                        <div class="user-cell">
+                                            <div class="carta-admin-icon">@(p.TipoPlantilla == "docx" ? "📝" : "📄")</div>
+                                            <div>
+                                                <div class="user-name">@p.Nombre</div>
+                                                @if (!string.IsNullOrWhiteSpace(p.Descripcion))
+                                                {
+                                                    <div class="user-email">@p.Descripcion</div>
+                                                }
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td class="text-sm">
+                                        @if (!string.IsNullOrWhiteSpace(p.NombreFirmante))
+                                        {
+                                            <div>@p.NombreFirmante</div>
+                                            @if (!string.IsNullOrWhiteSpace(p.CargoFirmante))
+                                            {
+                                                <div class="text-muted text-xs">@p.CargoFirmante</div>
+                                            }
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">—</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (p.AplicaTodasAreas)
+                                        {
+                                            <span class="badge badge-success">Todas las áreas</span>
+                                        }
+                                        else
+                                        {
+                                            <div style="display:flex;flex-wrap:wrap;gap:.25rem;">
+                                                @foreach (var nombre in p.AreaNombres)
+                                                {
+                                                    <span class="badge badge-info">@nombre</span>
+                                                }
+                                            </div>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (p.TipoPlantilla == "docx")
+                                        {
+                                            <span class="badge badge-purple">Word</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge badge-gray">HTML</span>
+                                        }
+                                        @if (p.VariablesEditables.Any())
+                                        {
+                                            <span class="badge badge-warning" style="margin-left:.25rem;">✏️ Editable</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        <div class="flex gap-2">
+                                            <button class="btn btn-ghost btn-sm"
+                                                    @onclick="() => MostrarVariables()">
+                                                Variables
+                                            </button>
+                                            <button class="btn btn-ghost btn-sm btn-icon"
+                                                    @onclick="() => AbrirEditar(p)" title="Editar">✏️</button>
+                                            <button class="btn btn-danger btn-sm btn-icon"
+                                                    @onclick="() => PedirConfirmacion(p)" title="Eliminar">🗑️</button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+    }
+    else
+    {
+        <!-- Historial de descargas -->
+        @if (cargandoHistorial)
+        {
+            <div class="loading"><div class="spinner"></div> Cargando historial...</div>
+        }
+        else if (!solicitudes.Any())
+        {
+            <div class="empty-state">
+                <div class="empty-state-icon">📋</div>
+                <h3>Sin descargas aún</h3>
+                <p>Aquí aparecerán todas las cartas que los colaboradores hayan descargado.</p>
+            </div>
+        }
+        else
+        {
+            <div class="card">
+                <div class="filter-bar">
+                    <div class="search-input-wrap">
+                        <span class="search-icon">🔍</span>
+                        <input type="text" placeholder="Buscar colaborador o plantilla..."
+                               @bind="filtroHistorial" @bind:event="oninput" />
+                    </div>
+                    <span class="text-muted text-sm">@SolicitudesFiltradas.Count() descarga(s)</span>
+                </div>
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Colaborador</th>
+                                <th>Documento</th>
+                                <th>Fecha y hora</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var s in SolicitudesFiltradas.Take(100))
+                            {
+                                <tr>
+                                    <td>
+                                        <div class="user-cell">
+                                            <div class="avatar avatar-sm">@Iniciales(s.ColaboradorNombre)</div>
+                                            <span class="user-name">@s.ColaboradorNombre</span>
+                                        </div>
+                                    </td>
+                                    <td class="text-sm">@s.PlantillaNombre</td>
+                                    <td class="text-muted text-sm">
+                                        @s.FechaSolicitud.ToLocalTime().ToString("dd/MM/yyyy HH:mm")
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+    }
 }
 
 <!-- Modal variables -->
 @if (showVariables)
 {
     <div class="modal-backdrop" @onclick="() => showVariables = false">
-        <div class="modal" style="max-width:480px;" @onclick:stopPropagation>
+        <div class="modal" style="max-width:500px;" @onclick:stopPropagation>
             <div class="modal-header">
                 <span class="modal-title">Variables disponibles</span>
                 <button class="btn btn-ghost btn-sm btn-icon" @onclick="() => showVariables = false">✕</button>
             </div>
             <div class="modal-body">
-                <p class="text-muted" style="margin-bottom:1rem;">
-                    Usa estas variables en el contenido HTML de la plantilla. Se reemplazarán automáticamente con los datos del colaborador.
+                <p class="text-muted text-sm" style="margin-bottom:1rem;">
+                    Usa estas variables en el contenido de la plantilla. Se reemplazan automáticamente con los datos del colaborador.
                 </p>
                 <div class="variables-grid">
                     @foreach (var v in Variables)
@@ -130,7 +246,7 @@ else
 @if (showModal)
 {
     <div class="modal-backdrop" @onclick="CerrarModal">
-        <div class="modal" style="max-width:720px;" @onclick:stopPropagation>
+        <div class="modal" style="max-width:740px;" @onclick:stopPropagation>
             <div class="modal-header">
                 <span class="modal-title">@(editandoId.HasValue ? "Editar plantilla" : "Nueva plantilla")</span>
                 <button class="btn btn-ghost btn-sm btn-icon" @onclick="CerrarModal">✕</button>
@@ -147,53 +263,52 @@ else
                         <label>Descripción</label>
                         <InputText @bind-Value="form.Descripcion" placeholder="Descripción breve (opcional)" />
                     </div>
+
                     <div class="form-group">
                         <label>Tipo de plantilla</label>
-                        <div class="flex gap-2">
-                            <label style="display:flex;align-items:center;gap:.4rem;cursor:pointer;">
+                        <div class="tipo-selector">
+                            <label class="tipo-option @(form.TipoPlantilla == "html" ? "tipo-option--active" : "")">
                                 <input type="radio" name="tipo" value="html"
                                        checked="@(form.TipoPlantilla == "html")"
                                        @onchange='() => form.TipoPlantilla = "html"' />
-                                Escribir en HTML
+                                <span class="tipo-icon">📄</span>
+                                <div>
+                                    <div class="tipo-label">Editor HTML</div>
+                                    <div class="tipo-desc">Escribe directamente con formato</div>
+                                </div>
                             </label>
-                            <label style="display:flex;align-items:center;gap:.4rem;cursor:pointer;">
+                            <label class="tipo-option @(form.TipoPlantilla == "docx" ? "tipo-option--active" : "")">
                                 <input type="radio" name="tipo" value="docx"
                                        checked="@(form.TipoPlantilla == "docx")"
                                        @onchange='() => form.TipoPlantilla = "docx"' />
-                                Subir archivo Word (.docx)
+                                <span class="tipo-icon">📝</span>
+                                <div>
+                                    <div class="tipo-label">Archivo Word</div>
+                                    <div class="tipo-desc">Sube un .docx con variables</div>
+                                </div>
                             </label>
                         </div>
                     </div>
 
                     @if (form.TipoPlantilla == "html")
                     {
-                        <!-- Instructivo HTML -->
                         <div class="instructivo-box">
                             <button type="button" class="instructivo-toggle"
                                     @onclick="() => showInstructivoHtml = !showInstructivoHtml">
-                                <span>💡 ¿Cómo usar variables en el editor HTML?</span>
+                                <span>💡 ¿Cómo usar variables?</span>
                                 <span>@(showInstructivoHtml ? "▲" : "▼")</span>
                             </button>
                             @if (showInstructivoHtml)
                             {
                                 <div class="instructivo-body">
-                                    <p>Escribe el contenido de la carta normalmente. Donde quieras insertar un dato del colaborador, usa una <strong>variable</strong> con el formato <code>&#123;&#123;nombre_variable&#125;&#125;</code>.</p>
-                                    <p style="margin-top:.5rem;">Puedes hacer clic en cualquier variable del panel derecho del editor para insertarla en la posición del cursor.</p>
+                                    <p>Escribe el contenido normalmente. Donde quieras insertar un dato del colaborador, usa <code>&#123;&#123;nombre_variable&#125;&#125;</code>. Haz clic en cualquier variable del panel derecho del editor para insertarla.</p>
                                     <div class="instructivo-ejemplo">
-                                        <div class="instructivo-ejemplo-label">Ejemplo de uso en el texto:</div>
-                                        <code>
-                                            La empresa certifica que <strong>&#123;&#123;nombre_completo&#125;&#125;</strong> identificado con cédula
-                                            <strong>&#123;&#123;cedula&#125;&#125;</strong>, se desempeña en el cargo de <strong>&#123;&#123;cargo&#125;&#125;</strong>
-                                            desde el <strong>&#123;&#123;fecha_ingreso&#125;&#125;</strong>.
-                                        </code>
+                                        <div class="instructivo-ejemplo-label">Ejemplo:</div>
+                                        <code>La empresa certifica que <strong>&#123;&#123;nombre_completo&#125;&#125;</strong> se desempeña como <strong>&#123;&#123;cargo&#125;&#125;</strong> desde el <strong>&#123;&#123;fecha_ingreso&#125;&#125;</strong>.</code>
                                     </div>
-                                    <p style="margin-top:.5rem;color:var(--text-muted);font-size:.8rem;">
-                                        Al generar el PDF, cada variable se reemplaza automáticamente con los datos del perfil del colaborador que solicita la carta.
-                                    </p>
                                 </div>
                             }
                         </div>
-
                         <div class="form-group">
                             <label>Contenido de la carta</label>
                             <EditorPlantilla @bind-HtmlContent="form.ContenidoHtml" />
@@ -201,55 +316,40 @@ else
                     }
                     else
                     {
-                        <!-- Instructivo DOCX -->
                         <div class="instructivo-box">
                             <button type="button" class="instructivo-toggle"
                                     @onclick="() => showInstructivoDocx = !showInstructivoDocx">
-                                <span>💡 ¿Cómo preparar el archivo Word con variables?</span>
+                                <span>💡 ¿Cómo preparar el archivo Word?</span>
                                 <span>@(showInstructivoDocx ? "▲" : "▼")</span>
                             </button>
                             @if (showInstructivoDocx)
                             {
                                 <div class="instructivo-body">
                                     <ol class="instructivo-steps">
-                                        <li>Abre tu documento Word (.docx) normalmente.</li>
-                                        <li>
-                                            Donde quieras que aparezca un dato del colaborador, escribe la variable
-                                            con doble llave: <code>&#123;&#123;nombre_variable&#125;&#125;</code>
-                                        </li>
-                                        <li>
-                                            <strong>Importante:</strong> escribe la variable completa de un solo trazo,
-                                            sin interrupciones. Si copias y pegas partes, Word puede dividirla en
-                                            fragmentos internos y no se reemplazará correctamente.
-                                        </li>
-                                        <li>Guarda el archivo como <strong>.docx</strong> (no .doc ni .pdf).</li>
-                                        <li>Sube el archivo aquí y el sistema reemplazará las variables al generar cada carta.</li>
+                                        <li>Abre tu documento Word y escribe las variables con doble llave: <code>&#123;&#123;nombre_variable&#125;&#125;</code></li>
+                                        <li>Escribe cada variable de un solo trazo sin interrupciones para que Word no la fragmente.</li>
+                                        <li>Guarda como <strong>.docx</strong> y súbelo aquí.</li>
                                     </ol>
                                     <div class="instructivo-ejemplo">
-                                        <div class="instructivo-ejemplo-label">Variables disponibles para usar en Word:</div>
-                                        <div style="display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.4rem;">
+                                        <div class="instructivo-ejemplo-label">Variables disponibles:</div>
+                                        <div style="display:flex;flex-wrap:wrap;gap:.3rem;margin-top:.4rem;">
                                             @foreach (var v in Variables)
                                             {
-                                                <span style="display:inline-flex;align-items:center;gap:.3rem;background:var(--bg-secondary);border:1px solid var(--border);border-radius:4px;padding:.15rem .4rem;font-size:.75rem;">
-                                                    <code>@v.Key</code>
-                                                    <span class="text-muted">@v.Value</span>
-                                                </span>
+                                                <span style="background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:.1rem .35rem;font-size:.75rem;"><code>@v.Key</code></span>
                                             }
                                         </div>
                                     </div>
-                                    <p style="margin-top:.75rem;color:var(--warning, #b45309);font-size:.8rem;background:var(--warning-bg, #fef3c7);padding:.5rem .75rem;border-radius:6px;">
-                                        ⚠️ Si una variable no se reemplaza, verifica que esté escrita exactamente igual (incluyendo las llaves dobles y sin espacios extra).
-                                    </p>
                                 </div>
                             }
                         </div>
-
                         <div class="form-group">
                             <label>Archivo Word (.docx) *</label>
                             <InputFile OnChange="OnDocxSeleccionado" accept=".docx" />
                             @if (!string.IsNullOrWhiteSpace(form.ArchivoDocxBase64))
                             {
-                                <small class="text-muted">✅ Archivo cargado correctamente</small>
+                                <div class="alert alert-success" style="margin-top:.5rem;padding:.5rem .75rem;">
+                                    ✅ Archivo cargado correctamente
+                                </div>
                             }
                         </div>
                     }
@@ -257,25 +357,25 @@ else
                     <div class="form-grid">
                         <div class="form-group">
                             <label>Nombre del firmante</label>
-                            <InputText @bind-Value="form.NombreFirmante" placeholder="Ej: Francy Gutiérrez Ramírez" />
+                            <InputText @bind-Value="form.NombreFirmante" placeholder="Ej: Francy Gutiérrez" />
                         </div>
                         <div class="form-group">
                             <label>Cargo del firmante</label>
-                            <InputText @bind-Value="form.CargoFirmante" placeholder="Ej: Director de Recursos Humanos" />
+                            <InputText @bind-Value="form.CargoFirmante" placeholder="Ej: Director de RRHH" />
                         </div>
                     </div>
 
                     <div class="form-group">
-                        <label>Firma (imagen)</label>
+                        <label>Imagen de firma</label>
                         <InputFile OnChange="OnFirmaSeleccionada" accept="image/*" />
                         @if (!string.IsNullOrWhiteSpace(form.FirmaImagenBase64))
                         {
-                            <div style="margin-top:.5rem;">
+                            <div style="margin-top:.5rem;display:flex;align-items:center;gap:.75rem;">
                                 <img src="@form.FirmaImagenBase64" alt="Firma"
-                                     style="max-height:80px;border:1px solid var(--border);border-radius:4px;padding:4px;" />
+                                     style="max-height:64px;border:1px solid var(--border);border-radius:4px;padding:4px;" />
                                 <button type="button" class="btn btn-ghost btn-sm"
                                         @onclick="() => form.FirmaImagenBase64 = null">
-                                    Quitar firma
+                                    Quitar
                                 </button>
                             </div>
                         }
@@ -283,12 +383,10 @@ else
 
                     <div class="form-group">
                         <label>Disponible para</label>
-                        <div class="flex gap-2" style="margin-bottom:.5rem;">
-                            <label style="display:flex;align-items:center;gap:.4rem;cursor:pointer;">
-                                <input type="checkbox" @bind="form.AplicaTodasAreas" />
-                                Todas las áreas
-                            </label>
-                        </div>
+                        <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;margin-bottom:.5rem;">
+                            <input type="checkbox" @bind="form.AplicaTodasAreas" />
+                            Todas las áreas
+                        </label>
                         @if (!form.AplicaTodasAreas)
                         {
                             <div class="areas-check-list">
@@ -309,9 +407,7 @@ else
                     <div class="form-group">
                         <label>
                             Campos editables por el colaborador
-                            <span class="text-muted text-sm" style="font-weight:400;margin-left:.25rem;">
-                                — el colaborador podrá personalizar estos valores antes de descargar
-                            </span>
+                            <span class="text-muted text-sm" style="font-weight:400;margin-left:.25rem;">— el colaborador puede personalizar estos valores antes de descargar</span>
                         </label>
                         <div class="areas-check-list">
                             @foreach (var v in VariablesEditablesOpciones)
@@ -326,15 +422,13 @@ else
                                 </label>
                             }
                         </div>
-                        <small class="text-muted">
-                            Las variables no marcadas se rellenan automáticamente con los datos del perfil.
-                        </small>
+                        <small class="text-muted">Las variables no marcadas se rellenan automáticamente con los datos del perfil.</small>
                     </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-ghost" @onclick="CerrarModal">Cancelar</button>
                     <button type="submit" class="btn btn-primary" disabled="@guardando">
-                        @(guardando ? "Guardando..." : "Guardar")
+                        @(guardando ? "Guardando..." : (editandoId.HasValue ? "Guardar cambios" : "Crear plantilla"))
                     </button>
                 </div>
             </EditForm>
@@ -346,41 +440,52 @@ else
     private Toast toast = null!;
     private List<PlantillaDocumentoDto> plantillas = [];
     private List<AreaDto> areas = [];
+    private List<SolicitudDocumentoDto> solicitudes = [];
     private bool cargando = true;
+    private bool cargandoHistorial = false;
+    private bool historialCargado = false;
     private bool showModal = false;
     private bool showVariables = false;
     private bool showConfirm = false;
     private bool guardando = false;
     private bool showInstructivoHtml = false;
-    private bool showInstructivoDocx = true; // abierto por defecto en docx
+    private bool showInstructivoDocx = true;
+    private string tabActiva = "plantillas";
+    private string filtroHistorial = string.Empty;
     private int? editandoId;
     private string confirmMsg = string.Empty;
     private PlantillaDocumentoDto? aEliminar;
 
     private CreatePlantillaDocumentoDto form = new();
 
+    private IEnumerable<SolicitudDocumentoDto> SolicitudesFiltradas =>
+        string.IsNullOrWhiteSpace(filtroHistorial)
+            ? solicitudes
+            : solicitudes.Where(s =>
+                s.ColaboradorNombre.Contains(filtroHistorial, StringComparison.OrdinalIgnoreCase) ||
+                s.PlantillaNombre.Contains(filtroHistorial, StringComparison.OrdinalIgnoreCase));
+
     private static readonly Dictionary<string, string> Variables = new()
     {
-        ["{{nombre_completo}}"]  = "Nombre y apellido del colaborador",
+        ["{{nombre_completo}}"]  = "Nombre y apellido",
         ["{{nombre}}"]           = "Nombre",
         ["{{apellido}}"]         = "Apellido",
-        ["{{cedula}}"]           = "Número de cédula",
+        ["{{cedula}}"]           = "Cédula",
         ["{{cargo}}"]            = "Cargo actual",
         ["{{area}}"]             = "Área / departamento",
-        ["{{fecha_ingreso}}"]    = "Fecha de ingreso (texto)",
+        ["{{fecha_ingreso}}"]    = "Fecha de ingreso",
         ["{{tipo_contrato}}"]    = "Tipo de contrato",
-        ["{{sueldo_basico}}"]    = "Sueldo básico formateado",
+        ["{{sueldo_basico}}"]    = "Sueldo básico",
         ["{{ciudad}}"]           = "Ciudad",
-        ["{{fecha_expedicion}}"] = "Fecha de hoy (texto)",
+        ["{{fecha_expedicion}}"] = "Fecha de hoy",
         ["{{nombre_firmante}}"]  = "Nombre del firmante",
         ["{{cargo_firmante}}"]   = "Cargo del firmante",
     };
 
-    // Variables que el admin puede marcar como editables por el colaborador
     private static readonly Dictionary<string, string> VariablesEditablesOpciones = new()
     {
         ["destinatario"]     = "A quién va dirigida la carta",
-        ["motivo"]           = "Motivo o propósito de la carta",
+        ["motivo"]           = "Motivo o propósito",
         ["entidad"]          = "Entidad o empresa destinataria",
         ["nombre_completo"]  = "Nombre completo (si el colaborador quiere ajustarlo)",
         ["cargo"]            = "Cargo (si difiere del perfil)",
@@ -390,12 +495,25 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        var t1 = ApiService.GetAllAsync();
-        var t2 = AreaApi.GetAllAsync();
-        await Task.WhenAll(t1, t2);
-        plantillas = t1.Result ?? [];
-        areas = t2.Result ?? [];
+        await AuthInfo.LoadAsync();
+        if (!AuthInfo.EsSoloColaborador)
+        {
+            var t1 = ApiService.GetAllAsync();
+            var t2 = AreaApi.GetAllAsync();
+            await Task.WhenAll(t1, t2);
+            plantillas = t1.Result ?? [];
+            areas = t2.Result ?? [];
+        }
         cargando = false;
+    }
+
+    private async Task CargarHistorial()
+    {
+        if (historialCargado) return;
+        cargandoHistorial = true;
+        solicitudes = await ApiService.GetTodasSolicitudesAsync();
+        cargandoHistorial = false;
+        historialCargado = true;
     }
 
     private void AbrirNueva()
@@ -458,7 +576,7 @@ else
     private void PedirConfirmacion(PlantillaDocumentoDto p)
     {
         aEliminar = p;
-        confirmMsg = $"¿Eliminar la plantilla \"{p.Nombre}\"?";
+        confirmMsg = $"¿Eliminar la plantilla \"{p.Nombre}\"? Esta acción no se puede deshacer.";
         showConfirm = true;
     }
 
@@ -482,30 +600,17 @@ else
     private async Task OnFirmaSeleccionada(InputFileChangeEventArgs e)
     {
         var file = e.File;
-        if (file.Size > 2 * 1024 * 1024)
-        {
-            await toast.Show("La imagen no debe superar 2 MB.", "error");
-            return;
-        }
+        if (file.Size > 2 * 1024 * 1024) { await toast.Show("La imagen no debe superar 2 MB.", "error"); return; }
         using var ms = new MemoryStream();
         await file.OpenReadStream(2 * 1024 * 1024).CopyToAsync(ms);
-        var base64 = Convert.ToBase64String(ms.ToArray());
-        form.FirmaImagenBase64 = $"data:{file.ContentType};base64,{base64}";
+        form.FirmaImagenBase64 = $"data:{file.ContentType};base64,{Convert.ToBase64String(ms.ToArray())}";
     }
 
     private async Task OnDocxSeleccionado(InputFileChangeEventArgs e)
     {
         var file = e.File;
-        if (!file.Name.EndsWith(".docx", StringComparison.OrdinalIgnoreCase))
-        {
-            await toast.Show("Solo se aceptan archivos .docx", "error");
-            return;
-        }
-        if (file.Size > 5 * 1024 * 1024)
-        {
-            await toast.Show("El archivo no debe superar 5 MB.", "error");
-            return;
-        }
+        if (!file.Name.EndsWith(".docx", StringComparison.OrdinalIgnoreCase)) { await toast.Show("Solo se aceptan archivos .docx", "error"); return; }
+        if (file.Size > 5 * 1024 * 1024) { await toast.Show("El archivo no debe superar 5 MB.", "error"); return; }
         using var ms = new MemoryStream();
         await file.OpenReadStream(5 * 1024 * 1024).CopyToAsync(ms);
         form.ArchivoDocxBase64 = Convert.ToBase64String(ms.ToArray());
@@ -524,4 +629,12 @@ else
     }
 
     private void MostrarVariables() => showVariables = true;
+
+    private static string Iniciales(string nombre)
+    {
+        var partes = nombre.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return partes.Length >= 2
+            ? $"{partes[0][0]}{partes[1][0]}".ToUpper()
+            : nombre.Length > 0 ? nombre[0].ToString().ToUpper() : "?";
+    }
 }

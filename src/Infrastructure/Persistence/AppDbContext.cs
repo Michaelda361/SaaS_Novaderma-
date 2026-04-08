@@ -131,12 +131,15 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         modelBuilder.Entity<PlantillaDocumento>()
             .HasQueryFilter(p => p.Activo);
 
+        modelBuilder.Entity<PlantillaDocumento>()
+            .Property(p => p.TipoPlantilla).HasConversion<string>();
+
         // Query filters para evitar warnings de EF con relaciones requeridas
         modelBuilder.Entity<PlantillaDocumentoArea>()
             .HasQueryFilter(pa => pa.Area!.Activo && pa.PlantillaDocumento!.Activo);
 
         modelBuilder.Entity<SolicitudDocumento>()
-            .HasQueryFilter(s => s.Colaborador!.Activo && s.PlantillaDocumento!.Activo);
+            .HasQueryFilter(s => s.Activo && s.Colaborador!.Activo && s.PlantillaDocumento!.Activo);
 
         modelBuilder.Entity<PlantillaDocumentoArea>()
             .HasKey(pa => new { pa.PlantillaDocumentoId, pa.AreaId });

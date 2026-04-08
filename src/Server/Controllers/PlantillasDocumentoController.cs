@@ -120,4 +120,13 @@ public class PlantillasDocumentoController(
         catch (UnauthorizedAccessException) { return Ok(new List<object>()); }
         catch (Exception ex) { return StatusCode(500, ex.Message); }
     }
+
+    // ── Historial admin: todas las solicitudes ────────────────────────────────
+
+    [HttpGet("solicitudes")]
+    public async Task<IActionResult> GetTodasSolicitudes()
+    {
+        var result = await service.GetTodasSolicitudesAsync();
+        return Ok(result);
+    }
 }

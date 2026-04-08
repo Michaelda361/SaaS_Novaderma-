@@ -1,4 +1,5 @@
 using TalentManagement.Domain.Common;
+using TalentManagement.Domain.Enums;
 
 namespace TalentManagement.Domain.Entities;
 
@@ -7,8 +8,8 @@ public class PlantillaDocumento : BaseEntity
     public string Nombre { get; set; } = string.Empty;
     public string? Descripcion { get; set; }
 
-    /// <summary>html = plantilla HTML con {{variables}} | docx = archivo Word subido</summary>
-    public string TipoPlantilla { get; set; } = "html";
+    /// <summary>Html = plantilla HTML con {{variables}} | Docx = archivo Word subido</summary>
+    public TipoPlantilla TipoPlantilla { get; set; } = TipoPlantilla.Html;
 
     /// <summary>Contenido HTML con marcadores {{variable}} (cuando TipoPlantilla = html)</summary>
     public string? ContenidoHtml { get; set; }

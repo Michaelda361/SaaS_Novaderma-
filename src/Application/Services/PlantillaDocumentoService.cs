@@ -1,7 +1,7 @@
 using System.Globalization;
-using System.Text.Json;
 using TalentManagement.Application.Interfaces;
 using TalentManagement.Domain.Entities;
+using TalentManagement.Domain.Enums;
 using TalentManagement.Shared.DTOs.PlantillasDocumento;
 
 namespace TalentManagement.Application.Services;
@@ -41,7 +41,7 @@ public class PlantillaDocumentoService(
         {
             Nombre = dto.Nombre,
             Descripcion = dto.Descripcion,
-            TipoPlantilla = dto.TipoPlantilla,
+            TipoPlantilla = dto.TipoPlantilla == "docx" ? TipoPlantilla.Docx : TipoPlantilla.Html,
             ContenidoHtml = dto.ContenidoHtml,
             ArchivoDocx = string.IsNullOrWhiteSpace(dto.ArchivoDocxBase64)
                 ? null
@@ -66,7 +66,7 @@ public class PlantillaDocumentoService(
 
         plantilla.Nombre = dto.Nombre;
         plantilla.Descripcion = dto.Descripcion;
-        plantilla.TipoPlantilla = dto.TipoPlantilla;
+        plantilla.TipoPlantilla = dto.TipoPlantilla == "docx" ? TipoPlantilla.Docx : TipoPlantilla.Html;
         plantilla.ContenidoHtml = dto.ContenidoHtml;
         if (!string.IsNullOrWhiteSpace(dto.ArchivoDocxBase64))
             plantilla.ArchivoDocx = Convert.FromBase64String(dto.ArchivoDocxBase64);
@@ -101,7 +101,7 @@ public class PlantillaDocumentoService(
     public async Task<(string htmlResuelto, PlantillaDocumento plantilla)>
         PrevisualizarAsync(int plantillaId, string email, Dictionary<string, string>? extras = null)
     {
-        var (html, plantilla, _) = await ResolverInternoAsync(plantillaId, email, extras);
+        var (html, plantilla, _) = await ResolverInternoAsync(plantillaId, email, extras, validarEditables: false);
         return (html, plantilla);
     }
 
@@ -109,7 +109,7 @@ public class PlantillaDocumentoService(
     public async Task<(string htmlResuelto, PlantillaDocumento plantilla, Colaborador colaborador)>
         ResolverPlantillaAsync(int plantillaId, string email, Dictionary<string, string>? extras = null)
     {
-        var (html, plantilla, colaborador) = await ResolverInternoAsync(plantillaId, email, extras);
+        var (html, plantilla, colaborador) = await ResolverInternoAsync(plantillaId, email, extras, validarEditables: true);
 
         await repository.CreateSolicitudAsync(new SolicitudDocumento
         {
@@ -122,7 +122,7 @@ public class PlantillaDocumentoService(
     }
 
     private async Task<(string htmlResuelto, PlantillaDocumento plantilla, Colaborador colaborador)>
-        ResolverInternoAsync(int plantillaId, string email, Dictionary<string, string>? extras)
+        ResolverInternoAsync(int plantillaId, string email, Dictionary<string, string>? extras, bool validarEditables)
     {
         var plantilla = await repository.GetByIdAsync(plantillaId)
             ?? throw new KeyNotFoundException("Plantilla no encontrada");
@@ -134,9 +134,23 @@ public class PlantillaDocumentoService(
             !plantilla.Areas.Any(a => a.AreaId == colaborador.AreaId))
             throw new UnauthorizedAccessException("No tienes acceso a esta plantilla");
 
-        var contenidoResuelto = plantilla.TipoPlantilla == "docx"
-            ? ReemplazarVariablesEnDocx(plantilla.ArchivoDocx!, colaborador, plantilla, extras)
-            : ReemplazarVariables(plantilla.ContenidoHtml ?? string.Empty, colaborador, plantilla, extras);
+        // Filtrar extras: solo se aplican las variables marcadas como editables
+        Dictionary<string, string>? extrasFiltrados = null;
+        if (extras is { Count: > 0 })
+        {
+            var editablesPermitidas = string.IsNullOrWhiteSpace(plantilla.VariablesEditables)
+                ? []
+                : System.Text.Json.JsonSerializer.Deserialize<List<string>>(plantilla.VariablesEditables) ?? [];
+
+            extrasFiltrados = validarEditables
+                ? extras.Where(kv => editablesPermitidas.Contains(kv.Key))
+                        .ToDictionary(kv => kv.Key, kv => kv.Value)
+                : extras; // en preview se permite todo para que el admin pueda probar
+        }
+
+        var contenidoResuelto = plantilla.TipoPlantilla == TipoPlantilla.Docx
+            ? ReemplazarVariablesEnDocx(plantilla.ArchivoDocx!, colaborador, plantilla, extrasFiltrados)
+            : ReemplazarVariables(plantilla.ContenidoHtml ?? string.Empty, colaborador, plantilla, extrasFiltrados);
 
         return (contenidoResuelto, plantilla, colaborador);
     }
@@ -149,7 +163,17 @@ public class PlantillaDocumentoService(
             ?? throw new UnauthorizedAccessException("Usuario no registrado como colaborador");
 
         var solicitudes = await repository.GetSolicitudesByColaboradorAsync(colaborador.Id);
-        return solicitudes.Select(s => new SolicitudDocumentoDto
+        return MapSolicitudes(solicitudes);
+    }
+
+    public async Task<List<SolicitudDocumentoDto>> GetTodasSolicitudesAsync()
+    {
+        var solicitudes = await repository.GetTodasSolicitudesAsync();
+        return MapSolicitudes(solicitudes);
+    }
+
+    private static List<SolicitudDocumentoDto> MapSolicitudes(IEnumerable<SolicitudDocumento> solicitudes) =>
+        solicitudes.Select(s => new SolicitudDocumentoDto
         {
             Id = s.Id,
             PlantillaDocumentoId = s.PlantillaDocumentoId,
@@ -158,7 +182,6 @@ public class PlantillaDocumentoService(
             ColaboradorNombre = $"{s.Colaborador.Nombre} {s.Colaborador.Apellido}",
             FechaSolicitud = s.FechaSolicitud
         }).ToList();
-    }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
 
@@ -185,7 +208,6 @@ public class PlantillaDocumentoService(
             .Replace("{{nombre_firmante}}", p.NombreFirmante ?? string.Empty)
             .Replace("{{cargo_firmante}}", p.CargoFirmante ?? string.Empty);
 
-        // Aplicar overrides del colaborador (variables editables)
         if (extras is { Count: > 0 })
             foreach (var (key, value) in extras)
                 resultado = resultado.Replace($"{{{{{key}}}}}", value);
@@ -193,10 +215,6 @@ public class PlantillaDocumentoService(
         return resultado;
     }
 
-    /// <summary>
-    /// Reemplaza variables dentro del .docx usando OpenXml.
-    /// Retorna los bytes del docx modificado en Base64 para que el PdfGeneratorService los use.
-    /// </summary>
     private static string ReemplazarVariablesEnDocx(
         byte[] docxBytes, Colaborador c, PlantillaDocumento p, Dictionary<string, string>? extras = null)
     {
@@ -221,7 +239,6 @@ public class PlantillaDocumentoService(
             ["{{cargo_firmante}}"]  = p.CargoFirmante ?? string.Empty,
         };
 
-        // Aplicar overrides del colaborador
         if (extras is { Count: > 0 })
             foreach (var (key, value) in extras)
                 variables[$"{{{{{key}}}}}"] = value;
@@ -238,7 +255,7 @@ public class PlantillaDocumentoService(
         Id = p.Id,
         Nombre = p.Nombre,
         Descripcion = p.Descripcion,
-        TipoPlantilla = p.TipoPlantilla,
+        TipoPlantilla = p.TipoPlantilla == TipoPlantilla.Docx ? "docx" : "html",
         ContenidoHtml = p.ContenidoHtml,
         TieneDocx = p.ArchivoDocx is { Length: > 0 },
         FirmaImagenBase64 = p.FirmaImagenBase64,
