@@ -80,6 +80,19 @@ public class PlantillaDocumentoRepository(AppDbContext context) : IPlantillaDocu
         return solicitud;
     }
 
+    public async Task<SolicitudDocumento?> GetSolicitudByIdAsync(int id) =>
+        await context.SolicitudesDocumento
+            .Include(s => s.PlantillaDocumento)
+            .Include(s => s.Colaborador)
+            .FirstOrDefaultAsync(s => s.Id == id);
+
+    public async Task<SolicitudDocumento> UpdateSolicitudAsync(SolicitudDocumento solicitud)
+    {
+        context.SolicitudesDocumento.Update(solicitud);
+        await context.SaveChangesAsync();
+        return solicitud;
+    }
+
     public async Task<IEnumerable<SolicitudDocumento>> GetSolicitudesByColaboradorAsync(int colaboradorId) =>
         await context.SolicitudesDocumento
             .Include(s => s.PlantillaDocumento)
@@ -96,4 +109,17 @@ public class PlantillaDocumentoRepository(AppDbContext context) : IPlantillaDocu
             .OrderByDescending(s => s.FechaSolicitud)
             .AsNoTracking()
             .ToListAsync();
+
+    public async Task<IEnumerable<SolicitudDocumento>> GetSolicitudesPendientesAsync() =>
+        await context.SolicitudesDocumento
+            .Include(s => s.PlantillaDocumento)
+            .Include(s => s.Colaborador)
+            .Where(s => s.Estado == Domain.Enums.EstadoSolicitud.Pendiente)
+            .OrderByDescending(s => s.FechaSolicitud)
+            .AsNoTracking()
+            .ToListAsync();
+
+    public Task<int> CountPendientesAsync() =>
+        context.SolicitudesDocumento
+            .CountAsync(s => s.Estado == Domain.Enums.EstadoSolicitud.Pendiente);
 }

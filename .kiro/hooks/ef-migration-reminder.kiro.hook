@@ -1,0 +1,17 @@
+{
+  "enabled": true,
+  "name": "Recordatorio de Migración EF",
+  "description": "Recuerda crear una migración de EF Core cuando se modifican entidades de dominio o el DbContext",
+  "version": "1",
+  "when": {
+    "type": "fileEdited",
+    "patterns": [
+      "src/Domain/Entities/*.cs",
+      "src/Infrastructure/Persistence/AppDbContext.cs"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Se modificó una entidad de dominio o el AppDbContext. Verifica si el cambio requiere una nueva migración de EF Core. Si es así, recuérdale al usuario ejecutar:\n\ndotnet ef migrations add <NombreMigracion> --project src/Infrastructure --startup-project src/Server\ndotnet ef database update --project src/Infrastructure --startup-project src/Server\n\nSolo menciona esto si el cambio realmente afecta el esquema de la base de datos (nueva propiedad, nueva entidad, cambio de tipo, nueva relación, etc.)."
+  }
+}

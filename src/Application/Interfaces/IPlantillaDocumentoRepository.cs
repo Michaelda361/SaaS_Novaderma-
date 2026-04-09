@@ -1,4 +1,5 @@
 using TalentManagement.Domain.Entities;
+using TalentManagement.Domain.Enums;
 
 namespace TalentManagement.Application.Interfaces;
 
@@ -10,7 +11,12 @@ public interface IPlantillaDocumentoRepository
     Task<PlantillaDocumento> CreateAsync(PlantillaDocumento plantilla);
     Task<PlantillaDocumento> UpdateAsync(PlantillaDocumento plantilla);
     Task DeleteAsync(int id);
+
     Task<SolicitudDocumento> CreateSolicitudAsync(SolicitudDocumento solicitud);
+    Task<SolicitudDocumento?> GetSolicitudByIdAsync(int id);
+    Task<SolicitudDocumento> UpdateSolicitudAsync(SolicitudDocumento solicitud);
     Task<IEnumerable<SolicitudDocumento>> GetSolicitudesByColaboradorAsync(int colaboradorId);
     Task<IEnumerable<SolicitudDocumento>> GetTodasSolicitudesAsync();
+    Task<IEnumerable<SolicitudDocumento>> GetSolicitudesPendientesAsync();
+    Task<int> CountPendientesAsync();
 }

@@ -134,6 +134,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         modelBuilder.Entity<PlantillaDocumento>()
             .Property(p => p.TipoPlantilla).HasConversion<string>();
 
+        modelBuilder.Entity<SolicitudDocumento>()
+            .Property(s => s.Estado).HasConversion<string>();
+
         // Query filters para evitar warnings de EF con relaciones requeridas
         modelBuilder.Entity<PlantillaDocumentoArea>()
             .HasQueryFilter(pa => pa.Area!.Activo && pa.PlantillaDocumento!.Activo);

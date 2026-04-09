@@ -1,0 +1,17 @@
+{
+  "enabled": true,
+  "name": "Recordatorio de Registro en DI",
+  "description": "Recuerda registrar nuevos repositorios y servicios en DependencyInjection.cs al crearlos",
+  "version": "1",
+  "when": {
+    "type": "fileCreated",
+    "patterns": [
+      "src/Infrastructure/Repositories/*.cs",
+      "src/Application/Services/*.cs"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Se creó un nuevo repositorio o servicio. Verifica que esté registrado en src/Infrastructure/DependencyInjection.cs:\n- Repositorios: services.AddScoped<I{Entity}Repository, {Entity}Repository>()\n- Servicios de aplicación: services.AddScoped<{Entity}Service>()\n\nSi el archivo recién creado no está registrado aún, agrega el registro correspondiente en DependencyInjection.cs."
+  }
+}

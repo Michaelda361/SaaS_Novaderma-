@@ -3,6 +3,8 @@ using DocumentFormat.OpenXml.Wordprocessing;
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
+using Syncfusion.DocIO.DLS;
+using Syncfusion.DocIORenderer;
 using TalentManagement.Application.Services;
 using TalentManagement.Domain.Entities;
 using TalentManagement.Domain.Enums;
@@ -10,23 +12,114 @@ using PdfDocument = QuestPDF.Fluent.Document;
 
 namespace TalentManagement.Infrastructure.Services;
 
-public class PdfGeneratorService
+public class PdfGeneratorService(LibreOfficeConverterService libreOffice)
 {
-    public PdfGeneratorService()
+    private readonly LibreOfficeConverterService _libreOffice = libreOffice;
+
+    static PdfGeneratorService()
     {
         QuestPDF.Settings.License = LicenseType.Community;
     }
 
-    public byte[] Generar(string contenidoResuelto, PlantillaDocumento plantilla)
+    /// <summary>Genera PDF desde HTML. Solo para plantillas de tipo Html.</summary>
+    public byte[] GenerarPdfDesdeHtml(string htmlResuelto, PlantillaDocumento plantilla) =>
+        GenerarDesdeHtml(htmlResuelto, plantilla);
+
+    /// <summary>
+    /// Aplica variables al .docx y devuelve los bytes del archivo Word modificado.
+    /// El formato original se preserva completamente — no se convierte a PDF.
+    /// </summary>
+    public byte[] GenerarDocx(string contenidoResuelto)
     {
-        if (plantilla.TipoPlantilla == TipoPlantilla.Docx)
+        var payload = System.Text.Json.JsonSerializer.Deserialize<DocxReemplazoPayload>(contenidoResuelto)!;
+        var docxBytes = Convert.FromBase64String(payload.DocxBase64);
+        return AplicarVariablesEnDocx(docxBytes, payload.Variables);
+    }
+
+    /// <summary>
+    /// Aplica variables al .docx y convierte a PDF.
+    /// Usa LibreOffice si está disponible (máxima fidelidad).
+    /// Cae en Syncfusion DocIORenderer como fallback.
+    /// </summary>
+    public byte[] GenerarPdfDesdeDocx(string contenidoResuelto)
+    {
+        var docxBytes = GenerarDocx(contenidoResuelto);
+
+        if (_libreOffice.EstaDisponible())
         {
-            var payload = System.Text.Json.JsonSerializer.Deserialize<DocxReemplazoPayload>(contenidoResuelto)!;
-            var docxBytes = Convert.FromBase64String(payload.DocxBase64);
-            var docxModificado = AplicarVariablesEnDocx(docxBytes, payload.Variables);
-            return GenerarDesdeDocx(docxModificado, plantilla);
+            var pdf = _libreOffice.ConvertirDocxAPdf(docxBytes);
+            if (pdf is not null) return pdf;
         }
-        return GenerarDesdeHtml(contenidoResuelto, plantilla);
+
+        // Fallback: Syncfusion DocIORenderer
+        using var inputStream = new MemoryStream(docxBytes);
+        using var wordDoc = new Syncfusion.DocIO.DLS.WordDocument(inputStream, Syncfusion.DocIO.FormatType.Docx);
+        using var renderer = new Syncfusion.DocIORenderer.DocIORenderer();
+        using var pdfDoc = renderer.ConvertToPDF(wordDoc);
+        using var outputStream = new MemoryStream();
+        pdfDoc.Save(outputStream);
+        return outputStream.ToArray();
+    }
+
+    /// <summary>
+    /// Extrae TODOS los párrafos del DOCX con el texto ya resuelto (variables aplicadas).
+    /// Permite al colaborador editar cualquier parte del documento.
+    /// </summary>
+    public List<(int indice, string textoResuelto, string? contexto)>
+        ExtraerParrafosEditables(byte[] docxBytes, Dictionary<string, string> variables)
+    {
+        var resultado = new List<(int, string, string?)>();
+        using var ms = new MemoryStream(docxBytes);
+        using var doc = WordprocessingDocument.Open(ms, false);
+        var body = doc.MainDocumentPart?.Document?.Body;
+        if (body is null) return resultado;
+
+        var parrafos = body.Descendants<Paragraph>().ToList();
+        for (int i = 0; i < parrafos.Count; i++)
+        {
+            var texto = string.Concat(parrafos[i].Descendants<Text>().Select(t => t.Text));
+            var textoResuelto = texto;
+            foreach (var (key, value) in variables)
+                textoResuelto = textoResuelto.Replace(key, value);
+            resultado.Add((i, textoResuelto, null));
+        }
+        return resultado;
+    }
+
+    /// <summary>
+    /// Aplica los textos editados por el colaborador a los párrafos del DOCX,
+    /// preservando el formato (negrita, cursiva, fuente) del primer run de cada párrafo.
+    /// </summary>
+    public byte[] AplicarEdicionEnDocx(byte[] docxBytes, Dictionary<int, string> parrafosEditados)
+    {
+        using var ms = new MemoryStream();
+        ms.Write(docxBytes, 0, docxBytes.Length);
+        ms.Position = 0;
+
+        using (var doc = WordprocessingDocument.Open(ms, true))
+        {
+            var body = doc.MainDocumentPart?.Document?.Body;
+            if (body is null) return docxBytes;
+
+            var parrafos = body.Descendants<Paragraph>().ToList();
+            foreach (var (indice, textoEditado) in parrafosEditados)
+            {
+                if (indice < 0 || indice >= parrafos.Count) continue;
+                var para = parrafos[indice];
+                var runs = para.Elements<Run>().ToList();
+                if (!runs.Any()) continue;
+
+                var primerRun = runs[0];
+                var primerText = primerRun.GetFirstChild<Text>();
+                if (primerText is null) continue;
+
+                primerText.Text = textoEditado;
+                primerText.Space = DocumentFormat.OpenXml.SpaceProcessingModeValues.Preserve;
+                foreach (var r in runs.Skip(1)) r.Remove();
+            }
+            doc.MainDocumentPart!.Document.Save();
+        }
+        return ms.ToArray();
     }
 
     // ── HTML → PDF ────────────────────────────────────────────────────────────
@@ -122,58 +215,7 @@ public class PdfGeneratorService
         if (span.Subrayado) s.Underline();
     }
 
-    // ── DOCX → PDF ────────────────────────────────────────────────────────────
-
-    private static byte[] GenerarDesdeDocx(byte[] docxBytes, PlantillaDocumento plantilla)
-    {
-        var parrafos = ExtraerParrafosDeDocx(docxBytes);
-
-        return PdfDocument.Create(container =>
-        {
-            container.Page(page =>
-            {
-                page.Size(PageSizes.Letter);
-                page.Margin(2.5f, Unit.Centimetre);
-                page.DefaultTextStyle(t => t.FontSize(11).FontFamily("Arial"));
-
-                page.Content().Column(col =>
-                {
-                    foreach (var (texto, negrita, cursiva, centrado) in parrafos)
-                    {
-                        if (string.IsNullOrWhiteSpace(texto))
-                        {
-                            col.Item().PaddingTop(6);
-                            continue;
-                        }
-
-                        var item = col.Item();
-                        if (centrado) item = item.AlignCenter();
-
-                        item.Text(t =>
-                        {
-                            var span = t.Span(texto).FontSize(11);
-                            if (negrita) span.Bold();
-                            if (cursiva) span.Italic();
-                        });
-                    }
-
-                    if (!string.IsNullOrWhiteSpace(plantilla.NombreFirmante))
-                    {
-                        col.Item().PaddingTop(40);
-                        RenderFirma(col, plantilla);
-                    }
-                });
-
-                page.Footer().AlignCenter().Text(t =>
-                {
-                    t.Span("Página ").FontSize(9).FontColor(Colors.Grey.Medium);
-                    t.CurrentPageNumber().FontSize(9).FontColor(Colors.Grey.Medium);
-                    t.Span(" de ").FontSize(9).FontColor(Colors.Grey.Medium);
-                    t.TotalPages().FontSize(9).FontColor(Colors.Grey.Medium);
-                });
-            });
-        }).GeneratePdf();
-    }
+    // ── DOCX: aplicar variables ───────────────────────────────────────────────
 
     private static byte[] AplicarVariablesEnDocx(byte[] docxBytes, Dictionary<string, string> variables)
     {
@@ -186,19 +228,83 @@ public class PdfGeneratorService
             var body = doc.MainDocumentPart?.Document?.Body;
             if (body is not null)
             {
-                // Consolidar runs fragmentados antes de reemplazar para mayor fidelidad
                 ConsolidarRuns(body);
-
-                foreach (var text in body.Descendants<Text>())
-                    foreach (var (key, value) in variables)
-                        if (text.Text.Contains(key))
-                            text.Text = text.Text.Replace(key, value);
-
+                ReemplazarEnParrafos(body, variables);
                 doc.MainDocumentPart!.Document.Save();
             }
         }
 
         return ms.ToArray();
+    }
+
+    /// <summary>
+    /// Reemplaza variables en runs individuales. Si una variable queda fragmentada
+    /// entre varios runs (Word la partió con formatos distintos), reconstruye el párrafo
+    /// usando el formato del primer run como base.
+    /// </summary>
+    private static void ReemplazarEnParrafos(Body body, Dictionary<string, string> variables)
+    {
+        foreach (var para in body.Descendants<Paragraph>())
+        {
+            // Paso 1: reemplazo run a run (caso simple — variable en un solo run)
+            foreach (var run in para.Descendants<Run>())
+            {
+                var textEl = run.GetFirstChild<Text>();
+                if (textEl is null) continue;
+
+                var original = textEl.Text;
+                var reemplazado = original;
+                foreach (var (key, value) in variables)
+                    reemplazado = reemplazado.Replace(key, value);
+
+                if (reemplazado == original) continue;
+
+                textEl.Text = reemplazado;
+                textEl.Space = DocumentFormat.OpenXml.SpaceProcessingModeValues.Preserve;
+                NormalizarFuenteRun(run);
+            }
+
+            // Paso 2: si quedan variables fragmentadas entre runs, reconstruir el párrafo
+            var textoParrafo = string.Concat(para.Descendants<Text>().Select(t => t.Text));
+            if (!variables.Keys.Any(k => textoParrafo.Contains(k))) continue;
+
+            var textoFinal = textoParrafo;
+            foreach (var (key, value) in variables)
+                textoFinal = textoFinal.Replace(key, value);
+
+            var runs = para.Elements<Run>().ToList();
+            if (!runs.Any()) continue;
+
+            // Poner todo el texto en el primer run y eliminar los demás
+            var primerRun = runs[0];
+            var primerText = primerRun.GetFirstChild<Text>();
+            if (primerText is null) continue;
+
+            primerText.Text = textoFinal;
+            primerText.Space = DocumentFormat.OpenXml.SpaceProcessingModeValues.Preserve;
+            NormalizarFuenteRun(primerRun);
+
+            foreach (var r in runs.Skip(1))
+                r.Remove();
+        }
+    }
+
+    /// <summary>
+    /// Elimina el override de fuente (<w:rFonts>) del run para que el texto reemplazado
+    /// herede la fuente del párrafo/estilo del documento en lugar de la fuente del placeholder.
+    /// Preserva el resto del formato (negrita, cursiva, tamaño, color, etc.).
+    /// </summary>
+    private static void NormalizarFuenteRun(Run run)
+    {
+        var rPr = run.RunProperties;
+        if (rPr is null) return;
+
+        // Quitar override de fuente — el texto hereda la fuente del párrafo
+        rPr.RemoveAllChildren<RunFonts>();
+
+        // Si el rPr quedó vacío, eliminarlo también para mayor limpieza
+        if (!rPr.HasChildren)
+            rPr.Remove();
     }
 
     /// <summary>
@@ -234,29 +340,6 @@ public class PdfGeneratorService
                 }
             }
         }
-    }
-
-    private static List<(string texto, bool negrita, bool cursiva, bool centrado)>
-        ExtraerParrafosDeDocx(byte[] docxBytes)
-    {
-        var resultado = new List<(string, bool, bool, bool)>();
-
-        using var ms = new MemoryStream(docxBytes);
-        using var doc = WordprocessingDocument.Open(ms, false);
-        var body = doc.MainDocumentPart?.Document?.Body;
-        if (body is null) return resultado;
-
-        foreach (var para in body.Elements<Paragraph>())
-        {
-            var texto = string.Concat(para.Descendants<Text>().Select(t => t.Text));
-            var negrita = para.Descendants<Bold>().Any();
-            var cursiva = para.Descendants<Italic>().Any();
-            var justificacion = para.ParagraphProperties?.Justification?.Val;
-            var centrado = justificacion?.Value == JustificationValues.Center;
-            resultado.Add((texto, negrita, cursiva, centrado));
-        }
-
-        return resultado;
     }
 
     // ── Parser HTML completo ──────────────────────────────────────────────────

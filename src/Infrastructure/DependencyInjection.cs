@@ -44,7 +44,9 @@ public static class DependencyInjection
         services.AddScoped<DocumentoService>();
         services.AddScoped<PlantillaDocumentoService>();
         services.AddScoped<CuestionarioService>();
+        services.AddScoped<LibreOfficeConverterService>();
         services.AddScoped<PdfGeneratorService>();
+        services.AddScoped<DocxToHtmlConverterService>();
 
         // SharePoint — mock en Development, real en producción
         var env = configuration["ASPNETCORE_ENVIRONMENT"] ?? "Production";

@@ -1,0 +1,16 @@
+{
+  "enabled": true,
+  "name": "Registrar ApiService en Client Program.cs",
+  "description": "Recuerda registrar nuevos ApiServices del cliente en Client/Program.cs al crearlos",
+  "version": "1",
+  "when": {
+    "type": "fileCreated",
+    "patterns": [
+      "src/Client/Services/*ApiService.cs"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Se creó un nuevo ApiService en el cliente. Verifica que esté registrado en src/Client/Program.cs con:\nbuilder.Services.AddScoped<{NombreDelServicio}>();\n\nSi no está registrado, agrégalo junto a los demás AddScoped de servicios del cliente."
+  }
+}

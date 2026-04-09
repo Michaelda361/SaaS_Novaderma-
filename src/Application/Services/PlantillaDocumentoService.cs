@@ -95,29 +95,87 @@ public class PlantillaDocumentoService(
         return true;
     }
 
-    // ── Generación de documento ──────────────────────────────────────────────
-
-    /// <summary>Resuelve variables sin registrar solicitud — para previsualización.</summary>
-    public async Task<(string htmlResuelto, PlantillaDocumento plantilla)>
-        PrevisualizarAsync(int plantillaId, string email, Dictionary<string, string>? extras = null)
+    /// <summary>Registra una solicitud de descarga sin generar el documento.</summary>
+    public async Task RegistrarSolicitudAsync(int plantillaId, string email)
     {
-        var (html, plantilla, _) = await ResolverInternoAsync(plantillaId, email, extras, validarEditables: false);
-        return (html, plantilla);
-    }
-
-    /// <summary>Resuelve variables y registra la solicitud — para generación final.</summary>
-    public async Task<(string htmlResuelto, PlantillaDocumento plantilla, Colaborador colaborador)>
-        ResolverPlantillaAsync(int plantillaId, string email, Dictionary<string, string>? extras = null)
-    {
-        var (html, plantilla, colaborador) = await ResolverInternoAsync(plantillaId, email, extras, validarEditables: true);
-
+        var colaborador = await colaboradorRepository.GetByEmailAsync(email)
+            ?? throw new UnauthorizedAccessException("Usuario no registrado como colaborador");
         await repository.CreateSolicitudAsync(new SolicitudDocumento
         {
             PlantillaDocumentoId = plantillaId,
             ColaboradorId = colaborador.Id,
             FechaSolicitud = DateTime.UtcNow
         });
+    }
 
+    /// <summary>
+    /// Devuelve el DOCX original y el diccionario de variables resueltas para el colaborador.
+    /// </summary>
+    public async Task<(byte[] docxBytes, PlantillaDocumento plantilla, Dictionary<string, string> variables)>
+        ObtenerDocxConVariablesAsync(int plantillaId, string email)
+    {
+        var plantilla = await repository.GetByIdAsync(plantillaId)
+            ?? throw new KeyNotFoundException("Plantilla no encontrada");
+        var colaborador = await colaboradorRepository.GetByEmailAsync(email)
+            ?? throw new UnauthorizedAccessException("Usuario no registrado como colaborador");
+
+        if (!plantilla.AplicaTodasAreas &&
+            !plantilla.Areas.Any(a => a.AreaId == colaborador.AreaId))
+            throw new UnauthorizedAccessException("No tienes acceso a esta plantilla");
+
+        var cultura = new CultureInfo("es-CO");
+        var hoy = DateTime.Today;
+        var variables = new Dictionary<string, string>
+        {
+            ["{{nombre_completo}}"] = $"{colaborador.Nombre} {colaborador.Apellido}",
+            ["{{nombre}}"]          = colaborador.Nombre,
+            ["{{apellido}}"]        = colaborador.Apellido,
+            ["{{cedula}}"]          = colaborador.Cedula ?? string.Empty,
+            ["{{cargo}}"]           = colaborador.Cargo?.Nombre ?? string.Empty,
+            ["{{area}}"]            = colaborador.Area?.Nombre ?? string.Empty,
+            ["{{fecha_ingreso}}"]   = colaborador.FechaIngreso.ToString("d 'de' MMMM 'de' yyyy", cultura),
+            ["{{tipo_contrato}}"]   = colaborador.TipoContrato ?? string.Empty,
+            ["{{sueldo_basico}}"]   = colaborador.SueldoBasico.HasValue
+                ? colaborador.SueldoBasico.Value.ToString("C0", cultura) : string.Empty,
+            ["{{ciudad}}"]          = colaborador.Ciudad ?? string.Empty,
+            ["{{fecha_expedicion}}"]= hoy.ToString("d 'de' MMMM 'de' yyyy", cultura),
+            ["{{nombre_firmante}}"] = plantilla.NombreFirmante ?? string.Empty,
+            ["{{cargo_firmante}}"]  = plantilla.CargoFirmante ?? string.Empty,
+        };
+
+        return (plantilla.ArchivoDocx!, plantilla, variables);
+    }
+
+    // ── Generación de documento ──────────────────────────────────────────────
+
+    /// <summary>Resuelve variables sin registrar solicitud — para previsualización.</summary>
+    public async Task<(string htmlResuelto, PlantillaDocumento plantilla, Dictionary<string, string> valoresPerfil)>
+        PrevisualizarAsync(int plantillaId, string email, Dictionary<string, string>? extras = null)
+    {
+        var (html, plantilla, colaborador) = await ResolverInternoAsync(plantillaId, email, extras, validarEditables: false);
+
+        // Valores del perfil para pre-rellenar campos editables en el cliente
+        var cultura = new System.Globalization.CultureInfo("es-CO");
+        var valoresPerfil = new Dictionary<string, string>
+        {
+            ["nombre_completo"]  = $"{colaborador.Nombre} {colaborador.Apellido}",
+            ["nombre"]           = colaborador.Nombre,
+            ["apellido"]         = colaborador.Apellido,
+            ["cedula"]           = colaborador.Cedula ?? string.Empty,
+            ["cargo"]            = colaborador.Cargo?.Nombre ?? string.Empty,
+            ["area"]             = colaborador.Area?.Nombre ?? string.Empty,
+            ["ciudad"]           = colaborador.Ciudad ?? string.Empty,
+            ["fecha_expedicion"] = DateTime.Today.ToString("d 'de' MMMM 'de' yyyy", cultura),
+            ["tipo_contrato"]    = colaborador.TipoContrato ?? string.Empty,
+        };
+
+        return (html, plantilla, valoresPerfil);
+    }
+
+    public async Task<(string htmlResuelto, PlantillaDocumento plantilla, Colaborador colaborador)>
+        ResolverPlantillaAsync(int plantillaId, string email, Dictionary<string, string>? extras = null)
+    {
+        var (html, plantilla, colaborador) = await ResolverInternoAsync(plantillaId, email, extras, validarEditables: true);
         return (html, plantilla, colaborador);
     }
 
@@ -155,33 +213,99 @@ public class PlantillaDocumentoService(
         return (contenidoResuelto, plantilla, colaborador);
     }
 
-    // ── Historial ────────────────────────────────────────────────────────────
+    // ── Solicitudes con flujo de aprobación ──────────────────────────────────
+
+    public async Task<SolicitudDocumentoDto> EnviarSolicitudAsync(int plantillaId, string email, byte[] pdfBytes)
+    {
+        var colaborador = await colaboradorRepository.GetByEmailAsync(email)
+            ?? throw new UnauthorizedAccessException("Usuario no registrado como colaborador");
+
+        var solicitud = new SolicitudDocumento
+        {
+            PlantillaDocumentoId = plantillaId,
+            ColaboradorId = colaborador.Id,
+            FechaSolicitud = DateTime.UtcNow,
+            Estado = Domain.Enums.EstadoSolicitud.Pendiente,
+            PdfBytes = pdfBytes,
+        };
+
+        var creada = await repository.CreateSolicitudAsync(solicitud);
+        var conNav = await repository.GetSolicitudByIdAsync(creada.Id) ?? creada;
+        return MapSolicitud(conNav);
+    }
+
+    public async Task<SolicitudDocumentoDto?> AprobarSolicitudAsync(int solicitudId, string? comentario)
+    {
+        var s = await repository.GetSolicitudByIdAsync(solicitudId);
+        if (s is null) return null;
+        s.Estado = Domain.Enums.EstadoSolicitud.Aprobada;
+        s.ComentarioAdmin = comentario;
+        s.FechaResolucion = DateTime.UtcNow;
+        await repository.UpdateSolicitudAsync(s);
+        return MapSolicitud(s);
+    }
+
+    public async Task<SolicitudDocumentoDto?> RechazarSolicitudAsync(int solicitudId, string? comentario)
+    {
+        var s = await repository.GetSolicitudByIdAsync(solicitudId);
+        if (s is null) return null;
+        s.Estado = Domain.Enums.EstadoSolicitud.Rechazada;
+        s.ComentarioAdmin = comentario;
+        s.FechaResolucion = DateTime.UtcNow;
+        await repository.UpdateSolicitudAsync(s);
+        return MapSolicitud(s);
+    }
+
+    public async Task<byte[]?> DescargarSolicitudAprobadaAsync(int solicitudId, string emailSolicitante)
+    {
+        var s = await repository.GetSolicitudByIdAsync(solicitudId);
+        if (s is null) return null;
+        if (s.Colaborador.Email != emailSolicitante)
+            throw new UnauthorizedAccessException("No tienes acceso a esta solicitud");
+        if (s.Estado != Domain.Enums.EstadoSolicitud.Aprobada)
+            throw new InvalidOperationException("La solicitud no está aprobada");
+        return s.PdfBytes;
+    }
 
     public async Task<List<SolicitudDocumentoDto>> GetSolicitudesAsync(string email)
     {
         var colaborador = await colaboradorRepository.GetByEmailAsync(email)
             ?? throw new UnauthorizedAccessException("Usuario no registrado como colaborador");
-
         var solicitudes = await repository.GetSolicitudesByColaboradorAsync(colaborador.Id);
-        return MapSolicitudes(solicitudes);
+        return solicitudes.Select(MapSolicitud).ToList();
     }
 
     public async Task<List<SolicitudDocumentoDto>> GetTodasSolicitudesAsync()
     {
         var solicitudes = await repository.GetTodasSolicitudesAsync();
-        return MapSolicitudes(solicitudes);
+        return solicitudes.Select(MapSolicitud).ToList();
     }
 
-    private static List<SolicitudDocumentoDto> MapSolicitudes(IEnumerable<SolicitudDocumento> solicitudes) =>
-        solicitudes.Select(s => new SolicitudDocumentoDto
-        {
-            Id = s.Id,
-            PlantillaDocumentoId = s.PlantillaDocumentoId,
-            PlantillaNombre = s.PlantillaDocumento?.Nombre ?? string.Empty,
-            ColaboradorId = s.ColaboradorId,
-            ColaboradorNombre = $"{s.Colaborador.Nombre} {s.Colaborador.Apellido}",
-            FechaSolicitud = s.FechaSolicitud
-        }).ToList();
+    public async Task<List<SolicitudDocumentoDto>> GetPendientesAsync()
+    {
+        var solicitudes = await repository.GetSolicitudesPendientesAsync();
+        return solicitudes.Select(MapSolicitud).ToList();
+    }
+
+    public Task<int> CountPendientesAsync() => repository.CountPendientesAsync();
+
+    public async Task<Domain.Entities.SolicitudDocumento?> GetSolicitudEntityAsync(int id) =>
+        await repository.GetSolicitudByIdAsync(id);
+
+    private static SolicitudDocumentoDto MapSolicitud(SolicitudDocumento s) => new()
+    {
+        Id = s.Id,
+        PlantillaDocumentoId = s.PlantillaDocumentoId,
+        PlantillaNombre = s.PlantillaDocumento?.Nombre ?? string.Empty,
+        ColaboradorId = s.ColaboradorId,
+        ColaboradorNombre = $"{s.Colaborador.Nombre} {s.Colaborador.Apellido}",
+        ColaboradorEmail = s.Colaborador.Email ?? string.Empty,
+        FechaSolicitud = s.FechaSolicitud,
+        Estado = s.Estado.ToString(),
+        ComentarioAdmin = s.ComentarioAdmin,
+        FechaResolucion = s.FechaResolucion,
+        TienePdf = s.PdfBytes is { Length: > 0 },
+    };
 
     // ── Helpers ──────────────────────────────────────────────────────────────
 

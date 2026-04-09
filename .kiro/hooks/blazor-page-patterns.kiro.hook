@@ -1,0 +1,16 @@
+{
+  "enabled": true,
+  "name": "Validar Patrones de Página Blazor",
+  "description": "Verifica que nuevas páginas Razor en Client/Pages sigan los patrones UI establecidos del proyecto",
+  "version": "1",
+  "when": {
+    "type": "fileCreated",
+    "patterns": [
+      "src/Client/Pages/*.razor"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Se creó una nueva página Blazor. Verifica que cumpla los patrones UI de NovaHub:\n- Tiene @page con la ruta correcta\n- Tiene @attribute [Authorize]\n- Inyecta el ApiService correspondiente con @inject\n- Incluye <Toast @ref=\"toast\" /> para feedback\n- Usa <ConfirmDialog> antes de cualquier acción destructiva (eliminar)\n- Maneja estado de carga con variable `cargando` y muestra <div class=\"loading\"><div class=\"spinner\"></div></div>\n- Tiene empty-state cuando no hay datos (<div class=\"empty-state\">)\n- Usa EditForm + DataAnnotationsValidator en formularios\n- Llama toast.Show(\"mensaje\") en éxito y toast.Show(\"mensaje\", \"error\") en error\n- No tiene @using innecesarios (todo está en _Imports.razor)\n\nIndica qué falta o qué no cumple."
+  }
+}

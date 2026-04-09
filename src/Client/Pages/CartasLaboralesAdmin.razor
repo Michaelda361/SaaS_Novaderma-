@@ -3,6 +3,9 @@
 @inject PlantillaDocumentoApiService ApiService
 @inject AreaApiService AreaApi
 @inject AuthInfoService AuthInfo
+@inject NotificacionesService Notificaciones
+@inject IJSRuntime JS
+@implements IAsyncDisposable
 
 <Toast @ref="toast" />
 <ConfirmDialog Visible="showConfirm"
@@ -42,9 +45,17 @@ else
                 @onclick='() => tabActiva = "plantillas"'>
             📄 Plantillas <span class="admin-tab-count">@plantillas.Count</span>
         </button>
+        <button class="admin-tab @(tabActiva == "pendientes" ? "admin-tab--active" : "")"
+                @onclick='() => { tabActiva = "pendientes"; _ = CargarPendientes(); }'>
+            ⏳ Pendientes
+            @if (countPendientes > 0)
+            {
+                <span class="admin-tab-count admin-tab-count--alert">@countPendientes</span>
+            }
+        </button>
         <button class="admin-tab @(tabActiva == "historial" ? "admin-tab--active" : "")"
                 @onclick='() => { tabActiva = "historial"; _ = CargarHistorial(); }'>
-            📋 Historial de descargas
+            📋 Historial
             @if (solicitudes.Any())
             {
                 <span class="admin-tab-count">@solicitudes.Count</span>
@@ -139,7 +150,7 @@ else
                                     <td>
                                         <div class="flex gap-2">
                                             <button class="btn btn-ghost btn-sm"
-                                                    @onclick="() => MostrarVariables()">
+                                                    @onclick="() => MostrarVariables(p)">
                                                 Variables
                                             </button>
                                             <button class="btn btn-ghost btn-sm btn-icon"
@@ -156,9 +167,67 @@ else
             </div>
         }
     }
+    else if (tabActiva == "pendientes")
+    {
+        @if (cargandoPendientes)
+        {
+            <div class="loading"><div class="spinner"></div> Cargando...</div>
+        }
+        else if (!pendientes.Any())
+        {
+            <div class="empty-state">
+                <div class="empty-state-icon">✅</div>
+                <h3>Sin solicitudes pendientes</h3>
+                <p>Todas las solicitudes han sido resueltas.</p>
+            </div>
+        }
+        else
+        {
+            <div class="card">
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr><th>Colaborador</th><th>Documento</th><th>Fecha</th><th>PDF</th><th></th></tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var s in pendientes)
+                            {
+                                var sid = s.Id;
+                                <tr>
+                                    <td>
+                                        <div class="user-cell">
+                                            <div class="avatar avatar-sm">@Iniciales(s.ColaboradorNombre)</div>
+                                            <div>
+                                                <div class="user-name">@s.ColaboradorNombre</div>
+                                                <div class="user-email">@s.ColaboradorEmail</div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td class="text-sm">@s.PlantillaNombre</td>
+                                    <td class="text-muted text-sm">@s.FechaSolicitud.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
+                                    <td>
+                                        @if (s.TienePdf)
+                                        {
+                                            <a href="@ApiService.GetPdfSolicitudUrl(sid)" target="_blank" class="btn btn-ghost btn-sm">👁 Ver PDF</a>
+                                        }
+                                    </td>
+                                    <td>
+                                        <div class="flex gap-2">
+                                            <button class="btn btn-primary btn-sm" @onclick="() => AbrirAprobar(s)">✅ Aprobar</button>
+                                            <button class="btn btn-danger btn-sm" @onclick="() => AbrirRechazar(s)">❌ Rechazar</button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+    }
     else
     {
-        <!-- Historial de descargas -->
+        <!-- Historial de solicitudes -->
         @if (cargandoHistorial)
         {
             <div class="loading"><div class="spinner"></div> Cargando historial...</div>
@@ -167,8 +236,8 @@ else
         {
             <div class="empty-state">
                 <div class="empty-state-icon">📋</div>
-                <h3>Sin descargas aún</h3>
-                <p>Aquí aparecerán todas las cartas que los colaboradores hayan descargado.</p>
+                <h3>Sin solicitudes aún</h3>
+                <p>Aquí aparecerán todas las solicitudes de los colaboradores.</p>
             </div>
         }
         else
@@ -180,16 +249,12 @@ else
                         <input type="text" placeholder="Buscar colaborador o plantilla..."
                                @bind="filtroHistorial" @bind:event="oninput" />
                     </div>
-                    <span class="text-muted text-sm">@SolicitudesFiltradas.Count() descarga(s)</span>
+                    <span class="text-muted text-sm">@SolicitudesFiltradas.Count() solicitud(es)</span>
                 </div>
                 <div class="table-wrapper">
                     <table>
                         <thead>
-                            <tr>
-                                <th>Colaborador</th>
-                                <th>Documento</th>
-                                <th>Fecha y hora</th>
-                            </tr>
+                            <tr><th>Colaborador</th><th>Documento</th><th>Fecha</th><th>Estado</th></tr>
                         </thead>
                         <tbody>
                             @foreach (var s in SolicitudesFiltradas.Take(100))
@@ -202,8 +267,11 @@ else
                                         </div>
                                     </td>
                                     <td class="text-sm">@s.PlantillaNombre</td>
-                                    <td class="text-muted text-sm">
-                                        @s.FechaSolicitud.ToLocalTime().ToString("dd/MM/yyyy HH:mm")
+                                    <td class="text-muted text-sm">@s.FechaSolicitud.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
+                                    <td>
+                                        @if (s.Estado == "Pendiente")      { <span class="badge badge-warning">⏳ Pendiente</span> }
+                                        else if (s.Estado == "Aprobada")   { <span class="badge badge-success">✅ Aprobada</span> }
+                                        else                               { <span class="badge badge-danger">❌ Rechazada</span> }
                                     </td>
                                 </tr>
                             }
@@ -216,27 +284,50 @@ else
 }
 
 <!-- Modal variables -->
-@if (showVariables)
+@if (showVariables && plantillaVariables is not null)
 {
     <div class="modal-backdrop" @onclick="() => showVariables = false">
-        <div class="modal" style="max-width:500px;" @onclick:stopPropagation>
+        <div class="modal" style="max-width:560px;" @onclick:stopPropagation>
             <div class="modal-header">
-                <span class="modal-title">Variables disponibles</span>
+                <span class="modal-title">Variables — @plantillaVariables.Nombre</span>
                 <button class="btn btn-ghost btn-sm btn-icon" @onclick="() => showVariables = false">✕</button>
             </div>
             <div class="modal-body">
-                <p class="text-muted text-sm" style="margin-bottom:1rem;">
-                    Usa estas variables en el contenido de la plantilla. Se reemplazan automáticamente con los datos del colaborador.
+                <p class="text-muted text-sm" style="margin-bottom:.75rem;">
+                    Estas variables se reemplazan automáticamente con los datos del colaborador al generar el documento.
                 </p>
                 <div class="variables-grid">
                     @foreach (var v in Variables)
                     {
-                        <div class="variable-item">
+                        var usada = plantillaVariables.TipoPlantilla == "html" &&
+                                    (plantillaVariables.ContenidoHtml?.Contains(v.Key) ?? false);
+                        <div class="variable-item @(usada ? "variable-item--usada" : "")">
                             <code class="variable-tag">@v.Key</code>
                             <span class="text-muted text-sm">@v.Value</span>
+                            @if (usada) { <span class="variable-usada-badge">✓ en uso</span> }
                         </div>
                     }
                 </div>
+
+                @if (plantillaVariables.VariablesEditables.Any())
+                {
+                    <div style="margin-top:1.25rem;padding-top:1rem;border-top:1px solid var(--border);">
+                        <p class="text-sm" style="margin-bottom:.5rem;font-weight:500;">
+                            ✏️ Campos que el colaborador completa
+                        </p>
+                        <div class="variables-grid">
+                            @foreach (var key in plantillaVariables.VariablesEditables)
+                            {
+                                var label = VariablesEditablesOpciones.TryGetValue(key, out var l) ? l : key.Replace("_", " ");
+                                <div class="variable-item variable-item--editable">
+                                    <code class="variable-tag">@("{{" + key + "}}")</code>
+                                    <span class="text-muted text-sm">@label</span>
+                                    <span class="variable-editable-badge">editable</span>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
             </div>
         </div>
     </div>
@@ -409,6 +500,7 @@ else
                             Campos editables por el colaborador
                             <span class="text-muted text-sm" style="font-weight:400;margin-left:.25rem;">— el colaborador puede personalizar estos valores antes de descargar</span>
                         </label>
+                        <!-- Variables predefinidas -->
                         <div class="areas-check-list">
                             @foreach (var v in VariablesEditablesOpciones)
                             {
@@ -422,7 +514,38 @@ else
                                 </label>
                             }
                         </div>
-                        <small class="text-muted">Las variables no marcadas se rellenan automáticamente con los datos del perfil.</small>
+                        <!-- Variables personalizadas ya agregadas -->
+                        @foreach (var custom in form.VariablesEditables.Where(k => !VariablesEditablesOpciones.ContainsKey(k)))
+                        {
+                            var customKey = custom;
+                            <div style="display:flex;align-items:center;gap:.4rem;margin-top:.35rem;">
+                                <input type="checkbox" checked disabled />
+                                <code style="font-size:.8rem;">@("{{" + customKey + "}}")</code>
+                                <span class="text-muted text-sm">Variable personalizada</span>
+                                <button type="button" class="btn btn-ghost btn-sm btn-icon"
+                                        style="margin-left:auto;"
+                                        @onclick="() => form.VariablesEditables.Remove(customKey)">✕</button>
+                            </div>
+                        }
+                        <!-- Agregar variable personalizada -->
+                        <div style="display:flex;gap:.5rem;margin-top:.6rem;align-items:center;">
+                            <input type="text" class="form-control" style="font-size:.8rem;max-width:200px;"
+                                   placeholder="nombre_variable"
+                                   @bind="nuevaVariableCustom" @bind:event="oninput"
+                                   @onkeydown="OnNuevaVariableKeyDown" />
+                            <button type="button" class="btn btn-ghost btn-sm"
+                                    disabled="@string.IsNullOrWhiteSpace(nuevaVariableCustom)"
+                                    @onclick="AgregarVariableCustom">
+                                + Agregar
+                            </button>
+                        </div>
+                        @if (!string.IsNullOrWhiteSpace(errorVariableCustom))
+                        {
+                            <small class="text-danger">@errorVariableCustom</small>
+                        }
+                        <small class="text-muted" style="display:block;margin-top:.35rem;">
+                            Las variables del perfil se rellenan automáticamente. Las personalizadas las completa el colaborador.
+                        </small>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -432,6 +555,42 @@ else
                     </button>
                 </div>
             </EditForm>
+        </div>
+    </div>
+}
+
+<!-- Modal aprobar/rechazar -->
+@if (solicitudResolviendo is not null)
+{
+    <div class="modal-backdrop" @onclick="CerrarModalResolucion">
+        <div class="modal" style="max-width:480px;" @onclick:stopPropagation>
+            <div class="modal-header">
+                <span class="modal-title">@(accionResolucion == "aprobar" ? "✅ Aprobar solicitud" : "❌ Rechazar solicitud")</span>
+                <button class="btn btn-ghost btn-sm btn-icon" @onclick="CerrarModalResolucion">✕</button>
+            </div>
+            <div class="modal-body">
+                <p class="text-sm" style="margin-bottom:1rem;">
+                    <strong>@solicitudResolviendo.ColaboradorNombre</strong> — @solicitudResolviendo.PlantillaNombre
+                </p>
+                <div class="form-group">
+                    <label>Comentario @(accionResolucion == "rechazar" ? "(requerido)" : "(opcional)")</label>
+                    <textarea class="form-control" rows="3"
+                              placeholder="@(accionResolucion == "rechazar" ? "Indica el motivo del rechazo..." : "Mensaje opcional para el colaborador...")"
+                              @bind="comentarioResolucion"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-ghost" @onclick="CerrarModalResolucion">Cancelar</button>
+                <button class="btn @(accionResolucion == "aprobar" ? "btn-primary" : "btn-danger")"
+                        disabled="@(resolviendo || (accionResolucion == "rechazar" && string.IsNullOrWhiteSpace(comentarioResolucion)))"
+                        @onclick="ConfirmarResolucion">
+                    @if (resolviendo)
+                    {
+                        <span class="spinner" style="width:.9rem;height:.9rem;border-width:2px;border-color:rgba(255,255,255,.3);border-top-color:#fff;"></span>
+                    }
+                    else { <span>@(accionResolucion == "aprobar" ? "Aprobar" : "Rechazar")</span> }
+                </button>
+            </div>
         </div>
     </div>
 }
@@ -455,6 +614,9 @@ else
     private int? editandoId;
     private string confirmMsg = string.Empty;
     private PlantillaDocumentoDto? aEliminar;
+    private PlantillaDocumentoDto? plantillaVariables;
+    private string nuevaVariableCustom = string.Empty;
+    private string errorVariableCustom = string.Empty;
 
     private CreatePlantillaDocumentoDto form = new();
 
@@ -628,7 +790,31 @@ else
         else form.VariablesEditables.Remove(key);
     }
 
-    private void MostrarVariables() => showVariables = true;
+    private void MostrarVariables(PlantillaDocumentoDto p) { plantillaVariables = p; showVariables = true; }
+
+    private void AgregarVariableCustom()
+    {
+        errorVariableCustom = string.Empty;
+        var key = nuevaVariableCustom.Trim().ToLower().Replace(" ", "_");
+        if (string.IsNullOrWhiteSpace(key)) return;
+        if (!System.Text.RegularExpressions.Regex.IsMatch(key, @"^[a-z0-9_]+$"))
+        {
+            errorVariableCustom = "Solo letras, números y guión bajo.";
+            return;
+        }
+        if (form.VariablesEditables.Contains(key))
+        {
+            errorVariableCustom = "Esa variable ya está en la lista.";
+            return;
+        }
+        form.VariablesEditables.Add(key);
+        nuevaVariableCustom = string.Empty;
+    }
+
+    private void OnNuevaVariableKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") AgregarVariableCustom();
+    }
 
     private static string Iniciales(string nombre)
     {

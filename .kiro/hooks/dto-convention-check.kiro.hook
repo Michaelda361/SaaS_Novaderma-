@@ -1,0 +1,16 @@
+{
+  "enabled": true,
+  "name": "Validar Convenciones de DTOs",
+  "description": "Verifica que los nuevos DTOs en Shared sigan las convenciones de nomenclatura y estructura del proyecto",
+  "version": "1",
+  "when": {
+    "type": "fileCreated",
+    "patterns": [
+      "src/Shared/DTOs/**/*.cs"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Se creó un nuevo DTO en Shared. Verifica que cumpla las convenciones de NovaHub:\n- Nombre: debe ser {Entity}Dto, Create{Entity}Dto, o Update{Entity}Dto\n- Ubicación: debe estar en Shared/DTOs/{Entidades}/ (carpeta en plural)\n- Contenido: solo propiedades con DataAnnotations, sin lógica de negocio\n- Nunca debe exponer entidades de dominio directamente\n- Namespace: TalentManagement.Shared.DTOs.{Entidades}\n\nSi algo no cumple, indícalo con la corrección sugerida."
+  }
+}

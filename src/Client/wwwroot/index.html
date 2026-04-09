@@ -32,6 +32,8 @@
         <span class="dismiss">✕</span>
     </div>
     <script src="_content/Microsoft.Authentication.WebAssembly.Msal/AuthenticationService.js"></script>
+    <script src="js/jszip.min.js"></script>
+    <script src="js/docx-preview.js"></script>
     <script src="_framework/blazor.webassembly#[.{fingerprint}].js"></script>
     <script>
         // Exponer instancia MSAL para el picker de SharePoint
@@ -62,6 +64,31 @@
             doc.close();
         };
 
+        // Muestra un PDF (data URL base64) en un iframe
+        window.setPdfIframeSrc = function(iframe, dataUrl) {
+            if (!iframe) return;
+            iframe.src = dataUrl;
+        };
+
+        // Inicializa el editor de párrafos DOCX
+        window.initDocxEditor = function(container, parrafos) {
+            if (!container) return;
+            parrafos.forEach(function(p) {
+                var el = container.querySelector('[data-idx="' + p.indice + '"]');
+                if (el) el.textContent = p.texto;
+            });
+        };
+
+        // Lee el contenido actual de todos los párrafos editables
+        window.getDocxEditorContent = function(container) {
+            if (!container) return {};
+            var result = {};
+            container.querySelectorAll('[data-idx]').forEach(function(el) {
+                result[parseInt(el.getAttribute('data-idx'))] = el.textContent;
+            });
+            return result;
+        };
+
         // Descarga de PDF generado desde bytes base64
         window.descargarPdf = function(base64, fileName) {
             const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
@@ -74,6 +101,68 @@
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
+        };
+
+        // Descarga genérica (PDF, DOCX, etc.) desde bytes base64
+        window.descargarArchivo = function(base64, fileName, contentType) {
+            const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+            const blob = new Blob([bytes], { type: contentType || 'application/octet-stream' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        };
+
+        // Renderiza un .docx (base64) en un iframe aislado usando docx-preview
+        window.renderDocxPreview = async function(iframe, base64) {
+            if (!iframe) return;
+            try {
+                const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+                const blob = new Blob([bytes], {
+                    type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+                });
+
+                // Inyectar docx-preview en el iframe para aislarlo del CSS de la app
+                const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+                iframeDoc.open();
+                iframeDoc.write(`<!DOCTYPE html><html><head><meta charset="utf-8">
+                    <style>
+                        * { box-sizing: border-box; }
+                        html, body { margin: 0; padding: 0; background: #e5e7eb; }
+                        .docx-wrapper { background: #e5e7eb !important; padding: 20px; display: flex; flex-direction: column; align-items: center; gap: 20px; min-height: 100%; }
+                        .docx-wrapper > section.docx { background: white !important; box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
+                    </style>
+                </head><body><div id="root"></div></body></html>`);
+                iframeDoc.close();
+
+                // Copiar la función docx al contexto del iframe
+                iframe.contentWindow.docx = window.docx;
+
+                const container = iframeDoc.getElementById('root');
+                await window.docx.renderAsync(blob, container, null, {
+                    className: 'docx',
+                    inWrapper: true,
+                    ignoreWidth: false,
+                    ignoreHeight: true,
+                    ignoreFonts: false,
+                    breakPages: true,
+                    useBase64URL: true,
+                    renderChanges: false,
+                    renderHeaders: true,
+                    renderFooters: true,
+                    renderFootnotes: true,
+                });
+            } catch(e) {
+                try {
+                    const d = iframe.contentDocument || iframe.contentWindow.document;
+                    d.body.innerHTML = '<div style="padding:2rem;color:#6b7280;text-align:center;font-family:sans-serif;">No se pudo renderizar la vista previa.</div>';
+                } catch(_) {}
+                console.error('docx-preview error:', e);
+            }
         };
 
         // Editor de plantillas

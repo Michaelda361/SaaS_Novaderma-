@@ -1,0 +1,16 @@
+{
+  "enabled": true,
+  "name": "Guardia de Soft Delete",
+  "description": "Verifica que los repositorios implementen soft delete correctamente y nunca usen hard delete",
+  "version": "1",
+  "when": {
+    "type": "fileEdited",
+    "patterns": [
+      "src/Infrastructure/Repositories/*.cs"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Se modificó un repositorio. Verifica que el método DeleteAsync implemente soft delete correctamente:\n- CORRECTO: entity.Activo = false; await db.SaveChangesAsync();\n- INCORRECTO: db.Remove(entity) o db.Set<T>().Remove(entity)\n\nTambién verifica que las queries no estén ignorando el global query filter de Activo (evitar .IgnoreQueryFilters() salvo que sea intencional y justificado).\n\nSi hay un hard delete, corrígelo a soft delete."
+  }
+}

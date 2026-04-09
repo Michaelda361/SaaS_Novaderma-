@@ -3,6 +3,7 @@ using Microsoft.Identity.Web;
 using Scalar.AspNetCore;
 using TalentManagement.Infrastructure;
 using TalentManagement.Server;
+using TalentManagement.Server.Hubs;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -31,12 +32,15 @@ else
 }
 
 builder.Services.AddOpenApi();
-builder.Services.AddRazorPages(); // para la página /dev
+builder.Services.AddRazorPages();
+builder.Services.AddSignalR();
 builder.Services.AddControllers()
     .AddJsonOptions(options =>
     {
         options.JsonSerializerOptions.DefaultIgnoreCondition =
             System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull;
+        options.JsonSerializerOptions.Converters.Add(
+            new System.Text.Json.Serialization.JsonStringEnumConverter());
     });
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddHttpContextAccessor();
@@ -47,7 +51,8 @@ builder.Services.AddCors(options =>
         policy.WithOrigins("http://localhost:5185", "https://localhost:5185",
                            "http://localhost:5000", "https://localhost:5001")
               .AllowAnyMethod()
-              .AllowAnyHeader()));
+              .AllowAnyHeader()
+              .AllowCredentials()));
 
 var app = builder.Build();
 
@@ -95,6 +100,7 @@ if (!app.Environment.IsDevelopment())
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
+app.MapHub<NotificacionesHub>("/hubs/notificaciones");
 
 // Endpoint para que el cliente sepa si el usuario actual es Microsoft (Bearer) o dev
 app.MapGet("/api/v1/auth/es-microsoft", (HttpContext ctx) =>
