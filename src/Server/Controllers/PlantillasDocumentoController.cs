@@ -281,23 +281,36 @@ public class PlantillasDocumentoController(
         try
         {
             var email = currentUser.GetEmail();
-            var (docxBytes, plantilla, variables) = await service.ObtenerDocxConVariablesAsync(id, email);
+            var plantillaDto = await service.GetByIdAsync(id);
+            if (plantillaDto is null) return NotFound();
 
-            var payload = System.Text.Json.JsonSerializer.Serialize(new DocxReemplazoPayload
+            byte[] pdfBytes;
+
+            if (plantillaDto.TipoPlantilla == "docx")
             {
-                DocxBase64 = Convert.ToBase64String(docxBytes),
-                Variables = variables,
-            });
-            var docxConVariables = pdfGenerator.GenerarDocx(payload);
-            var docxFinal = dto.ParrafosEditados.Count > 0
-                ? pdfGenerator.AplicarEdicionEnDocx(docxConVariables, dto.ParrafosEditados)
-                : docxConVariables;
-            var payloadFinal = System.Text.Json.JsonSerializer.Serialize(new DocxReemplazoPayload
+                var (docxBytes, plantilla, variables) = await service.ObtenerDocxConVariablesAsync(id, email);
+                var payload = System.Text.Json.JsonSerializer.Serialize(new DocxReemplazoPayload
+                {
+                    DocxBase64 = Convert.ToBase64String(docxBytes),
+                    Variables = variables,
+                });
+                var docxConVariables = pdfGenerator.GenerarDocx(payload);
+                var docxFinal = dto.ParrafosEditados.Count > 0
+                    ? pdfGenerator.AplicarEdicionEnDocx(docxConVariables, dto.ParrafosEditados)
+                    : docxConVariables;
+                var payloadFinal = System.Text.Json.JsonSerializer.Serialize(new DocxReemplazoPayload
+                {
+                    DocxBase64 = Convert.ToBase64String(docxFinal),
+                    Variables = [],
+                });
+                pdfBytes = pdfGenerator.GenerarPdfDesdeDocx(payloadFinal);
+            }
+            else
             {
-                DocxBase64 = Convert.ToBase64String(docxFinal),
-                Variables = [],
-            });
-            var pdfBytes = pdfGenerator.GenerarPdfDesdeDocx(payloadFinal);
+                // HTML: resolver variables → QuestPDF → PDF
+                var (htmlResuelto, plantilla, _) = await service.PrevisualizarAsync(id, email);
+                pdfBytes = pdfGenerator.GenerarPdfDesdeHtml(htmlResuelto, plantilla);
+            }
 
             var solicitud = await service.EnviarSolicitudAsync(id, email, pdfBytes);
             await hub.Clients.Group("admins").SendAsync("NuevaSolicitud", solicitud);
@@ -356,10 +369,12 @@ public class PlantillasDocumentoController(
     {
         try
         {
-            var solicitud = await service.GetSolicitudEntityAsync(solicitudId);
-            if (solicitud?.PdfBytes is null) return NotFound();
-            return File(solicitud.PdfBytes, "application/pdf");
+            var email = currentUser.GetEmail();
+            var pdf = await service.GetPdfSolicitudAsync(solicitudId, email);
+            if (pdf is null) return NotFound();
+            return File(pdf, "application/pdf");
         }
+        catch (UnauthorizedAccessException ex) { return Forbid(ex.Message); }
         catch (Exception ex) { return StatusCode(500, ex.Message); }
     }
 

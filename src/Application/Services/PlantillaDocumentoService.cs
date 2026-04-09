@@ -292,6 +292,27 @@ public class PlantillaDocumentoService(
     public async Task<Domain.Entities.SolicitudDocumento?> GetSolicitudEntityAsync(int id) =>
         await repository.GetSolicitudByIdAsync(id);
 
+    /// <summary>
+    /// Devuelve el PDF de una solicitud si el solicitante tiene acceso.
+    /// Admin/jefe puede ver cualquiera; colaborador solo la suya.
+    /// </summary>
+    public async Task<byte[]?> GetPdfSolicitudAsync(int solicitudId, string email)
+    {
+        var s = await repository.GetSolicitudByIdAsync(solicitudId);
+        if (s?.PdfBytes is null) return null;
+
+        // El dueño siempre puede ver su propio PDF
+        if (s.Colaborador.Email == email) return s.PdfBytes;
+
+        // Otros: solo si son jefe de área o no son colaborador registrado
+        var colaborador = await colaboradorRepository.GetByEmailAsync(email);
+        if (colaborador is null) return s.PdfBytes; // usuario sin perfil = admin externo
+        var esJefe = await colaboradorRepository.EsJefeDeAreaAsync(colaborador.Id);
+        if (esJefe) return s.PdfBytes;
+
+        throw new UnauthorizedAccessException("No tienes acceso a este PDF.");
+    }
+
     private static SolicitudDocumentoDto MapSolicitud(SolicitudDocumento s) => new()
     {
         Id = s.Id,

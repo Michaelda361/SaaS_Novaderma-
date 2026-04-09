@@ -3,7 +3,8 @@ using Microsoft.AspNetCore.SignalR;
 
 namespace TalentManagement.Server.Hubs;
 
-[Authorize]
+// AllowAnonymous para dev sin MSAL. La seguridad está en los endpoints REST.
+[AllowAnonymous]
 public class NotificacionesHub : Hub
 {
     public override async Task OnConnectedAsync()

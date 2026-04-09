@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.WebAssembly.Authentication;
 using Microsoft.AspNetCore.SignalR.Client;
 using TalentManagement.Shared.DTOs.PlantillasDocumento;
 
@@ -8,18 +9,20 @@ public class NotificacionesService : IAsyncDisposable
 {
     private HubConnection? _hub;
     private readonly NavigationManager _nav;
+    private readonly IAccessTokenProvider _tokenProvider;
 
     public event Action<SolicitudDocumentoDto>? OnNuevaSolicitud;
     public event Action<SolicitudDocumentoDto>? OnSolicitudResuelta;
 
     public bool Conectado => _hub?.State == HubConnectionState.Connected;
 
-    public NotificacionesService(NavigationManager nav)
+    public NotificacionesService(NavigationManager nav, IAccessTokenProvider tokenProvider)
     {
         _nav = nav;
+        _tokenProvider = tokenProvider;
     }
 
-    public async Task ConectarAsync(string accessToken)
+    public async Task ConectarAsync()
     {
         if (_hub is not null) return;
 
@@ -31,7 +34,11 @@ public class NotificacionesService : IAsyncDisposable
         _hub = new HubConnectionBuilder()
             .WithUrl(hubUrl, options =>
             {
-                options.AccessTokenProvider = () => Task.FromResult<string?>(accessToken);
+                options.AccessTokenProvider = async () =>
+                {
+                    var result = await _tokenProvider.RequestAccessToken();
+                    return result.TryGetToken(out var token) ? token.Value : null;
+                };
             })
             .WithAutomaticReconnect()
             .Build();
@@ -42,7 +49,8 @@ public class NotificacionesService : IAsyncDisposable
         _hub.On<SolicitudDocumentoDto>("SolicitudResuelta",
             s => OnSolicitudResuelta?.Invoke(s));
 
-        await _hub.StartAsync();
+        try { await _hub.StartAsync(); }
+        catch { /* En dev sin MSAL puede fallar — la app sigue funcionando sin notificaciones */ }
     }
 
     public async Task UnirseGrupoAdminAsync()

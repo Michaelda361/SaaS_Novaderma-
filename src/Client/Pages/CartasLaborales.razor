@@ -294,7 +294,7 @@ else
         solicitudes = t2.Result;
         cargando = false;
 
-        await Notificaciones.ConectarAsync(string.Empty);
+        await Notificaciones.ConectarAsync();
         Notificaciones.OnSolicitudResuelta += OnSolicitudResuelta;
     }
 

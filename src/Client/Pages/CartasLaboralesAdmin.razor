@@ -600,8 +600,10 @@ else
     private List<PlantillaDocumentoDto> plantillas = [];
     private List<AreaDto> areas = [];
     private List<SolicitudDocumentoDto> solicitudes = [];
+    private List<SolicitudDocumentoDto> pendientes = [];
     private bool cargando = true;
     private bool cargandoHistorial = false;
+    private bool cargandoPendientes = false;
     private bool historialCargado = false;
     private bool showModal = false;
     private bool showVariables = false;
@@ -617,6 +619,11 @@ else
     private PlantillaDocumentoDto? plantillaVariables;
     private string nuevaVariableCustom = string.Empty;
     private string errorVariableCustom = string.Empty;
+    private int countPendientes = 0;
+    private SolicitudDocumentoDto? solicitudResolviendo;
+    private string accionResolucion = "aprobar";
+    private string comentarioResolucion = string.Empty;
+    private bool resolviendo = false;
 
     private CreatePlantillaDocumentoDto form = new();
 
@@ -662,11 +669,85 @@ else
         {
             var t1 = ApiService.GetAllAsync();
             var t2 = AreaApi.GetAllAsync();
-            await Task.WhenAll(t1, t2);
+            var t3 = ApiService.CountPendientesAsync();
+            await Task.WhenAll(t1, t2, t3);
             plantillas = t1.Result ?? [];
             areas = t2.Result ?? [];
+            countPendientes = t3.Result;
+
+            await Notificaciones.ConectarAsync();
+            await Notificaciones.UnirseGrupoAdminAsync();
+            Notificaciones.OnNuevaSolicitud += OnNuevaSolicitud;
         }
         cargando = false;
+    }
+
+    private void OnNuevaSolicitud(SolicitudDocumentoDto s)
+    {
+        countPendientes++;
+        if (tabActiva == "pendientes") pendientes.Insert(0, s);
+        InvokeAsync(async () =>
+        {
+            StateHasChanged();
+            await toast.Show($"📥 Nueva solicitud de {s.ColaboradorNombre} — {s.PlantillaNombre}");
+        });
+    }
+
+    private async Task CargarPendientes()
+    {
+        cargandoPendientes = true;
+        pendientes = await ApiService.GetPendientesAsync();
+        countPendientes = pendientes.Count;
+        cargandoPendientes = false;
+    }
+
+    private void AbrirAprobar(SolicitudDocumentoDto s)
+    {
+        solicitudResolviendo = s;
+        accionResolucion = "aprobar";
+        comentarioResolucion = string.Empty;
+    }
+
+    private void AbrirRechazar(SolicitudDocumentoDto s)
+    {
+        solicitudResolviendo = s;
+        accionResolucion = "rechazar";
+        comentarioResolucion = string.Empty;
+    }
+
+    private void CerrarModalResolucion() { solicitudResolviendo = null; comentarioResolucion = string.Empty; }
+
+    private async Task ConfirmarResolucion()
+    {
+        if (solicitudResolviendo is null) return;
+        resolviendo = true;
+        StateHasChanged();
+
+        var dto = new ResolverSolicitudDto { Comentario = comentarioResolucion };
+        var resultado = accionResolucion == "aprobar"
+            ? await ApiService.AprobarAsync(solicitudResolviendo.Id, dto)
+            : await ApiService.RechazarAsync(solicitudResolviendo.Id, dto);
+
+        resolviendo = false;
+
+        if (resultado is null)
+        {
+            await toast.Show("Error al procesar la solicitud.", "error");
+            StateHasChanged();
+            return;
+        }
+
+        pendientes.RemoveAll(s => s.Id == resultado.Id);
+        countPendientes = pendientes.Count;
+        CerrarModalResolucion();
+        await toast.Show(accionResolucion == "aprobar" ? "Solicitud aprobada." : "Solicitud rechazada.");
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        Notificaciones.OnNuevaSolicitud -= OnNuevaSolicitud;
+        await Notificaciones.SalirGrupoAdminAsync();
+        await Notificaciones.DisposeAsync();
     }
 
     private async Task CargarHistorial()

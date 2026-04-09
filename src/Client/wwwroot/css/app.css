@@ -2111,6 +2111,12 @@ textarea { resize: vertical; min-height: 80px; }
     border-color: transparent;
 }
 
+.admin-tab-count--alert {
+    background: #fef2f2;
+    color: #dc2626;
+    border-color: #fecaca;
+}
+
 .carta-admin-icon {
     font-size: 1.25rem;
     width: 2rem;
