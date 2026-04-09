@@ -106,6 +106,7 @@ public class CuestionarioService(ICuestionarioRepository repository)
             FechaRespuesta = DateTime.UtcNow,
             Puntaje = puntaje,
             Aprobado = aprobado,
+            TotalCorrectas = correctas,
             Respuestas = respuestasEntidad
         };
 
@@ -132,7 +133,7 @@ public class CuestionarioService(ICuestionarioRepository repository)
             Aprobado = r.Aprobado,
             PuntajeAprobacion = c?.PuntajeAprobacion ?? 70,
             TotalPreguntas = c?.Preguntas.Count ?? 0,
-            Correctas = (int)Math.Round(r.Puntaje / 100 * (c?.Preguntas.Count ?? 0))
+            Correctas = r.TotalCorrectas
         };
     }
 

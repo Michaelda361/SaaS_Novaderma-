@@ -19,6 +19,9 @@ public class RespuestaCuestionario : BaseEntity
 
     public bool Aprobado { get; set; }
 
+    /// <summary>Cantidad de respuestas correctas (almacenado para evitar recálculo con error de redondeo).</summary>
+    public int TotalCorrectas { get; set; }
+
     [JsonIgnore]
     public ICollection<RespuestaPregunta> Respuestas { get; set; } = [];
 }
