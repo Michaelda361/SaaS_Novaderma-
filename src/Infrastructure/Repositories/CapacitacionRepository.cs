@@ -10,7 +10,8 @@ public class CapacitacionRepository(AppDbContext context) : ICapacitacionReposit
     private IQueryable<Capacitacion> WithIncludes() =>
         context.Capacitaciones
             .Include(c => c.Area)
-            .Include(c => c.Colaborador);
+            .Include(c => c.Colaborador)
+            .Include(c => c.Inscripciones);
 
     public async Task<IEnumerable<Capacitacion>> GetAllAsync() =>
         await WithIncludes().AsNoTracking().ToListAsync();

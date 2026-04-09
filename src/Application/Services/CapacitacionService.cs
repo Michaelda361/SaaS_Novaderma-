@@ -95,7 +95,7 @@ public class CapacitacionService(
         DuracionHoras = c.DuracionHoras,
         FechaInicio = c.FechaInicio,
         FechaFin = c.FechaFin,
-        TotalInscritos = 0,
+        TotalInscritos = c.Inscripciones?.Count ?? 0,
         AreaId = c.AreaId,
         AreaNombre = c.Area?.Nombre,
         ColaboradorId = c.ColaboradorId,
