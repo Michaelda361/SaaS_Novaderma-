@@ -1,17 +1,17 @@
 {
   "enabled": true,
   "name": "Build al guardar C#",
-  "description": "Ejecuta dotnet build al guardar cualquier archivo .cs para detectar errores de compilación al instante",
+  "description": "Ejecuta dotnet build al guardar cualquier archivo .cs dentro de src/ para detectar errores de compilacion al instante",
   "version": "1",
   "when": {
     "type": "fileEdited",
     "patterns": [
-      "**/*.cs"
+      "src/**/*.cs"
     ]
   },
   "then": {
     "type": "runCommand",
-    "command": "dotnet build --no-restore -v quiet",
+    "command": "dotnet build --no-restore -v quiet 2>&1",
     "timeout": 60
   }
 }

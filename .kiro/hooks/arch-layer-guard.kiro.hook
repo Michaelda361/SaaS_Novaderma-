@@ -1,7 +1,7 @@
 {
   "enabled": true,
   "name": "Guardia de Arquitectura por Capas",
-  "description": "Verifica que los archivos escritos respeten las reglas de capas de la arquitectura limpia del proyecto",
+  "description": "Verifica que los archivos de codigo fuente (.cs, .razor) dentro de src/ respeten las reglas de capas. No aplica a documentacion, configuracion ni archivos fuera de src/.",
   "version": "1",
   "when": {
     "type": "preToolUse",
@@ -11,6 +11,6 @@
   },
   "then": {
     "type": "askAgent",
-    "prompt": "Antes de escribir este archivo, verifica que cumple las reglas de arquitectura de NovaHub:\n- Domain: sin dependencias externas, entidades heredan BaseEntity (Id, Activo)\n- Application: solo depende de Domain, mapeo manual sin AutoMapper, sin referencias a Infrastructure\n- Infrastructure: implementa interfaces de Application, todo el DI en DependencyInjection.cs\n- Server: controladores delgados, solo inyectan el Service de Application, retornan IActionResult, todos con [Authorize] y ruta api/v1/[controller]\n- Shared: solo DTOs, nunca entidades de dominio\n- Client: nunca referencia Application ni Infrastructure\n\nSi el archivo viola alguna regla, adviértelo antes de proceder."
+    "prompt": "Si el archivo que se va a escribir es codigo fuente dentro de src/ (extension .cs o .razor), verifica que cumpla las reglas de arquitectura de NovaHub:\n- Domain: sin dependencias externas, entidades heredan BaseEntity (Id, Activo)\n- Application: solo depende de Domain, mapeo manual sin AutoMapper, sin referencias a Infrastructure\n- Infrastructure: implementa interfaces de Application, todo el DI en DependencyInjection.cs\n- Server: controladores delgados, solo inyectan el Service de Application, retornan IActionResult, todos con [Authorize] y ruta api/v1/[controller]\n- Shared: solo DTOs, nunca entidades de dominio\n- Client: nunca referencia Application ni Infrastructure\n\nSi el archivo es documentacion (.md), configuracion (.json, .hook, .kiro), script temporal (.js, .ps1), o esta fuera de src/, NO apliques esta verificacion y permite la escritura directamente sin comentarios.\n\nSi el archivo de codigo viola alguna regla, adviertelo antes de proceder."
   }
 }

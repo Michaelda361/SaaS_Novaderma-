@@ -1,0 +1,16 @@
+{
+  "enabled": true,
+  "name": "Recordatorio de NavLink en MainLayout",
+  "description": "Recuerda agregar el NavLink en MainLayout y el case en GetPageTitle() al crear una nueva pagina",
+  "version": "1",
+  "when": {
+    "type": "fileCreated",
+    "patterns": [
+      "src/Client/Pages/*.razor"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Se creo una nueva pagina Blazor. Verifica que se hayan actualizado estos dos lugares en src/Client/Layout/MainLayout.razor:\n1. Agregar un NavLink en la seccion de navegacion del sidebar con el icono y texto apropiados\n2. Agregar un case en el metodo GetPageTitle() para retornar el titulo correcto de la pagina\n\nSi alguno falta, agrega los cambios necesarios en MainLayout.razor."
+  }
+}

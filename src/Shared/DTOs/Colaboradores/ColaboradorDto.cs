@@ -18,4 +18,10 @@ public class ColaboradorDto
     public string CargoNombre { get; set; } = string.Empty;
     public int CargoId { get; set; }
     public string? SupervisorNombre { get; set; }
+    public string Rol { get; set; } = "Colaborador";
+}
+
+public class CambiarRolDto
+{
+    public string Rol { get; set; } = "Colaborador";
 }

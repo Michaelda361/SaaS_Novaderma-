@@ -182,7 +182,7 @@ else
             }
             else
             {
-                <div class="carta-modal-body">
+                <div class="carta-modal-body @(!plantillaSeleccionada.VariablesEditables.Any() ? "carta-modal-body--full" : "")">
                     @if (plantillaSeleccionada.VariablesEditables.Any())
                     {
                         <div class="carta-modal-sidebar">

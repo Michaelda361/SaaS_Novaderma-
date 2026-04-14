@@ -134,6 +134,14 @@ public class PlantillaDocumentoApiService(HttpClient http)
     public string GetPdfSolicitudUrl(int solicitudId) =>
         $"api/v1/plantillasdocumento/solicitudes/{solicitudId}/pdf";
 
+    public async Task<string?> GetPdfSolicitudBase64Async(int solicitudId)
+    {
+        var r = await http.GetAsync($"api/v1/plantillasdocumento/solicitudes/{solicitudId}/pdf");
+        if (!r.IsSuccessStatusCode) return null;
+        var bytes = await r.Content.ReadAsByteArrayAsync();
+        return Convert.ToBase64String(bytes);
+    }
+
     public async Task<List<SolicitudDocumentoDto>> GetMisSolicitudesAsync()
     {
         var r = await http.GetAsync($"{Base}/mis-solicitudes");

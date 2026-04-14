@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using TalentManagement.Infrastructure.Persistence;
 
@@ -11,9 +12,11 @@ using TalentManagement.Infrastructure.Persistence;
 namespace TalentManagement.Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260409215327_AddTotalCorrectasToRespuestaCuestionario")]
+    partial class AddTotalCorrectasToRespuestaCuestionario
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -245,10 +248,6 @@ namespace TalentManagement.Infrastructure.Migrations
                         .HasColumnType("datetime2");
 
                     b.Property<string>("Nombre")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("Rol")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 

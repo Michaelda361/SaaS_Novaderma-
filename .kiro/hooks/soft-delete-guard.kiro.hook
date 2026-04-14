@@ -11,6 +11,6 @@
   },
   "then": {
     "type": "askAgent",
-    "prompt": "Se modificó un repositorio. Verifica que el método DeleteAsync implemente soft delete correctamente:\n- CORRECTO: entity.Activo = false; await db.SaveChangesAsync();\n- INCORRECTO: db.Remove(entity) o db.Set<T>().Remove(entity)\n\nTambién verifica que las queries no estén ignorando el global query filter de Activo (evitar .IgnoreQueryFilters() salvo que sea intencional y justificado).\n\nSi hay un hard delete, corrígelo a soft delete."
+    "prompt": "Se modifico un repositorio. Verifica que el metodo DeleteAsync implemente soft delete correctamente:\n- CORRECTO: entity.Activo = false; await context.SaveChangesAsync();\n- INCORRECTO: context.Remove(entity) o context.Set<T>().Remove(entity)\n\nTambien verifica que las queries no esten ignorando el global query filter de Activo (evitar .IgnoreQueryFilters() salvo que sea intencional y justificado).\n\nSi hay un hard delete, corrigelo a soft delete."
   }
 }

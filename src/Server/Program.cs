@@ -7,12 +7,20 @@ using TalentManagement.Server.Hubs;
 
 var builder = WebApplication.CreateBuilder(args);
 
+Console.WriteLine($"[NovaHub] Environment: {builder.Environment.EnvironmentName}");
+
 // Inyectar ContentRootPath en config para que MockSharePointService lo pueda leer
 builder.Configuration["ContentRootPath"] = builder.Environment.ContentRootPath;
 
-if (builder.Environment.IsDevelopment())
+// Detectar modo dev: por environment O por presencia de DevSettings en config
+var esModoDev = builder.Environment.IsDevelopment()
+    || !string.IsNullOrWhiteSpace(builder.Configuration["DevSettings:DefaultDevUser"]);
+
+Console.WriteLine($"[NovaHub] Environment: {builder.Environment.EnvironmentName} | DevMode: {esModoDev}");
+
+if (esModoDev)
 {
-    // En dev: acepta tanto JWT de Entra ID como el esquema DevUser (header X-Dev-User)
+    // Dev: acepta JWT de Entra ID Y el esquema DevUser (header X-Dev-User)
     builder.Services.AddMicrosoftIdentityWebApiAuthentication(builder.Configuration);
     builder.Services.AddAuthentication()
         .AddScheme<AuthenticationSchemeOptions, DevAuthHandler>("DevUser", _ => { });
@@ -22,7 +30,6 @@ if (builder.Environment.IsDevelopment())
             .RequireAuthenticatedUser()
             .Build());
 
-    // Singleton para cambiar el usuario dev en caliente
     builder.Services.AddSingleton<TalentManagement.Server.Services.DevUserStore>();
 }
 else
@@ -34,6 +41,12 @@ else
 builder.Services.AddOpenApi();
 builder.Services.AddRazorPages();
 builder.Services.AddSignalR();
+builder.Services.AddResponseCompression(opts =>
+{
+    opts.EnableForHttps = true;
+    opts.MimeTypes = Microsoft.AspNetCore.ResponseCompression.ResponseCompressionDefaults.MimeTypes
+        .Concat(["application/json", "application/pdf"]);
+});
 builder.Services.AddControllers()
     .AddJsonOptions(options =>
     {
@@ -56,13 +69,13 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
-if (app.Environment.IsDevelopment())
+if (esModoDev)
 {
     app.MapOpenApi();
     app.MapScalarApiReference();
 }
 
-if (app.Environment.IsDevelopment())
+if (esModoDev)
 {
     using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider
@@ -71,13 +84,13 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseCors();
+app.UseResponseCompression();
 app.UseStaticFiles();
 
-if (app.Environment.IsDevelopment())
-    app.MapRazorPages(); // sirve /dev
+if (esModoDev)
+    app.MapRazorPages();
 
-// Endpoints dev — gestión de usuario activo desde el cliente Blazor
-if (app.Environment.IsDevelopment())
+if (esModoDev)
 {
     app.MapGet("/api/v1/dev/usuario-activo", (TalentManagement.Server.Services.DevUserStore store) =>
         Results.Ok(new { email = store.ActiveEmail, activo = store.ActiveEmail != null }))
@@ -95,7 +108,7 @@ if (app.Environment.IsDevelopment())
     }).AllowAnonymous();
 }
 
-if (!app.Environment.IsDevelopment())
+if (!esModoDev)
     app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
@@ -117,23 +130,27 @@ app.MapGet("/api/v1/auth/perfil", async (
 {
     try
     {
-        var esDevUser = ctx.User.Identities.Any(i => i.AuthenticationType == "DevUser");
+        // EsMicrosoftUser se basa en el Bearer token del request, no en el DevUserStore
+        var esMicrosoft = currentUser.EsMicrosoftUser();
         var email = currentUser.GetEmail();
         var colaborador = await colaboradorRepo.GetByEmailAsync(email);
         var esJefe = colaborador is not null &&
                      await colaboradorRepo.EsJefeDeAreaAsync(colaborador.Id);
+        var puedeResolver = await currentUser.PuedeResolverSolicitudesAsync();
         return Results.Ok(new
         {
             email,
             esColaborador = colaborador is not null,
             esJefe,
             colaboradorId = colaborador?.Id,
-            esDevUser
+            esDevUser = !esMicrosoft,
+            rol = colaborador?.Rol.ToString() ?? "Admin",
+            puedeResolverSolicitudes = puedeResolver,
         });
     }
     catch
     {
-        return Results.Ok(new { email = "", esColaborador = false, esJefe = false, colaboradorId = (int?)null, esDevUser = false });
+        return Results.Ok(new { email = "", esColaborador = false, esJefe = false, colaboradorId = (int?)null, esDevUser = true });
     }
 }).RequireAuthorization();
 

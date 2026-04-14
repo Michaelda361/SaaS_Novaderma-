@@ -1,35 +1,45 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using TalentManagement.Application.Interfaces;
 using TalentManagement.Domain.Entities;
 using TalentManagement.Infrastructure.Persistence;
 
 namespace TalentManagement.Infrastructure.Repositories;
 
-public class CargoRepository(AppDbContext context) : ICargoRepository
+public class CargoRepository(AppDbContext context, IMemoryCache cache) : ICargoRepository
 {
-    public async Task<IEnumerable<Cargo>> GetAllAsync() =>
-        await context.Cargos
-            .Include(c => c.Area)
-            .Include(c => c.Colaboradores)
-            .AsNoTracking()
-            .ToListAsync();
+    private static readonly TimeSpan _ttl = TimeSpan.FromMinutes(10);
 
-    public async Task<IEnumerable<Cargo>> GetByAreaAsync(int areaId) =>
-        await context.Cargos
-            .Include(c => c.Area)
-            .Where(c => c.AreaId == areaId)
-            .AsNoTracking()
-            .ToListAsync();
+    public async Task<IEnumerable<Cargo>> GetAllAsync()
+    {
+        if (cache.TryGetValue("cargos_all", out IEnumerable<Cargo>? hit)) return hit!;
+        var result = await context.Cargos
+            .Include(c => c.Area).Include(c => c.Colaboradores)
+            .AsNoTracking().ToListAsync();
+        cache.Set("cargos_all", result, _ttl);
+        return result;
+    }
+
+    public async Task<IEnumerable<Cargo>> GetByAreaAsync(int areaId)
+    {
+        var key = $"cargos_area_{areaId}";
+        if (cache.TryGetValue(key, out IEnumerable<Cargo>? hit)) return hit!;
+        var result = await context.Cargos
+            .Include(c => c.Area).Where(c => c.AreaId == areaId)
+            .AsNoTracking().ToListAsync();
+        cache.Set(key, result, _ttl);
+        return result;
+    }
 
     public async Task<Cargo?> GetByIdAsync(int id) =>
-        await context.Cargos
-            .Include(c => c.Area)
+        await context.Cargos.Include(c => c.Area).AsNoTracking()
             .FirstOrDefaultAsync(c => c.Id == id);
 
     public async Task<Cargo> CreateAsync(Cargo cargo)
     {
         context.Cargos.Add(cargo);
         await context.SaveChangesAsync();
+        InvalidarCache(cargo.AreaId);
         return cargo;
     }
 
@@ -37,6 +47,7 @@ public class CargoRepository(AppDbContext context) : ICargoRepository
     {
         context.Cargos.Update(cargo);
         await context.SaveChangesAsync();
+        InvalidarCache(cargo.AreaId);
         return cargo;
     }
 
@@ -46,5 +57,12 @@ public class CargoRepository(AppDbContext context) : ICargoRepository
         if (cargo is null) return;
         cargo.Activo = false;
         await context.SaveChangesAsync();
+        InvalidarCache(cargo.AreaId);
+    }
+
+    private void InvalidarCache(int areaId = 0)
+    {
+        cache.Remove("cargos_all");
+        if (areaId > 0) cache.Remove($"cargos_area_{areaId}");
     }
 }

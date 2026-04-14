@@ -1,13 +1,36 @@
+---
+inclusion: always
+---
+
 # Product: NovaHub — Gestión de Talento
 
-NovaHub is a talent management web application for organizations. It allows HR teams to manage:
+NovaHub es una aplicación web de gestión de talento para organizaciones. Permite a los equipos de RRHH gestionar:
 
-- **Colaboradores** (employees) — personal info, area, cargo, supervisor hierarchy
-- **Capacitaciones** (training sessions) — scheduling, enrollment, resources
-- **Certificados** (certifications) — issuance, expiry tracking, alerts for upcoming expirations
-- **Áreas** (departments) — organizational units with an assigned jefe (head)
-- **Cargos** (job positions) — roles scoped to areas
-- **Inscripciones** (enrollments) — linking colaboradores to capacitaciones with grades
-- **Recursos** (resources) — materials attached to capacitaciones
+- **Colaboradores** — información personal, área, cargo, jerarquía de supervisores, rol en la app
+- **Capacitaciones** — programación, inscripciones, recursos adjuntos, cuestionarios de evaluación
+- **Certificados** — emisión, seguimiento de vencimientos, alertas de próximos vencimientos
+- **Áreas** — unidades organizacionales con jefe asignado
+- **Cargos** — puestos de trabajo scoped a un área
+- **Inscripciones** — vinculación de colaboradores a capacitaciones con calificaciones
+- **Recursos** — materiales adjuntos a capacitaciones (video, documento, presentación, enlace)
+- **Cuestionarios** — evaluaciones con preguntas de opción múltiple asociadas a capacitaciones
+- **Control Documental** — documentos organizacionales con flujo de aprobación y propuestas de cambio, almacenados en SharePoint
+- **Cartas Laborales** — generación de cartas en PDF desde plantillas HTML o DOCX, con flujo de aprobación del admin
 
-The app is secured via Azure Entra ID (MSAL). All API endpoints require a valid Bearer token. The UI is in Spanish.
+## Roles de usuario
+
+| Rol | Descripción | Acceso |
+|---|---|---|
+| Admin | Administrador del sistema | Acceso total a todos los módulos |
+| Jefe | Jefe de área | Gestión de su área, revisión de propuestas documentales |
+| Colaborador | Empleado regular | Acceso restringido: ver sus datos, solicitar cartas, proponer cambios en documentos |
+
+El rol se almacena en la entidad Colaborador (campo Rol, enum RolUsuario).
+En producción se valida contra Azure Entra ID. En desarrollo se usa DevAuthHandler.
+
+## Idioma
+La UI está completamente en español. Mensajes de error, labels, toasts y textos de la interfaz deben estar en español.
+
+## Seguridad
+La app está asegurada via Azure Entra ID (MSAL). Todos los endpoints API requieren Bearer token válido.
+En Development se usa DevAuthHandler con header X-Dev-User como alternativa.

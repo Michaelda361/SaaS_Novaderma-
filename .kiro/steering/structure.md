@@ -1,56 +1,85 @@
-# Project Structure
+---
+inclusion: always
+---
+
+# Project Structure - NovaHub
 
 ## Solution Layout
 
 ```
 src/
-├── Domain/           # Entities, base types — no dependencies on other layers
-├── Application/      # Interfaces (IRepository) + Services (business logic)
-├── Infrastructure/   # EF Core DbContext, Repositories, Migrations, DI registration
-├── Server/           # ASP.NET Core Web API — Controllers, Program.cs
-├── Shared/           # DTOs shared between Server and Client
+├── Domain/           # Entidades, tipos base — sin dependencias externas
+├── Application/      # Interfaces (IRepository) + Services (lógica de negocio)
+├── Infrastructure/   # EF Core DbContext, Repositorios, Migraciones, DI
+├── Server/           # ASP.NET Core Web API — Controllers, Hubs, Program.cs
+├── Shared/           # DTOs compartidos entre Server y Client
 └── Client/           # Blazor WASM SPA
 ```
 
-## Layer Rules
-- `Domain` has zero external dependencies. Entities inherit from `BaseEntity` (`Id`, `Activo`).
-- `Application` depends only on `Domain`. Services map entities → DTOs manually (no AutoMapper).
-- `Infrastructure` implements `Application` interfaces. All DI registration lives in `DependencyInjection.cs`.
-- `Server` controllers are thin: inject the Application service, call it, return `IActionResult`.
-- `Shared` DTOs are the only types crossing the API boundary — never expose domain entities directly.
-- `Client` never references `Application` or `Infrastructure`.
+## Reglas de capas
+- Domain no tiene dependencias externas. Entidades heredan BaseEntity (Id, Activo).
+- Application depende solo de Domain. Servicios mapean entidades a DTOs manualmente (sin AutoMapper).
+- Infrastructure implementa interfaces de Application. Todo el DI vive en DependencyInjection.cs.
+- Server controllers son delgados: inyectan el Service de Application, llaman, retornan IActionResult.
+- Shared DTOs son los únicos tipos que cruzan el límite API — nunca exponer entidades de dominio.
+- Client nunca referencia Application ni Infrastructure.
 
-## Naming Conventions
-- Entities: singular PascalCase (`Colaborador`, `Capacitacion`)
-- DTOs: `{Entity}Dto`, `Create{Entity}Dto`, `Update{Entity}Dto` in `Shared/DTOs/{Entity}s/`
-- Repositories: `I{Entity}Repository` interface + `{Entity}Repository` implementation
-- Services: `{Entity}Service` in `Application/Services/`
-- Controllers: `{Entity}sController` with route `api/v1/[controller]`
-- Client API services: `{Entity}ApiService` in `Client/Services/`
+## Convenciones de nombres
+- Entidades: singular PascalCase (Colaborador, Capacitacion)
+- DTOs: {Entidad}Dto, Create{Entidad}Dto, Update{Entidad}Dto en Shared/DTOs/{Entidades}/
+- Repositorios: interfaz I{Entidad}Repository + implementación {Entidad}Repository
+- Servicios: {Entidad}Service en Application/Services/
+- Controllers: {Entidades}Controller con ruta api/v1/[controller]
+- Client API services: {Entidad}ApiService en Client/Services/
 
 ## Soft Deletes
-All main entities use soft delete via `Activo` flag (from `BaseEntity`). EF global query filters exclude `Activo = false` records automatically. `DeleteAsync` sets `Activo = false` — never hard deletes.
+Todas las entidades principales usan soft delete via flag Activo (de BaseEntity).
+Los global query filters de EF excluyen Activo = false automáticamente.
+DeleteAsync establece Activo = false — nunca hard delete.
 
-## Client Structure
+Entidades que NO tienen soft delete (no heredan BaseEntity):
+VersionDocumento, FlujoAprobacionDoc, PropuestaModificacion, AuditLog,
+RespuestaCuestionario, RespuestaPregunta
+
+## Estructura del Client
+
 ```
 Client/
-├── Pages/        # Routable Razor components (@page), one per entity + detail views
-├── Shared/       # Reusable components (Toast, ConfirmDialog, etc.)
-├── Layout/       # MainLayout, sidebar, topbar
-├── Services/     # {Entity}ApiService — HttpClient wrappers using System.Net.Http.Json
-└── wwwroot/      # Static assets, app.css (custom CSS, no component library)
+├── Pages/        # Componentes Razor enrutables (@page), uno por entidad + vistas de detalle
+├── Shared/       # Componentes reutilizables: Toast, ConfirmDialog, EditorPlantilla, OneDriveBrowser
+├── Layout/       # MainLayout (sidebar + topbar), LoginDisplay
+├── Services/     # {Entidad}ApiService — wrappers de HttpClient con System.Net.Http.Json
+└── wwwroot/      # Assets estáticos, app.css (CSS propio, sin librería de componentes)
 ```
 
-## Blazor UI Patterns
-- Pages manage their own state (list, modal open/close, form model, loading flags)
-- Forms use `EditForm` + `DataAnnotationsValidator` + `ValidationMessage`
-- Feedback via `<Toast @ref="toast" />` — call `toast.Show("message")` or `toast.Show("message", "error")`
-- Destructive actions use `<ConfirmDialog>` before executing
-- CSS uses custom utility classes defined in `wwwroot/css/app.css` (`.card`, `.btn`, `.badge`, `.modal`, `.table-wrapper`, `.empty-state`, etc.)
-- All namespaces are globally imported via `_Imports.razor` — no per-file `@using` needed for common types
+### Componentes Shared disponibles
+- Toast @ref="toast" — feedback de operaciones. Llamar: await toast.Show("msg") o await toast.Show("msg", "error") o await toast.Show("msg", "warning")
+- ConfirmDialog Visible="..." Message="..." OnConfirm="..." OnCancel="..." — confirmación antes de acciones destructivas. Parámetro opcional: Title (default "¿Eliminar registro?")
+- EditorPlantilla — editor HTML para plantillas de cartas laborales
+- OneDriveBrowser — selector de archivos de OneDrive
 
-## API Patterns
-- All endpoints require `[Authorize]`
-- Routes follow `api/v1/[controller]`
-- Return types: `Ok()`, `CreatedAtAction()`, `NotFound()`, `NoContent()`
-- Client services use `GetFromJsonAsync`, `PostAsJsonAsync`, `PutAsJsonAsync` from `System.Net.Http.Json`
+### Namespaces globales (_Imports.razor)
+Todos los namespaces de TalentManagement.Client.*, TalentManagement.Shared.DTOs.*
+y los de ASP.NET Core están importados globalmente. No agregar @using por archivo para estos.
+
+## Patrones UI de Blazor
+- Las páginas manejan su propio estado (lista, modal abierto/cerrado, modelo de formulario, flags de carga)
+- Formularios usan EditForm + DataAnnotationsValidator + ValidationMessage
+- Feedback via Toast @ref="toast"
+- Acciones destructivas usan ConfirmDialog antes de ejecutar
+- CSS usa clases utilitarias propias en wwwroot/css/app.css:
+  .card, .card-header, .card-title, .btn, .btn-primary, .btn-danger,
+  .btn-ghost, .btn-sm, .btn-icon, .badge, .badge-warning, .badge-pill,
+  .modal, .table-wrapper, .empty-state, .empty-state-icon,
+  .loading, .spinner, .flex, .gap-2
+
+## Patrones de API
+- Todos los endpoints requieren [Authorize]
+- Rutas siguen api/v1/[controller]
+- Tipos de retorno: Ok(), CreatedAtAction(), NotFound(), NoContent(), UnprocessableEntity()
+- Client services usan GetFromJsonAsync, PostAsJsonAsync, PutAsJsonAsync de System.Net.Http.Json
+- Para uploads de archivo: multipart/form-data con IBrowserFile como StreamContent
+
+## SignalR
+- Hub: NotificacionesHub en /hubs/notificaciones
+- Client service: NotificacionesService — se conecta al hub para notificaciones en tiempo real

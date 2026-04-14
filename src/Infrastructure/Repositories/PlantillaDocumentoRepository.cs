@@ -8,7 +8,7 @@ namespace TalentManagement.Infrastructure.Repositories;
 
 public class PlantillaDocumentoRepository(AppDbContext context) : IPlantillaDocumentoRepository
 {
-    // Para listados: excluye ArchivoDocx (bytes pesados)
+    // Para listados: excluye ArchivoDocx y ContenidoHtml (datos pesados)
     private IQueryable<PlantillaDocumento> WithAreasNoBytes() =>
         context.PlantillasDocumento
             .Include(p => p.Areas).ThenInclude(a => a.Area)
@@ -18,8 +18,8 @@ public class PlantillaDocumentoRepository(AppDbContext context) : IPlantillaDocu
                 Nombre = p.Nombre,
                 Descripcion = p.Descripcion,
                 TipoPlantilla = p.TipoPlantilla,
-                ContenidoHtml = p.ContenidoHtml,
-                ArchivoDocx = null, // no cargar bytes en listados
+                ContenidoHtml = null,
+                ArchivoDocx = null,
                 FirmaImagenBase64 = p.FirmaImagenBase64,
                 NombreFirmante = p.NombreFirmante,
                 CargoFirmante = p.CargoFirmante,
@@ -99,16 +99,30 @@ public class PlantillaDocumentoRepository(AppDbContext context) : IPlantillaDocu
             .Include(s => s.Colaborador)
             .Where(s => s.ColaboradorId == colaboradorId)
             .OrderByDescending(s => s.FechaSolicitud)
-            .AsNoTracking()
-            .ToListAsync();
+            .Select(s => new SolicitudDocumento
+            {
+                Id = s.Id, PlantillaDocumentoId = s.PlantillaDocumentoId,
+                PlantillaDocumento = s.PlantillaDocumento, ColaboradorId = s.ColaboradorId,
+                Colaborador = s.Colaborador, FechaSolicitud = s.FechaSolicitud,
+                Estado = s.Estado, ComentarioAdmin = s.ComentarioAdmin,
+                FechaResolucion = s.FechaResolucion, PdfBytes = null, Activo = s.Activo,
+            })
+            .AsNoTracking().ToListAsync();
 
     public async Task<IEnumerable<SolicitudDocumento>> GetTodasSolicitudesAsync() =>
         await context.SolicitudesDocumento
             .Include(s => s.PlantillaDocumento)
             .Include(s => s.Colaborador)
             .OrderByDescending(s => s.FechaSolicitud)
-            .AsNoTracking()
-            .ToListAsync();
+            .Select(s => new SolicitudDocumento
+            {
+                Id = s.Id, PlantillaDocumentoId = s.PlantillaDocumentoId,
+                PlantillaDocumento = s.PlantillaDocumento, ColaboradorId = s.ColaboradorId,
+                Colaborador = s.Colaborador, FechaSolicitud = s.FechaSolicitud,
+                Estado = s.Estado, ComentarioAdmin = s.ComentarioAdmin,
+                FechaResolucion = s.FechaResolucion, PdfBytes = null, Activo = s.Activo,
+            })
+            .AsNoTracking().ToListAsync();
 
     public async Task<IEnumerable<SolicitudDocumento>> GetSolicitudesPendientesAsync() =>
         await context.SolicitudesDocumento
@@ -116,8 +130,15 @@ public class PlantillaDocumentoRepository(AppDbContext context) : IPlantillaDocu
             .Include(s => s.Colaborador)
             .Where(s => s.Estado == Domain.Enums.EstadoSolicitud.Pendiente)
             .OrderByDescending(s => s.FechaSolicitud)
-            .AsNoTracking()
-            .ToListAsync();
+            .Select(s => new SolicitudDocumento
+            {
+                Id = s.Id, PlantillaDocumentoId = s.PlantillaDocumentoId,
+                PlantillaDocumento = s.PlantillaDocumento, ColaboradorId = s.ColaboradorId,
+                Colaborador = s.Colaborador, FechaSolicitud = s.FechaSolicitud,
+                Estado = s.Estado, ComentarioAdmin = s.ComentarioAdmin,
+                FechaResolucion = s.FechaResolucion, PdfBytes = null, Activo = s.Activo,
+            })
+            .AsNoTracking().ToListAsync();
 
     public Task<int> CountPendientesAsync() =>
         context.SolicitudesDocumento

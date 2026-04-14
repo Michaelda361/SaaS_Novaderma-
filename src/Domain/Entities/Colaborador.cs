@@ -1,5 +1,6 @@
 using System.Text.Json.Serialization;
 using TalentManagement.Domain.Common;
+using TalentManagement.Domain.Enums;
 
 namespace TalentManagement.Domain.Entities;
 
@@ -11,11 +12,13 @@ public class Colaborador : BaseEntity
     public string Telefono { get; set; } = string.Empty;
     public DateTime FechaIngreso { get; set; }
 
-    // Datos laborales para generación de cartas
     public string? Cedula { get; set; }
-    public string? TipoContrato { get; set; }   // "término indefinido", "término fijo", etc.
+    public string? TipoContrato { get; set; }
     public decimal? SueldoBasico { get; set; }
     public string? Ciudad { get; set; }
+
+    /// <summary>Rol del usuario en la aplicación.</summary>
+    public RolUsuario Rol { get; set; } = RolUsuario.Colaborador;
 
     public int AreaId { get; set; }
     public Area Area { get; set; } = null!;

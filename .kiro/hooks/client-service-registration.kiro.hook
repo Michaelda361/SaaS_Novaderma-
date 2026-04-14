@@ -11,6 +11,6 @@
   },
   "then": {
     "type": "askAgent",
-    "prompt": "Se creó un nuevo ApiService en el cliente. Verifica que esté registrado en src/Client/Program.cs con:\nbuilder.Services.AddScoped<{NombreDelServicio}>();\n\nSi no está registrado, agrégalo junto a los demás AddScoped de servicios del cliente."
+    "prompt": "Se creo un nuevo ApiService en el cliente. Verifica que este registrado en src/Client/Program.cs con:\nbuilder.Services.AddScoped<{NombreDelServicio}>();\n\nSi no esta registrado, agregalo junto a los demas AddScoped de servicios del cliente."
   }
 }

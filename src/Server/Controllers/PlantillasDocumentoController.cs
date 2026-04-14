@@ -19,7 +19,7 @@ public class PlantillasDocumentoController(
     IHubContext<NotificacionesHub> hub,
     CurrentUserService currentUser) : ControllerBase
 {
-    // ── Admin: CRUD ───────────────────────────────────────────────────────────
+    // ── Admin: CRUD (solo usuario Microsoft) ─────────────────────────────────
 
     [HttpGet]
     public async Task<IActionResult> GetAll() =>
@@ -35,6 +35,7 @@ public class PlantillasDocumentoController(
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreatePlantillaDocumentoDto dto)
     {
+        if (!currentUser.EsMicrosoftUser()) return Forbid();
         var created = await service.CreateAsync(dto);
         return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
     }
@@ -42,6 +43,7 @@ public class PlantillasDocumentoController(
     [HttpPut("{id:int}")]
     public async Task<IActionResult> Update(int id, [FromBody] CreatePlantillaDocumentoDto dto)
     {
+        if (!currentUser.EsMicrosoftUser()) return Forbid();
         var result = await service.UpdateAsync(id, dto);
         return result is null ? NotFound() : Ok(result);
     }
@@ -49,6 +51,7 @@ public class PlantillasDocumentoController(
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> Delete(int id)
     {
+        if (!currentUser.EsMicrosoftUser()) return Forbid();
         var ok = await service.DeleteAsync(id);
         return ok ? NoContent() : NotFound();
     }
@@ -326,6 +329,7 @@ public class PlantillasDocumentoController(
     {
         try
         {
+            if (!await currentUser.PuedeResolverSolicitudesAsync()) return Forbid();
             var resultado = await service.AprobarSolicitudAsync(solicitudId, dto.Comentario);
             if (resultado is null) return NotFound();
             await hub.Clients.Group($"user:{resultado.ColaboradorEmail}")
@@ -340,6 +344,7 @@ public class PlantillasDocumentoController(
     {
         try
         {
+            if (!await currentUser.PuedeResolverSolicitudesAsync()) return Forbid();
             var resultado = await service.RechazarSolicitudAsync(solicitudId, dto.Comentario);
             if (resultado is null) return NotFound();
             await hub.Clients.Group($"user:{resultado.ColaboradorEmail}")

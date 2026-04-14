@@ -20,6 +20,8 @@ public static class DependencyInjection
         services.AddDbContext<AppDbContext>(options =>
             options.UseSqlServer(configuration.GetConnectionString("DefaultConnection")));
 
+        services.AddMemoryCache();
+
         // Repositorios
         services.AddScoped<IColaboradorRepository, ColaboradorRepository>();
         services.AddScoped<ICapacitacionRepository, CapacitacionRepository>();
@@ -50,7 +52,8 @@ public static class DependencyInjection
 
         // SharePoint — mock en Development, real en producción
         var env = configuration["ASPNETCORE_ENVIRONMENT"] ?? "Production";
-        if (env == "Development")
+        var esDevMode = env == "Development" || !string.IsNullOrWhiteSpace(configuration["DevSettings:DefaultDevUser"]);
+        if (esDevMode)
         {
             services.AddScoped<ISharePointService, MockSharePointService>();
             services.AddScoped<IAuditExcelService, MockAuditExcelService>();

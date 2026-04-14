@@ -11,6 +11,6 @@
   },
   "then": {
     "type": "askAgent",
-    "prompt": "Se creó un nuevo DTO en Shared. Verifica que cumpla las convenciones de NovaHub:\n- Nombre: debe ser {Entity}Dto, Create{Entity}Dto, o Update{Entity}Dto\n- Ubicación: debe estar en Shared/DTOs/{Entidades}/ (carpeta en plural)\n- Contenido: solo propiedades con DataAnnotations, sin lógica de negocio\n- Nunca debe exponer entidades de dominio directamente\n- Namespace: TalentManagement.Shared.DTOs.{Entidades}\n\nSi algo no cumple, indícalo con la corrección sugerida."
+    "prompt": "Se creo un nuevo DTO en Shared. Verifica que cumpla las convenciones de NovaHub:\n- Nombre: debe ser {Entity}Dto, Create{Entity}Dto, o Update{Entity}Dto\n- Ubicacion: debe estar en Shared/DTOs/{Entidades}/ (carpeta en plural)\n- Contenido: solo propiedades con DataAnnotations, sin logica de negocio\n- Nunca debe exponer entidades de dominio directamente\n- Namespace: TalentManagement.Shared.DTOs.{Entidades}\n\nSi algo no cumple, indicalo con la correccion sugerida."
   }
 }

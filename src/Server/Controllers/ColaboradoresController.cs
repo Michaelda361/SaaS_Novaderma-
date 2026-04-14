@@ -41,4 +41,15 @@ public class ColaboradoresController(ColaboradorService service) : ControllerBas
         var deleted = await service.DeleteAsync(id);
         return deleted ? NoContent() : NotFound();
     }
+
+    [HttpPut("{id:int}/rol")]
+    public async Task<IActionResult> CambiarRol(int id, [FromBody] CambiarRolDto dto)
+    {
+        try
+        {
+            var result = await service.CambiarRolAsync(id, dto.Rol);
+            return result is null ? NotFound() : Ok(result);
+        }
+        catch (ArgumentException ex) { return BadRequest(ex.Message); }
+    }
 }

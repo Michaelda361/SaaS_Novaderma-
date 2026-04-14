@@ -1,7 +1,7 @@
 {
   "enabled": true,
-  "name": "Validar Patrones de Página Blazor",
-  "description": "Verifica que nuevas páginas Razor en Client/Pages sigan los patrones UI establecidos del proyecto",
+  "name": "Validar Patrones de Pagina Blazor",
+  "description": "Verifica que nuevas paginas Razor en Client/Pages sigan los patrones UI establecidos del proyecto",
   "version": "1",
   "when": {
     "type": "fileCreated",
@@ -11,6 +11,6 @@
   },
   "then": {
     "type": "askAgent",
-    "prompt": "Se creó una nueva página Blazor. Verifica que cumpla los patrones UI de NovaHub:\n- Tiene @page con la ruta correcta\n- Tiene @attribute [Authorize]\n- Inyecta el ApiService correspondiente con @inject\n- Incluye <Toast @ref=\"toast\" /> para feedback\n- Usa <ConfirmDialog> antes de cualquier acción destructiva (eliminar)\n- Maneja estado de carga con variable `cargando` y muestra <div class=\"loading\"><div class=\"spinner\"></div></div>\n- Tiene empty-state cuando no hay datos (<div class=\"empty-state\">)\n- Usa EditForm + DataAnnotationsValidator en formularios\n- Llama toast.Show(\"mensaje\") en éxito y toast.Show(\"mensaje\", \"error\") en error\n- No tiene @using innecesarios (todo está en _Imports.razor)\n\nIndica qué falta o qué no cumple."
+    "prompt": "Se creo una nueva pagina Blazor. Verifica que cumpla los patrones UI de NovaHub:\n- Tiene @page con la ruta correcta\n- Tiene @attribute [Authorize]\n- Inyecta el ApiService correspondiente con @inject\n- Incluye <Toast @ref='toast' /> para feedback\n- Usa <ConfirmDialog> antes de cualquier accion destructiva (eliminar)\n- Maneja estado de carga con variable cargando y muestra spinner\n- Tiene empty-state cuando no hay datos\n- Usa EditForm + DataAnnotationsValidator en formularios\n- Llama toast.Show('mensaje') en exito y toast.Show('mensaje', 'error') en error\n- No tiene @using innecesarios (todo esta en _Imports.razor)\n\nIndica que falta o que no cumple."
   }
 }

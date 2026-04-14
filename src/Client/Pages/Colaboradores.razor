@@ -60,12 +60,14 @@
                         <th>Área</th>
                         <th>Ingreso</th>
                         <th>Supervisor</th>
+                        <th>Rol</th>
                         <th></th>
                     </tr>
                 </thead>
                 <tbody>
                     @foreach (var c in ColaboradoresFiltrados)
                     {
+                        var cid = c.Id;
                         <tr>
                             <td>
                                 <div class="user-cell">
@@ -80,6 +82,15 @@
                             <td><span class="badge badge-info">@c.AreaNombre</span></td>
                             <td class="text-muted text-sm">@c.FechaIngreso.ToString("dd/MM/yyyy")</td>
                             <td class="text-muted text-sm">@(c.SupervisorNombre ?? "—")</td>
+                            <td>
+                                <select class="rol-selector rol-selector--@c.Rol.ToLower()"
+                                        value="@c.Rol"
+                                        @onchange="async e => await CambiarRol(cid, e.Value?.ToString() ?? c.Rol)">
+                                    <option value="Colaborador">👤 Colaborador</option>
+                                    <option value="Jefe">👔 Jefe</option>
+                                    <option value="Admin">🔑 Admin</option>
+                                </select>
+                            </td>
                             <td>
                                 <div class="flex gap-2">
                                     <button class="btn btn-ghost btn-sm btn-icon"
@@ -331,6 +342,19 @@
     }
 
     private void CancelarEliminar() => confirmVisible = false;
+
+    private async Task CambiarRol(int id, string nuevoRol)
+    {
+        var resultado = await ApiService.CambiarRolAsync(id, nuevoRol);
+        if (resultado is not null)
+        {
+            var idx = colaboradores.FindIndex(c => c.Id == id);
+            if (idx >= 0) colaboradores[idx] = resultado;
+            await toast.Show($"Rol actualizado a {nuevoRol}.");
+        }
+        else
+            await toast.Show("No se pudo cambiar el rol.", "error");
+    }
 
     private static string Iniciales(string nombre, string apellido) =>
         $"{(nombre.Length > 0 ? nombre[0] : ' ')}{(apellido.Length > 0 ? apellido[0] : ' ')}".ToUpper();

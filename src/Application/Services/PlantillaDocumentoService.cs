@@ -229,9 +229,13 @@ public class PlantillaDocumentoService(
             PdfBytes = pdfBytes,
         };
 
-        var creada = await repository.CreateSolicitudAsync(solicitud);
-        var conNav = await repository.GetSolicitudByIdAsync(creada.Id) ?? creada;
-        return MapSolicitud(conNav);
+        await repository.CreateSolicitudAsync(solicitud);
+
+        // Construir DTO sin segunda query — la plantilla ya fue validada antes
+        var plantilla = await repository.GetByIdAsync(plantillaId);
+        solicitud.Colaborador = colaborador;
+        solicitud.PlantillaDocumento = plantilla!;
+        return MapSolicitud(solicitud);
     }
 
     public async Task<SolicitudDocumentoDto?> AprobarSolicitudAsync(int solicitudId, string? comentario)
@@ -301,14 +305,13 @@ public class PlantillaDocumentoService(
         var s = await repository.GetSolicitudByIdAsync(solicitudId);
         if (s?.PdfBytes is null) return null;
 
-        // El dueño siempre puede ver su propio PDF
         if (s.Colaborador.Email == email) return s.PdfBytes;
 
-        // Otros: solo si son jefe de área o no son colaborador registrado
-        var colaborador = await colaboradorRepository.GetByEmailAsync(email);
-        if (colaborador is null) return s.PdfBytes; // usuario sin perfil = admin externo
-        var esJefe = await colaboradorRepository.EsJefeDeAreaAsync(colaborador.Id);
-        if (esJefe) return s.PdfBytes;
+        var solicitante = await colaboradorRepository.GetByEmailAsync(email);
+        if (solicitante is null) return s.PdfBytes;
+        if (solicitante.Rol == Domain.Enums.RolUsuario.Jefe
+            || solicitante.Rol == Domain.Enums.RolUsuario.Admin)
+            return s.PdfBytes;
 
         throw new UnauthorizedAccessException("No tienes acceso a este PDF.");
     }

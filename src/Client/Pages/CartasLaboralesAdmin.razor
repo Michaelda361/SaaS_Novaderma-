@@ -22,7 +22,7 @@ else if (AuthInfo.EsSoloColaborador)
     <div class="empty-state">
         <div class="empty-state-icon">🔒</div>
         <h3>Acceso restringido</h3>
-        <p>Solo los administradores y jefes de área pueden gestionar plantillas.</p>
+        <p>Esta sección es solo para administradores y jefes de área.</p>
         <a href="cartas" class="btn btn-primary" style="margin-top:1rem;">Ir a mis cartas</a>
     </div>
 }
@@ -30,21 +30,30 @@ else
 {
     <div class="page-header">
         <div>
-            <h2 class="page-title">Plantillas de Cartas Laborales</h2>
-            <p class="page-subtitle">Gestiona las plantillas disponibles para los colaboradores</p>
+            <h2 class="page-title">Cartas Laborales — Administración</h2>
+            <p class="page-subtitle">
+                @if (AuthInfo.EsMicrosoftUser) { <span>Gestiona plantillas y aprueba solicitudes</span> }
+                else { <span>Revisa y aprueba las solicitudes de cartas laborales</span> }
+            </p>
         </div>
-        <div class="flex gap-2">
-            <a href="cartas" class="btn btn-ghost btn-sm">👁 Ver como colaborador</a>
-            <button class="btn btn-primary" @onclick="AbrirNueva">+ Nueva plantilla</button>
-        </div>
+        @if (AuthInfo.EsMicrosoftUser)
+        {
+            <div class="flex gap-2">
+                <a href="cartas" class="btn btn-ghost btn-sm">👁 Ver como colaborador</a>
+                <button class="btn btn-primary" @onclick="AbrirNueva">+ Nueva plantilla</button>
+            </div>
+        }
     </div>
 
-    <!-- Tabs -->
+    <!-- Tabs: plantillas solo para Microsoft, pendientes e historial para todos los no-colaboradores -->
     <div class="admin-tabs">
-        <button class="admin-tab @(tabActiva == "plantillas" ? "admin-tab--active" : "")"
-                @onclick='() => tabActiva = "plantillas"'>
-            📄 Plantillas <span class="admin-tab-count">@plantillas.Count</span>
-        </button>
+        @if (AuthInfo.EsMicrosoftUser)
+        {
+            <button class="admin-tab @(tabActiva == "plantillas" ? "admin-tab--active" : "")"
+                    @onclick='() => tabActiva = "plantillas"'>
+                📄 Plantillas <span class="admin-tab-count">@plantillas.Count</span>
+            </button>
+        }
         <button class="admin-tab @(tabActiva == "pendientes" ? "admin-tab--active" : "")"
                 @onclick='() => { tabActiva = "pendientes"; _ = CargarPendientes(); }'>
             ⏳ Pendientes
@@ -187,7 +196,7 @@ else
                 <div class="table-wrapper">
                     <table>
                         <thead>
-                            <tr><th>Colaborador</th><th>Documento</th><th>Fecha</th><th>PDF</th><th></th></tr>
+                            <tr><th>Colaborador</th><th>Documento</th><th>Fecha</th><th></th></tr>
                         </thead>
                         <tbody>
                             @foreach (var s in pendientes)
@@ -206,16 +215,9 @@ else
                                     <td class="text-sm">@s.PlantillaNombre</td>
                                     <td class="text-muted text-sm">@s.FechaSolicitud.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
                                     <td>
-                                        @if (s.TienePdf)
-                                        {
-                                            <a href="@ApiService.GetPdfSolicitudUrl(sid)" target="_blank" class="btn btn-ghost btn-sm">👁 Ver PDF</a>
-                                        }
-                                    </td>
-                                    <td>
-                                        <div class="flex gap-2">
-                                            <button class="btn btn-primary btn-sm" @onclick="() => AbrirAprobar(s)">✅ Aprobar</button>
-                                            <button class="btn btn-danger btn-sm" @onclick="() => AbrirRechazar(s)">❌ Rechazar</button>
-                                        </div>
+                                        <button class="btn btn-ghost btn-sm" @onclick="() => AbrirAprobar(s)" title="Revisar solicitud">
+                                            👁 Revisar
+                                        </button>
                                     </td>
                                 </tr>
                             }
@@ -559,37 +561,83 @@ else
     </div>
 }
 
-<!-- Modal aprobar/rechazar -->
+<!-- Modal aprobar/rechazar con vista previa del PDF -->
 @if (solicitudResolviendo is not null)
 {
     <div class="modal-backdrop" @onclick="CerrarModalResolucion">
-        <div class="modal" style="max-width:480px;" @onclick:stopPropagation>
+        <div class="modal" style="max-width:860px;width:95vw;overflow:hidden;" @onclick:stopPropagation>
             <div class="modal-header">
-                <span class="modal-title">@(accionResolucion == "aprobar" ? "✅ Aprobar solicitud" : "❌ Rechazar solicitud")</span>
+                <div>
+                    <span class="modal-title">Revisar solicitud</span>
+                    <div class="text-muted text-sm" style="margin-top:.2rem;">
+                        <strong>@solicitudResolviendo.ColaboradorNombre</strong>
+                        · @solicitudResolviendo.PlantillaNombre
+                        · @solicitudResolviendo.FechaSolicitud.ToLocalTime().ToString("dd/MM/yyyy HH:mm")
+                    </div>
+                </div>
                 <button class="btn btn-ghost btn-sm btn-icon" @onclick="CerrarModalResolucion">✕</button>
             </div>
-            <div class="modal-body">
-                <p class="text-sm" style="margin-bottom:1rem;">
-                    <strong>@solicitudResolviendo.ColaboradorNombre</strong> — @solicitudResolviendo.PlantillaNombre
-                </p>
-                <div class="form-group">
-                    <label>Comentario @(accionResolucion == "rechazar" ? "(requerido)" : "(opcional)")</label>
-                    <textarea class="form-control" rows="3"
-                              placeholder="@(accionResolucion == "rechazar" ? "Indica el motivo del rechazo..." : "Mensaje opcional para el colaborador...")"
-                              @bind="comentarioResolucion"></textarea>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-ghost" @onclick="CerrarModalResolucion">Cancelar</button>
-                <button class="btn @(accionResolucion == "aprobar" ? "btn-primary" : "btn-danger")"
-                        disabled="@(resolviendo || (accionResolucion == "rechazar" && string.IsNullOrWhiteSpace(comentarioResolucion)))"
-                        @onclick="ConfirmarResolucion">
-                    @if (resolviendo)
+
+            <div style="display:grid;grid-template-columns:1fr 300px;height:calc(90vh - 130px);max-height:580px;min-height:0;">
+                <!-- Vista previa del PDF -->
+                <div style="border-right:1px solid var(--border);overflow:hidden;position:relative;">
+                    @if (cargandoPdfPreview)
                     {
-                        <span class="spinner" style="width:.9rem;height:.9rem;border-width:2px;border-color:rgba(255,255,255,.3);border-top-color:#fff;"></span>
+                        <div style="display:flex;align-items:center;justify-content:center;height:100%;flex-direction:column;gap:.75rem;color:var(--text-muted);">
+                            <div class="spinner"></div>
+                            <span class="text-sm">Cargando documento...</span>
+                        </div>
                     }
-                    else { <span>@(accionResolucion == "aprobar" ? "Aprobar" : "Rechazar")</span> }
-                </button>
+                    else if (!string.IsNullOrEmpty(pdfPreviewBase64))
+                    {
+                        <iframe src="data:application/pdf;base64,@pdfPreviewBase64"
+                                style="width:100%;height:100%;border:none;"
+                                title="Vista previa del documento"></iframe>
+                    }
+                    else
+                    {
+                        <div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-muted);flex-direction:column;gap:.5rem;">
+                            <span style="font-size:2rem;">📄</span>
+                            <span class="text-sm">Sin vista previa disponible</span>
+                            <span class="text-xs text-muted">La solicitud no tiene PDF adjunto</span>
+                        </div>
+                    }
+                </div>
+
+                <!-- Panel de decisión -->
+                <div style="display:flex;flex-direction:column;padding:1.25rem;gap:1rem;">
+                    <p class="text-sm text-muted">Revisa el documento y decide si apruebas o rechazas la solicitud.</p>
+
+                    <div class="form-group" style="flex:1;">
+                        <label>Comentario (opcional)</label>
+                        <textarea class="form-control"
+                                  style="height:120px;resize:none;"
+                                  placeholder="Mensaje opcional para el colaborador..."
+                                  @bind="comentarioResolucion"></textarea>
+                    </div>
+
+                    <div style="display:flex;flex-direction:column;gap:.5rem;margin-top:auto;">
+                        <button class="btn btn-primary"
+                                disabled="@resolviendo"
+                                @onclick='() => { accionResolucion = "aprobar"; _ = ConfirmarResolucion(); }'>
+                            @if (resolviendo && accionResolucion == "aprobar")
+                            {
+                                <span class="spinner" style="width:.9rem;height:.9rem;border-width:2px;border-color:rgba(255,255,255,.3);border-top-color:#fff;"></span>
+                            }
+                            <span>✅ Aprobar</span>
+                        </button>
+                        <button class="btn btn-danger"
+                                disabled="@resolviendo"
+                                @onclick='() => { accionResolucion = "rechazar"; _ = ConfirmarResolucion(); }'>
+                            @if (resolviendo && accionResolucion == "rechazar")
+                            {
+                                <span class="spinner" style="width:.9rem;height:.9rem;border-width:2px;border-color:rgba(255,255,255,.3);border-top-color:#fff;"></span>
+                            }
+                            <span>❌ Rechazar</span>
+                        </button>
+                        <button class="btn btn-ghost" @onclick="CerrarModalResolucion">Cancelar</button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -624,6 +672,8 @@ else
     private string accionResolucion = "aprobar";
     private string comentarioResolucion = string.Empty;
     private bool resolviendo = false;
+    private bool cargandoPdfPreview = false;
+    private string? pdfPreviewBase64;
 
     private CreatePlantillaDocumentoDto form = new();
 
@@ -667,13 +717,27 @@ else
         await AuthInfo.LoadAsync();
         if (!AuthInfo.EsSoloColaborador)
         {
-            var t1 = ApiService.GetAllAsync();
-            var t2 = AreaApi.GetAllAsync();
-            var t3 = ApiService.CountPendientesAsync();
-            await Task.WhenAll(t1, t2, t3);
-            plantillas = t1.Result ?? [];
-            areas = t2.Result ?? [];
-            countPendientes = t3.Result;
+            if (AuthInfo.EsMicrosoftUser)
+            {
+                var t1 = ApiService.GetAllAsync();
+                var t2 = AreaApi.GetAllAsync();
+                var t3 = ApiService.CountPendientesAsync();
+                await Task.WhenAll(t1, t2, t3);
+                plantillas = t1.Result ?? [];
+                areas = t2.Result ?? [];
+                countPendientes = t3.Result;
+                if (countPendientes > 0)
+                {
+                    tabActiva = "pendientes";
+                    pendientes = await ApiService.GetPendientesAsync();
+                }
+            }
+            else
+            {
+                tabActiva = "pendientes";
+                pendientes = await ApiService.GetPendientesAsync();
+                countPendientes = pendientes.Count;
+            }
 
             await Notificaciones.ConectarAsync();
             await Notificaciones.UnirseGrupoAdminAsync();
@@ -701,21 +765,42 @@ else
         cargandoPendientes = false;
     }
 
-    private void AbrirAprobar(SolicitudDocumentoDto s)
+    private async Task AbrirAprobar(SolicitudDocumentoDto s)
     {
         solicitudResolviendo = s;
         accionResolucion = "aprobar";
         comentarioResolucion = string.Empty;
+        StateHasChanged();
+        await CargarPdfPreviewAsync(s);
     }
 
-    private void AbrirRechazar(SolicitudDocumentoDto s)
+    private async Task AbrirRechazar(SolicitudDocumentoDto s)
     {
         solicitudResolviendo = s;
         accionResolucion = "rechazar";
         comentarioResolucion = string.Empty;
+        StateHasChanged();
+        await CargarPdfPreviewAsync(s);
     }
 
-    private void CerrarModalResolucion() { solicitudResolviendo = null; comentarioResolucion = string.Empty; }
+    private async Task CargarPdfPreviewAsync(SolicitudDocumentoDto s)
+    {
+        if (!s.TienePdf) return;
+        cargandoPdfPreview = true;
+        pdfPreviewBase64 = null;
+        StateHasChanged();
+        pdfPreviewBase64 = await ApiService.GetPdfSolicitudBase64Async(s.Id);
+        cargandoPdfPreview = false;
+        StateHasChanged();
+    }
+
+    private void CerrarModalResolucion()
+    {
+        solicitudResolviendo = null;
+        comentarioResolucion = string.Empty;
+        pdfPreviewBase64 = null;
+        cargandoPdfPreview = false;
+    }
 
     private async Task ConfirmarResolucion()
     {

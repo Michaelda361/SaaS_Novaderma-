@@ -69,6 +69,19 @@ public class ColaboradorService(IColaboradorRepository repository)
         return true;
     }
 
+    public async Task<ColaboradorDto?> CambiarRolAsync(int id, string rol)
+    {
+        var colaborador = await repository.GetByIdAsync(id);
+        if (colaborador is null) return null;
+
+        if (!Enum.TryParse<Domain.Enums.RolUsuario>(rol, ignoreCase: true, out var rolEnum))
+            throw new ArgumentException($"Rol inválido: {rol}");
+
+        colaborador.Rol = rolEnum;
+        var updated = await repository.UpdateAsync(colaborador);
+        return MapToDto(updated);
+    }
+
     private static ColaboradorDto MapToDto(Colaborador c) => new()
     {
         Id = c.Id,
@@ -85,6 +98,7 @@ public class ColaboradorService(IColaboradorRepository repository)
         AreaId = c.AreaId,
         CargoNombre = c.Cargo?.Nombre ?? string.Empty,
         CargoId = c.CargoId,
-        SupervisorNombre = c.Supervisor is null ? null : $"{c.Supervisor.Nombre} {c.Supervisor.Apellido}"
+        SupervisorNombre = c.Supervisor is null ? null : $"{c.Supervisor.Nombre} {c.Supervisor.Apellido}",
+        Rol = c.Rol.ToString(),
     };
 }

@@ -79,3 +79,11 @@ dotnet ef migrations remove --project src/Infrastructure --startup-project src/S
 ```bash
 dotnet ef migrations script --project src/Infrastructure --startup-project src/Server
 ```
+
+### Warning PendingModelChangesWarning
+AppDbContext suprime este warning intencionalmente con ConfigureWarnings. Es normal y esperado.
+
+### Entidades inmutables (sin soft delete)
+Las entidades VersionDocumento, FlujoAprobacionDoc, PropuestaModificacion, AuditLog,
+RespuestaCuestionario y RespuestaPregunta NO heredan BaseEntity y NO tienen global query filter.
+No agregar HasQueryFilter para estas entidades.

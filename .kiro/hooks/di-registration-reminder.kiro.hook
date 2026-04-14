@@ -12,6 +12,6 @@
   },
   "then": {
     "type": "askAgent",
-    "prompt": "Se creó un nuevo repositorio o servicio. Verifica que esté registrado en src/Infrastructure/DependencyInjection.cs:\n- Repositorios: services.AddScoped<I{Entity}Repository, {Entity}Repository>()\n- Servicios de aplicación: services.AddScoped<{Entity}Service>()\n\nSi el archivo recién creado no está registrado aún, agrega el registro correspondiente en DependencyInjection.cs."
+    "prompt": "Se creo un nuevo repositorio o servicio. Verifica que este registrado en src/Infrastructure/DependencyInjection.cs:\n- Repositorios: services.AddScoped<I{Entity}Repository, {Entity}Repository>()\n- Servicios de aplicacion: services.AddScoped<{Entity}Service>()\n\nSi el archivo recien creado no esta registrado aun, agrega el registro correspondiente en DependencyInjection.cs."
   }
 }

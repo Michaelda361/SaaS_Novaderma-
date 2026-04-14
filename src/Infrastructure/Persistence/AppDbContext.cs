@@ -142,7 +142,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .HasQueryFilter(pa => pa.Area!.Activo && pa.PlantillaDocumento!.Activo);
 
         modelBuilder.Entity<SolicitudDocumento>()
-            .HasQueryFilter(s => s.Activo && s.Colaborador!.Activo && s.PlantillaDocumento!.Activo);
+            .HasQueryFilter(s => s.Activo);
 
         modelBuilder.Entity<PlantillaDocumentoArea>()
             .HasKey(pa => new { pa.PlantillaDocumentoId, pa.AreaId });
@@ -174,6 +174,20 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         modelBuilder.Entity<Colaborador>()
             .Property(c => c.SueldoBasico)
             .HasPrecision(18, 2);
+
+        modelBuilder.Entity<Colaborador>()
+            .Property(c => c.Rol).HasConversion<string>();
+
+        // ── Índices ───────────────────────────────────────────────────────────
+        modelBuilder.Entity<Colaborador>().HasIndex(c => c.Email).HasFilter("[Activo] = 1");
+        modelBuilder.Entity<Inscripcion>().HasIndex(i => i.CapacitacionId);
+        modelBuilder.Entity<Inscripcion>().HasIndex(i => i.ColaboradorId);
+        modelBuilder.Entity<RecursoCapacitacion>().HasIndex(r => r.CapacitacionId);
+        modelBuilder.Entity<Certificado>().HasIndex(c => c.ColaboradorId);
+        modelBuilder.Entity<SolicitudDocumento>().HasIndex(s => s.Estado).HasFilter("[Activo] = 1");
+        modelBuilder.Entity<SolicitudDocumento>().HasIndex(s => s.ColaboradorId);
+        modelBuilder.Entity<PropuestaModificacion>().HasIndex(p => p.AreaId);
+        modelBuilder.Entity<PlantillaDocumentoArea>().HasIndex(pa => pa.AreaId);
 
         // ── Cuestionarios ─────────────────────────────────────────────────────
         modelBuilder.Entity<Cuestionario>().HasQueryFilter(c => c.Activo);

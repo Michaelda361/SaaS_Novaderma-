@@ -31,4 +31,10 @@ public class ColaboradorApiService(HttpClient http)
 
     public Task<bool> DeleteAsync(int id) =>
         http.DeleteAsync($"{Base}/{id}").ContinueWith(t => t.Result.IsSuccessStatusCode);
+
+    public async Task<ColaboradorDto?> CambiarRolAsync(int id, string rol)
+    {
+        var r = await http.PutAsJsonAsync($"{Base}/{id}/rol", new CambiarRolDto { Rol = rol });
+        return r.IsSuccessStatusCode ? await r.Content.ReadFromJsonAsync<ColaboradorDto>() : null;
+    }
 }

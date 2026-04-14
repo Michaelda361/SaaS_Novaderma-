@@ -1,0 +1,16 @@
+{
+  "enabled": true,
+  "name": "Recordatorio de @using en _Imports.razor",
+  "description": "Recuerda agregar el @using en _Imports.razor al crear una nueva carpeta de DTOs en Shared",
+  "version": "1",
+  "when": {
+    "type": "fileCreated",
+    "patterns": [
+      "src/Shared/DTOs/**/*.cs"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Se creo un nuevo DTO en Shared. Verifica que el namespace de su carpeta este importado en src/Client/_Imports.razor con @using TalentManagement.Shared.DTOs.{Entidades}.\n\nSi no esta importado aun, agrega la linea correspondiente al final de _Imports.razor."
+  }
+}
