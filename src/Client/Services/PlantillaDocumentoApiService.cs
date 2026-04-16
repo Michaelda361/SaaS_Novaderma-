@@ -104,8 +104,15 @@ public class PlantillaDocumentoApiService(HttpClient http)
     public async Task<SolicitudDocumentoDto?> EnviarSolicitudAsync(int id, EnviarSolicitudDto dto)
     {
         var r = await http.PostAsJsonAsync($"{Base}/{id}/solicitar", dto);
+        if (r.StatusCode == System.Net.HttpStatusCode.Conflict)
+            throw new InvalidOperationException(await r.Content.ReadAsStringAsync());
         if (!r.IsSuccessStatusCode) return null;
         return await r.Content.ReadFromJsonAsync<SolicitudDocumentoDto>();
+    }
+
+    public async Task MarcarSolicitudesVistasAsync()
+    {
+        await http.PostAsync($"{Base}/mis-solicitudes/marcar-vistas", null);
     }
 
     public async Task<SolicitudDocumentoDto?> AprobarAsync(int solicitudId, ResolverSolicitudDto dto)

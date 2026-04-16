@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using TalentManagement.Application.Services;
+using TalentManagement.Server.Services;
 using TalentManagement.Shared.DTOs.Cuestionarios;
 
 namespace TalentManagement.Server.Controllers;
@@ -8,10 +9,10 @@ namespace TalentManagement.Server.Controllers;
 [Authorize]
 [ApiController]
 [Route("api/v1/[controller]")]
-public class CuestionariosController(CuestionarioService service) : ControllerBase
+public class CuestionariosController(
+    CuestionarioService service,
+    CurrentUserService currentUser) : ControllerBase
 {
-    private bool EsMicrosoftUser =>
-        !User.Identities.Any(i => i.AuthenticationType == "DevUser");
 
     [HttpGet("capacitacion/{capacitacionId:int}")]
     public async Task<IActionResult> GetByCapacitacion(int capacitacionId)
@@ -23,8 +24,7 @@ public class CuestionariosController(CuestionarioService service) : ControllerBa
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreateCuestionarioDto dto)
     {
-        if (!EsMicrosoftUser)
-            return StatusCode(403, new { message = "Solo usuarios Microsoft pueden crear cuestionarios." });
+        if (!await currentUser.PuedeGestionarPlantillasAsync()) return Forbid();
         var created = await service.CreateAsync(dto);
         return CreatedAtAction(nameof(GetByCapacitacion),
             new { capacitacionId = created.CapacitacionId }, created);
@@ -33,8 +33,7 @@ public class CuestionariosController(CuestionarioService service) : ControllerBa
     [HttpPut("{id:int}")]
     public async Task<IActionResult> Update(int id, [FromBody] CreateCuestionarioDto dto)
     {
-        if (!EsMicrosoftUser)
-            return StatusCode(403, new { message = "Solo usuarios Microsoft pueden editar cuestionarios." });
+        if (!await currentUser.PuedeGestionarPlantillasAsync()) return Forbid();
         var result = await service.UpdateAsync(id, dto);
         return result is null ? NotFound() : Ok(result);
     }
@@ -42,8 +41,7 @@ public class CuestionariosController(CuestionarioService service) : ControllerBa
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> Delete(int id)
     {
-        if (!EsMicrosoftUser)
-            return StatusCode(403, new { message = "Solo usuarios Microsoft pueden eliminar cuestionarios." });
+        if (!await currentUser.PuedeGestionarPlantillasAsync()) return Forbid();
         var deleted = await service.DeleteAsync(id);
         return deleted ? NoContent() : NotFound();
     }

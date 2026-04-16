@@ -20,4 +20,7 @@ public class SolicitudDocumento : BaseEntity
 
     public string? ComentarioAdmin { get; set; }
     public DateTime? FechaResolucion { get; set; }
+
+    /// <summary>False cuando hay una resolución nueva que el colaborador aún no ha visto.</summary>
+    public bool NotificadoColaborador { get; set; } = true;
 }

@@ -13,6 +13,8 @@ public class SolicitudDocumentoDto
     public string? ComentarioAdmin { get; set; }
     public DateTime? FechaResolucion { get; set; }
     public bool TienePdf { get; set; }
+    /// <summary>True si hay una resolución que el colaborador aún no ha visto.</summary>
+    public bool TieneNovedad { get; set; }
 }
 
 public class ResolverSolicitudDto

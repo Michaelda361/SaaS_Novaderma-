@@ -2,6 +2,7 @@
 @attribute [Authorize]
 @inject PlantillaDocumentoApiService ApiService
 @inject NotificacionesService Notificaciones
+@inject AuthInfoService AuthInfo
 @inject IJSRuntime JS
 @implements IAsyncDisposable
 
@@ -10,18 +11,18 @@
 <div class="page-header">
     <div>
         <h2 class="page-title">Mis Cartas Laborales</h2>
-        <p class="page-subtitle">Descarga tus documentos laborales al instante</p>
+        <p class="page-subtitle">Solicita y descarga tus documentos laborales</p>
     </div>
-    <a href="cartas/admin" class="btn btn-ghost btn-sm">⚙️ Gestionar plantillas</a>
+    @if (!AuthInfo.EsSoloColaborador)
+    {
+        <a href="cartas/admin" class="btn btn-ghost btn-sm">⚙️ Administrar</a>
+    }
 </div>
 
 @if (cargando)
 {
     <div class="cartas-skeleton">
-        @for (int i = 0; i < 3; i++)
-        {
-            <div class="skeleton-card" style="height:100px;"></div>
-        }
+        @for (int i = 0; i < 3; i++) { <div class="skeleton-card" style="height:100px;"></div> }
     </div>
 }
 else if (!plantillas.Any())
@@ -57,12 +58,16 @@ else
                             { <span class="text-muted"> · @p.CargoFirmante</span> }
                         </div>
                     }
-                    @if (p.VariablesEditables.Any())
-                    {
-                        <div class="carta-card-badge">
+                    <div style="display:flex;gap:.35rem;flex-wrap:wrap;margin-top:.35rem;">
+                        @if (p.VariablesEditables.Any())
+                        {
                             <span class="badge badge-info">✏️ Personalizable</span>
-                        </div>
-                    }
+                        }
+                        @if (p.TipoPlantilla == "docx")
+                        {
+                            <span class="badge badge-purple">Word</span>
+                        }
+                    </div>
                 </div>
                 <div class="carta-card-actions">
                     <button class="btn btn-primary btn-sm"
@@ -72,10 +77,7 @@ else
                         {
                             <span class="spinner" style="width:.9rem;height:.9rem;border-width:2px;"></span>
                         }
-                        else
-                        {
-                            <span>👁 Ver y descargar</span>
-                        }
+                        else { <span>👁 Ver y solicitar</span> }
                     </button>
                 </div>
             </div>
@@ -83,11 +85,32 @@ else
     </div>
 }
 
+@* Banner de novedades — solicitudes resueltas no vistas *@
+@if (!cargando && solicitudes.Any(s => s.TieneNovedad))
+{
+    <div class="novedad-banner">
+        <span class="novedad-banner-icon">🔔</span>
+        <div>
+            <div class="font-medium text-sm">Tienes novedades en tus solicitudes</div>
+            <div class="text-xs" style="margin-top:.1rem;opacity:.85;">
+                @{
+                    var aprobadas = solicitudes.Count(s => s.TieneNovedad && s.Estado == "Aprobada");
+                    var rechazadas = solicitudes.Count(s => s.TieneNovedad && s.Estado == "Rechazada");
+                }
+                @if (aprobadas > 0) { <span>✅ @aprobadas aprobada(s) </span> }
+                @if (rechazadas > 0) { <span>❌ @rechazadas rechazada(s)</span> }
+            </div>
+        </div>
+    </div>
+}
+
+@* Tabla de solicitudes *@
 @if (solicitudes.Any())
 {
     <div class="card" style="margin-top:1.5rem;">
         <div class="card-header">
             <span class="card-title">📋 Mis solicitudes</span>
+            <span class="text-muted text-sm">@solicitudes.Count solicitud(es)</span>
         </div>
         <div class="table-wrapper">
             <table>
@@ -95,24 +118,41 @@ else
                     <tr><th>Documento</th><th>Fecha</th><th>Estado</th><th></th></tr>
                 </thead>
                 <tbody>
-                    @foreach (var s in solicitudes.Take(10))
+                    @foreach (var s in solicitudes.Take(20))
                     {
                         <tr>
-                            <td>@s.PlantillaNombre</td>
+                            <td class="font-medium">@s.PlantillaNombre</td>
                             <td class="text-muted text-sm">@s.FechaSolicitud.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
                             <td>
-                                @if (s.Estado == "Pendiente")      { <span class="badge badge-warning">⏳ Pendiente</span> }
-                                else if (s.Estado == "Aprobada")   { <span class="badge badge-success">✅ Aprobada</span> }
-                                else                               { <span class="badge badge-danger">❌ Rechazada</span> }
+                                @if (s.Estado == "Pendiente")    { <span class="badge badge-warning">⏳ Pendiente</span> }
+                                else if (s.Estado == "Aprobada") { <span class="badge badge-success">✅ Aprobada</span> }
+                                else                             { <span class="badge badge-danger">❌ Rechazada</span> }
                             </td>
                             <td>
                                 @if (s.Estado == "Aprobada")
                                 {
-                                    <button class="btn btn-primary btn-sm" @onclick="() => DescargarAprobada(s.Id)">⬇ Descargar</button>
+                                    <button class="btn btn-primary btn-sm" @onclick="() => DescargarAprobada(s.Id)">
+                                        ⬇ Descargar
+                                    </button>
                                 }
-                                else if (s.Estado == "Rechazada" && !string.IsNullOrWhiteSpace(s.ComentarioAdmin))
+                                else if (s.Estado == "Rechazada")
                                 {
-                                    <span class="text-muted text-sm" title="@s.ComentarioAdmin">💬 @s.ComentarioAdmin</span>
+                                    <div style="display:flex;flex-direction:column;gap:.25rem;align-items:flex-start;">
+                                        @if (!string.IsNullOrWhiteSpace(s.ComentarioAdmin))
+                                        {
+                                            <span class="text-sm text-muted" style="font-style:italic;">
+                                                💬 "@s.ComentarioAdmin"
+                                            </span>
+                                        }
+                                        <button class="btn btn-ghost btn-sm"
+                                                @onclick="() => ReSolicitar(s.PlantillaDocumentoId)">
+                                            🔄 Volver a solicitar
+                                        </button>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <span class="text-xs text-muted">En revisión</span>
                                 }
                             </td>
                         </tr>
@@ -123,7 +163,7 @@ else
     </div>
 }
 
-<!-- Modal de vista previa + descarga -->
+@* Modal de vista previa + solicitud *@
 @if (plantillaSeleccionada is not null)
 {
     <div class="modal-backdrop" @onclick="CerrarModal">
@@ -154,7 +194,7 @@ else
             {
                 <div class="docx-editor-hint">
                     <span>💡</span>
-                    <span>Haz clic en cualquier párrafo para editarlo. El formato y diseño del documento original se preservan al descargar.</span>
+                    <span>Haz clic en cualquier párrafo para editarlo. El formato original se preserva al generar el documento.</span>
                 </div>
                 <div class="docx-editor-pagina" @ref="editorDocxRef">
                     @foreach (var p in editorDocx.Parrafos)
@@ -170,7 +210,7 @@ else
             }
             else if (modoEdicion && preview?.TipoPlantilla == "html")
             {
-                <div class="carta-modal-body" style="height:520px;">
+                <div class="carta-modal-body">
                     <div class="carta-modal-sidebar">
                         <div class="carta-modal-sidebar-title">✏️ Editando</div>
                         <p class="carta-modal-sidebar-hint">Edita el contenido libremente.</p>
@@ -186,17 +226,16 @@ else
                     @if (plantillaSeleccionada.VariablesEditables.Any())
                     {
                         <div class="carta-modal-sidebar">
-                            <div class="carta-modal-sidebar-title">✏️ Personalizar carta</div>
+                            <div class="carta-modal-sidebar-title">✏️ Personalizar</div>
                             <p class="carta-modal-sidebar-hint">
-                                Completa los campos para personalizar tu carta antes de descargarla.
+                                Completa los campos — la vista previa se actualiza automáticamente.
                             </p>
                             @foreach (var key in plantillaSeleccionada.VariablesEditables)
                             {
                                 var k = key;
                                 <div class="form-group" style="margin-bottom:.75rem;">
                                     <label style="font-size:.8rem;">@EtiquetaVariable(k)</label>
-                                    <input @key="k"
-                                           class="form-control" type="text"
+                                    <input @key="k" type="text"
                                            style="font-size:.875rem;"
                                            value="@extrasActuales.GetValueOrDefault(k, "")"
                                            placeholder="@PlaceholderVariable(k)"
@@ -208,7 +247,7 @@ else
                     <div class="carta-modal-preview">
                         @if (cargandoPreview)
                         {
-                            <div class="loading" style="min-height:300px;">
+                            <div class="loading carta-preview-loading">
                                 <div class="spinner"></div>
                                 <span>Generando vista previa...</span>
                             </div>
@@ -217,7 +256,9 @@ else
                         {
                             <div class="carta-preview-error">
                                 <span>⚠️</span>
-                                <p>No se pudo cargar la vista previa. Verifica que tu perfil tenga todos los datos completos.</p>
+                                <p>No se pudo cargar la vista previa.</p>
+                                <button class="btn btn-ghost btn-sm" style="margin-top:.5rem;"
+                                        @onclick="CargarPreviewAsync">🔄 Reintentar</button>
                             </div>
                         }
                         else
@@ -251,10 +292,7 @@ else
                         <span class="spinner" style="width:.9rem;height:.9rem;border-width:2px;border-color:rgba(255,255,255,.3);border-top-color:#fff;"></span>
                         <span>Enviando...</span>
                     }
-                    else
-                    {
-                        <span>📤 Enviar solicitud</span>
-                    }
+                    else { <span>📤 Enviar solicitud</span> }
                 </button>
             </div>
         </div>
@@ -266,7 +304,6 @@ else
     private List<PlantillaDocumentoDto> plantillas = [];
     private List<SolicitudDocumentoDto> solicitudes = [];
     private bool cargando = true;
-    private bool descargando = false;
     private bool enviando = false;
     private bool cargandoPreview = false;
     private bool primeraVez = true;
@@ -294,6 +331,10 @@ else
         solicitudes = t2.Result;
         cargando = false;
 
+        // Si hay novedades no vistas, marcarlas como vistas en background
+        if (solicitudes.Any(s => s.TieneNovedad))
+            _ = ApiService.MarcarSolicitudesVistasAsync();
+
         await Notificaciones.ConectarAsync();
         Notificaciones.OnSolicitudResuelta += OnSolicitudResuelta;
     }
@@ -305,7 +346,7 @@ else
         else solicitudes.Insert(0, s);
 
         var msg = s.Estado == "Aprobada"
-            ? $"✅ Tu solicitud de \"{s.PlantillaNombre}\" fue aprobada."
+            ? $"✅ Tu solicitud de \"{s.PlantillaNombre}\" fue aprobada. Ya puedes descargarla."
             : $"❌ Tu solicitud de \"{s.PlantillaNombre}\" fue rechazada.{(string.IsNullOrWhiteSpace(s.ComentarioAdmin) ? "" : $" Motivo: {s.ComentarioAdmin}")}";
 
         InvokeAsync(async () =>
@@ -329,29 +370,44 @@ else
                 parrafos[int.Parse(prop.Name)] = prop.Value.GetString() ?? string.Empty;
         }
 
-        var resultado = await ApiService.EnviarSolicitudAsync(plantillaSeleccionada.Id,
-            new EnviarSolicitudDto { ParrafosEditados = parrafos });
-        enviando = false;
-
-        if (resultado is null)
+        try
         {
-            await toast.Show("No se pudo enviar la solicitud.", "error");
-            StateHasChanged();
-            return;
-        }
+            var resultado = await ApiService.EnviarSolicitudAsync(plantillaSeleccionada.Id,
+                new EnviarSolicitudDto { ParrafosEditados = parrafos });
+            enviando = false;
 
-        solicitudes.Insert(0, resultado);
-        CerrarModal();
-        await toast.Show("Solicitud enviada. El admin la revisará pronto.");
+            if (resultado is null)
+            {
+                await toast.Show("No se pudo enviar la solicitud. Intenta de nuevo.", "error");
+                StateHasChanged();
+                return;
+            }
+
+            solicitudes.Insert(0, resultado);
+            CerrarModal();
+            await toast.Show("✅ Solicitud enviada. Recibirás una notificación cuando sea revisada.");
+        }
+        catch (InvalidOperationException ex)
+        {
+            enviando = false;
+            await toast.Show(ex.Message, "warning");
+            StateHasChanged();
+        }
     }
 
     private async Task DescargarAprobada(int solicitudId)
     {
         var (bytes, fileName) = await ApiService.DescargarAprobadaAsync(solicitudId);
-        if (bytes is null) { await toast.Show("No se pudo descargar.", "error"); return; }
+        if (bytes is null) { await toast.Show("No se pudo descargar el documento.", "error"); return; }
         await JS.InvokeVoidAsync("descargarArchivo", Convert.ToBase64String(bytes),
             fileName ?? "carta.pdf", "application/pdf");
         await toast.Show("Documento descargado.");
+    }
+
+    private async Task ReSolicitar(int plantillaId)
+    {
+        var p = plantillas.FirstOrDefault(x => x.Id == plantillaId);
+        if (p is not null) await AbrirPreview(p);
     }
 
     public async ValueTask DisposeAsync()
@@ -396,8 +452,7 @@ else
             editorDocx = await ApiService.GetCamposEditablesAsync(plantillaSeleccionada.Id);
             if (editorDocx is not null)
             {
-                parrafosEditados = editorDocx.Parrafos
-                    .ToDictionary(p => p.Indice, p => p.TextoResuelto);
+                parrafosEditados = editorDocx.Parrafos.ToDictionary(p => p.Indice, p => p.TextoResuelto);
                 editorDocxPendienteInit = true;
             }
         }
@@ -507,8 +562,7 @@ else
         try
         {
             await Task.Delay(800, token);
-            if (!token.IsCancellationRequested)
-                await CargarPreviewAsync();
+            if (!token.IsCancellationRequested) await CargarPreviewAsync();
         }
         catch (TaskCanceledException) { }
     }
@@ -518,31 +572,19 @@ else
         var imgTag = !string.IsNullOrWhiteSpace(p.FirmaImagenBase64)
             ? $"<img src=\"{p.FirmaImagenBase64}\" style=\"max-height:70px;display:block;margin-bottom:6px;\" />"
             : string.Empty;
-
         var cargoTag = !string.IsNullOrWhiteSpace(p.CargoFirmante)
             ? $"<div style=\"font-size:9pt;color:#555;\">{p.CargoFirmante}</div>"
             : string.Empty;
-
         var firma = !string.IsNullOrWhiteSpace(p.NombreFirmante)
             ? $"<div style=\"margin-top:3rem;\">{imgTag}<div style=\"border-top:1px solid #555;padding-top:4px;width:220px;\"><strong style=\"font-size:10pt;\">{p.NombreFirmante}</strong>{cargoTag}</div></div>"
             : string.Empty;
-
         const string css =
             "html,body{margin:0;padding:0}" +
             "body{font-family:Arial,Helvetica,sans-serif;font-size:11pt;line-height:1.6;color:#111;background:#fff;padding:2cm 2.5cm;}" +
-            "p,div{margin:0 0 .4em 0}" +
-            "b,strong{font-weight:bold}" +
-            "i,em{font-style:italic}" +
-            "u{text-decoration:underline}" +
-            "ul{list-style:disc;margin-left:1.5em;margin-bottom:.5em}" +
-            "ol{list-style:decimal;margin-left:1.5em;margin-bottom:.5em}" +
-            "li{margin-bottom:.2em}";
-
+            "p,div{margin:0 0 .4em 0}b,strong{font-weight:bold}i,em{font-style:italic}u{text-decoration:underline}" +
+            "ul{list-style:disc;margin-left:1.5em;margin-bottom:.5em}ol{list-style:decimal;margin-left:1.5em;margin-bottom:.5em}li{margin-bottom:.2em}";
         return "<!DOCTYPE html><html lang=\"es\"><head><meta charset=\"utf-8\"/>"
-             + $"<style>{css}</style></head><body>"
-             + p.Html
-             + firma
-             + "</body></html>";
+             + $"<style>{css}</style></head><body>" + p.Html + firma + "</body></html>";
     }
 
     private static string EtiquetaVariable(string key) => key switch

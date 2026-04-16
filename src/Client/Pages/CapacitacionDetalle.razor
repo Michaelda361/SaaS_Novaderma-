@@ -5,6 +5,7 @@
 @inject ColaboradorApiService ColaboradorService
 @inject RecursoApiService RecursoService
 @inject CuestionarioApiService CuestionarioService
+@inject AuthInfoService AuthInfo
 @inject NavigationManager Nav
 <Toast @ref="toast" />
 
@@ -32,7 +33,7 @@
 <div class="card" style="margin-bottom:1.5rem;">
     <div class="card-header">
         <span class="card-title">📎 Materiales y recursos (@recursos.Count)</span>
-        @if (EsMicrosoftUser)
+        @if (PuedeGestionar)
         {
             <button class="btn btn-primary btn-sm" @onclick="AbrirModalRecurso">+ Agregar recurso</button>
         }
@@ -62,7 +63,7 @@
                     </div>
                     <div class="flex gap-2" style="margin-left:auto;">
                         <a href="@r.Url" target="_blank" class="btn btn-primary btn-sm">Abrir →</a>
-                        @if (EsMicrosoftUser)
+                        @if (PuedeGestionar)
                         {
                             <button class="btn btn-ghost btn-sm btn-icon"
                                     @onclick="() => AbrirEditarRecurso(r)" title="Editar">✏️</button>
@@ -77,12 +78,12 @@
 </div>
 
 <!-- INSCRITOS -->
-@if (!EsSoloColaborador || EsMicrosoftUser)
+@if (PuedeGestionar)
 {
 <div class="card">
     <div class="card-header">
         <span class="card-title">👥 Inscritos (@inscripciones.Count)</span>
-        @if (EsMicrosoftUser)
+        @if (PuedeGestionar)
         {
             <button class="btn btn-primary btn-sm" @onclick="AbrirModal">+ Inscribir colaborador</button>
         }
@@ -162,7 +163,7 @@
                             </td>
                             <td>
                                 <div class="flex gap-2">
-                                    @if (EsMicrosoftUser)
+                                    @if (PuedeGestionar)
                                     {
                                         @if (editandoId == i.Id)
                                         {
@@ -194,7 +195,7 @@
 <div class="card" style="margin-bottom:1.5rem;margin-top:1.5rem;">
     <div class="card-header">
         <span class="card-title">📝 Cuestionario</span>
-        @if (EsMicrosoftUser)
+        @if (PuedeGestionar)
         {
             @if (cuestionario is null)
             {
@@ -215,68 +216,102 @@
         <div class="empty-state" style="padding:1.5rem;">
             <div class="empty-state-icon">📝</div>
             <h3>Sin cuestionario</h3>
-            <p>@(EsMicrosoftUser ? "Crea un cuestionario para evaluar a los inscritos." : "Esta capacitación no tiene cuestionario aún.")</p>
+            <p>@(PuedeGestionar ? "Crea un cuestionario para evaluar a los inscritos." : "Esta capacitación no tiene cuestionario aún.")</p>
         </div>
     }
     else if (resultadoPropio is not null)
     {
         <!-- Ya respondió — mostrar resultado -->
-        <div style="padding:1.5rem;text-align:center;">
-            <div style="font-size:3rem;margin-bottom:.5rem;">
-                @(resultadoPropio.Aprobado ? "✅" : "❌")
-            </div>
-            <div style="font-size:1.5rem;font-weight:700;color:@(resultadoPropio.Aprobado ? "var(--success)" : "var(--danger)")">
+        <div class="cuest-resultado">
+            <div class="cuest-resultado-emoji">@(resultadoPropio.Aprobado ? "🎉" : "😔")</div>
+            <div class="cuest-resultado-puntaje @(resultadoPropio.Aprobado ? "cuest-resultado-puntaje--ok" : "cuest-resultado-puntaje--fail")">
                 @resultadoPropio.Puntaje.ToString("0.#")%
             </div>
-            <div class="text-muted text-sm" style="margin-top:.25rem;">
-                @resultadoPropio.Correctas de @resultadoPropio.TotalPreguntas correctas
-                · Mínimo: @resultadoPropio.PuntajeAprobacion%
+            <div class="text-muted text-sm" style="margin-top:.35rem;">
+                @resultadoPropio.Correctas de @resultadoPropio.TotalPreguntas correctas · Mínimo: @resultadoPropio.PuntajeAprobacion%
             </div>
-            <div style="margin-top:.75rem;">
-                <span class="badge @(resultadoPropio.Aprobado ? "badge-success" : "badge-danger")">
-                    @(resultadoPropio.Aprobado ? "Aprobado" : "No aprobado")
+            <div style="margin-top:.875rem;">
+                <span class="badge @(resultadoPropio.Aprobado ? "badge-success" : "badge-danger")" style="font-size:.875rem;padding:.35rem .875rem;">
+                    @(resultadoPropio.Aprobado ? "✅ Aprobado" : "❌ No aprobado")
                 </span>
             </div>
         </div>
     }
-    else if (EsSoloColaborador && inscripcionPropia is not null)
+    else if (inscripcionPropia is not null)
     {
-        <!-- Colaborador puede responder -->
+        <!-- Cualquier usuario inscrito puede responder -->
         <div style="padding:1rem;">
-            <p class="text-sm text-muted" style="margin-bottom:1rem;">
-                @cuestionario.Titulo — @cuestionario.Preguntas.Count pregunta(s) · Mínimo @cuestionario.PuntajeAprobacion% para aprobar
-            </p>
             @if (!respondiendo)
             {
-                <button class="btn btn-primary" @onclick="IniciarCuestionario">Responder cuestionario →</button>
+                <div class="cuest-info-card">
+                    <div class="cuest-info-icon">📝</div>
+                    <div>
+                        <div class="font-medium">@cuestionario.Titulo</div>
+                        @if (!string.IsNullOrWhiteSpace(cuestionario.Descripcion))
+                        {
+                            <div class="text-sm text-muted" style="margin-top:.2rem;">@cuestionario.Descripcion</div>
+                        }
+                        <div class="text-sm text-muted" style="margin-top:.35rem;">
+                            @cuestionario.Preguntas.Count pregunta(s) · Mínimo @cuestionario.PuntajeAprobacion% para aprobar
+                        </div>
+                    </div>
+                    <button class="btn btn-primary" @onclick="IniciarCuestionario">Comenzar →</button>
+                </div>
             }
             else
             {
-                <div style="display:flex;flex-direction:column;gap:1.5rem;">
-                    @foreach (var (pregunta, idx) in cuestionario.Preguntas.Select((p, i) => (p, i)))
+                <div style="display:flex;flex-direction:column;gap:1.25rem;">
+                    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;">
+                        <span class="text-sm text-muted">
+                            @respuestasColaborador.Count de @cuestionario.Preguntas.Count respondidas
+                        </span>
+                        <div style="display:flex;gap:.25rem;">
+                            @for (int qi = 0; qi < cuestionario.Preguntas.Count; qi++)
+                            {
+                                var qId = cuestionario.Preguntas[qi].Id;
+                                <div class="cuest-dot @(respuestasColaborador.ContainsKey(qId) ? "cuest-dot--done" : "")"></div>
+                            }
+                        </div>
+                    </div>
+
+                    @for (int qi = 0; qi < cuestionario.Preguntas.Count; qi++)
                     {
-                        <div class="card" style="padding:1rem;border:1px solid var(--border);">
-                            <div class="font-medium" style="margin-bottom:.75rem;">
-                                @(idx + 1). @pregunta.Enunciado
-                            </div>
-                            <div style="display:flex;flex-direction:column;gap:.5rem;">
-                                @foreach (var opcion in pregunta.Opciones)
-                                {
-                                    var seleccionada = respuestasColaborador.TryGetValue(pregunta.Id, out var sel) && sel == opcion.Id;
-                                    <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;padding:.5rem;border-radius:var(--radius);border:1px solid @(seleccionada ? "var(--primary)" : "var(--border)");background:@(seleccionada ? "var(--primary-light)" : "transparent")">
-                                        <input type="radio" name="p@(pregunta.Id)"
-                                               checked="@seleccionada"
-                                               @onchange="() => SeleccionarOpcion(pregunta.Id, opcion.Id)"
-                                               style="accent-color:var(--primary)" />
-                                        @opcion.Texto
-                                    </label>
-                                }
+                        var pregunta = cuestionario.Preguntas[qi];
+                        var pIdx = qi;
+                        <div class="cuest-pregunta">
+                            <div class="cuest-pregunta-num">@(pIdx + 1)</div>
+                            <div style="flex:1;">
+                                <div class="font-medium" style="margin-bottom:.75rem;line-height:1.5;">
+                                    @pregunta.Enunciado
+                                </div>
+                                <div style="display:flex;flex-direction:column;gap:.5rem;">
+                                    @foreach (var opcion in pregunta.Opciones)
+                                    {
+                                        var op = opcion;
+                                        var seleccionada = respuestasColaborador.TryGetValue(pregunta.Id, out var sel) && sel == op.Id;
+                                        <button type="button"
+                                                class="cuest-opcion @(seleccionada ? "cuest-opcion--seleccionada" : "")"
+                                                @onclick="() => SeleccionarOpcion(pregunta.Id, op.Id)">
+                                            <div class="cuest-opcion-radio @(seleccionada ? "cuest-opcion-radio--activo" : "")">
+                                                @if (seleccionada) { <span>●</span> }
+                                            </div>
+                                            <span>@op.Texto</span>
+                                        </button>
+                                    }
+                                </div>
                             </div>
                         </div>
                     }
-                    <div class="flex gap-2">
-                        <button class="btn btn-primary" @onclick="EnviarCuestionario" disabled="@enviandoCuestionario">
-                            @(enviandoCuestionario ? "Enviando..." : "Enviar respuestas")
+
+                    <div class="flex gap-2" style="padding-top:.5rem;border-top:1px solid var(--border);">
+                        <button class="btn btn-primary"
+                                @onclick="EnviarCuestionario"
+                                disabled="@(enviandoCuestionario || respuestasColaborador.Count < cuestionario.Preguntas.Count)">
+                            @if (enviandoCuestionario)
+                            {
+                                <span class="spinner" style="width:.9rem;height:.9rem;border-width:2px;border-color:rgba(255,255,255,.3);border-top-color:#fff;"></span>
+                            }
+                            @(enviandoCuestionario ? "Enviando..." : $"Enviar ({respuestasColaborador.Count}/{cuestionario.Preguntas.Count})")
                         </button>
                         <button class="btn btn-ghost" @onclick="() => respondiendo = false">Cancelar</button>
                     </div>
@@ -284,7 +319,7 @@
             }
         </div>
     }
-    else if (EsMicrosoftUser)
+    else if (PuedeGestionar)
     {
         <!-- Admin ve resumen del cuestionario -->
         <div style="padding:1rem;">
@@ -412,37 +447,58 @@
                         <button class="btn btn-ghost btn-sm" @onclick="AgregarPregunta">+ Pregunta</button>
                     </div>
 
-                    @foreach (var (p, pi) in cForm.Preguntas.Select((x, i) => (x, i)))
+                    @for (int pi = 0; pi < cForm.Preguntas.Count; pi++)
                     {
+                        var pregIdx = pi;
+                        var preg = cForm.Preguntas[pregIdx];
                         <div style="border:1px solid var(--border);border-radius:var(--radius);padding:1rem;margin-bottom:.75rem;">
                             <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:.5rem;">
                                 <div class="form-group" style="flex:1;margin-bottom:.5rem;">
-                                    <label style="font-size:.8rem;">Pregunta @(pi + 1)</label>
-                                    <input class="form-control" @bind="p.Enunciado" placeholder="Escribe la pregunta..." />
+                                    <label style="font-size:.8rem;">Pregunta @(pregIdx + 1)</label>
+                                    <input class="form-control"
+                                           value="@preg.Enunciado"
+                                           @oninput="e => cForm.Preguntas[pregIdx].Enunciado = e.Value?.ToString() ?? string.Empty"
+                                           placeholder="Escribe la pregunta..." />
                                 </div>
                                 <button class="btn btn-danger btn-sm btn-icon" style="margin-top:1.4rem;"
-                                        @onclick="() => EliminarPregunta(pi)">🗑️</button>
+                                        @onclick="() => EliminarPregunta(pregIdx)">🗑️</button>
                             </div>
 
                             <div style="margin-top:.5rem;">
-                                @foreach (var (o, oi) in p.Opciones.Select((x, i) => (x, i)))
+                                <div style="font-size:.75rem;color:var(--text-muted);margin-bottom:.4rem;">
+                                    Haz clic en ✓ para marcar la respuesta correcta
+                                </div>
+                                @for (int oi = 0; oi < preg.Opciones.Count; oi++)
                                 {
+                                    var opIdx = oi;
+                                    var opcion = preg.Opciones[opIdx];
                                     <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.4rem;">
-                                        <input type="radio" name="correcta_@pi"
-                                               checked="@o.EsCorrecta"
-                                               @onchange="() => MarcarCorrecta(pi, oi)"
-                                               title="Marcar como correcta"
-                                               style="accent-color:var(--success);flex-shrink:0" />
-                                        <input class="form-control" @bind="o.Texto" placeholder="Opción @(oi + 1)..." style="flex:1" />
-                                        @if (p.Opciones.Count > 2)
+                                        <button type="button"
+                                                class="@(opcion.EsCorrecta ? "btn-correcta-activa" : "btn-correcta")"
+                                                @onclick="() => MarcarCorrecta(pregIdx, opIdx)"
+                                                title="@(opcion.EsCorrecta ? "Respuesta correcta" : "Marcar como correcta")">
+                                            @(opcion.EsCorrecta ? "✓" : "○")
+                                        </button>
+                                        <input class="form-control"
+                                               value="@opcion.Texto"
+                                               @oninput="e => cForm.Preguntas[pregIdx].Opciones[opIdx].Texto = e.Value?.ToString() ?? string.Empty"
+                                               placeholder="Opción @(opIdx + 1)..."
+                                               style="flex:1" />
+                                        @if (preg.Opciones.Count > 2)
                                         {
-                                            <button class="btn btn-ghost btn-sm btn-icon"
-                                                    @onclick="() => EliminarOpcion(pi, oi)">✕</button>
+                                            <button type="button" class="btn btn-ghost btn-sm btn-icon"
+                                                    @onclick="() => EliminarOpcion(pregIdx, opIdx)">✕</button>
                                         }
                                     </div>
                                 }
-                                <button class="btn btn-ghost btn-sm" style="margin-top:.25rem;"
-                                        @onclick="() => AgregarOpcion(pi)">+ Opción</button>
+                                <button type="button" class="btn btn-ghost btn-sm" style="margin-top:.25rem;"
+                                        @onclick="() => AgregarOpcion(pregIdx)">+ Opción</button>
+                                @if (!preg.Opciones.Any(o => o.EsCorrecta))
+                                {
+                                    <div style="font-size:.75rem;color:var(--danger);margin-top:.35rem;">
+                                        ⚠️ Marca una opción como correcta
+                                    </div>
+                                }
                             </div>
                         </div>
                     }
@@ -460,8 +516,10 @@
 
 @code {
     [Parameter] public int Id { get; set; }
-    [CascadingParameter(Name = "EsMicrosoftUser")] private bool EsMicrosoftUser { get; set; }
+    [CascadingParameter(Name = "EsMicrosoftUser")] private bool EsMicrosoftUserCascade { get; set; }
     [CascadingParameter(Name = "EsSoloColaborador")] private bool EsSoloColaborador { get; set; }
+
+    private bool PuedeGestionar => AuthInfo.EsJefe || AuthInfo.EsMicrosoftUser;
 
     private CapacitacionDto? capacitacion;
     private List<InscripcionDto> inscripciones = [];
@@ -497,8 +555,20 @@
 
     protected override async Task OnInitializedAsync()
     {
+        await AuthInfo.LoadAsync();
         capacitacion = await CapacitacionService.GetByIdAsync(Id);
-        await Task.WhenAll(Cargar(), CargarRecursos(), CargarCuestionario());
+
+        if (PuedeGestionar)
+        {
+            // Jefe: carga inscripciones + recursos + cuestionario en paralelo
+            await Task.WhenAll(Cargar(), CargarRecursos(), CargarCuestionario());
+        }
+        else
+        {
+            // Colaborador: solo recursos y cuestionario (sin inscripciones del grupo)
+            cargando = false;
+            await Task.WhenAll(CargarRecursos(), CargarCuestionario());
+        }
     }
 
     private async Task Cargar()
@@ -605,17 +675,17 @@
     private async Task CargarCuestionario()
     {
         try { cuestionario = await CuestionarioService.GetByCapacitacionAsync(Id); } catch { }
-        if (cuestionario is not null && EsSoloColaborador)
+        if (cuestionario is null || !AuthInfo.ColaboradorId.HasValue) return;
+
+        // Buscar inscripción propia para cualquier usuario (Jefe también puede responder)
+        try
         {
-            // Buscar inscripción propia y resultado previo
-            var todas = await InscripcionService.GetByCapacitacionAsync(Id);
-            // inscripcionPropia se detecta por el colaborador del perfil — usamos la primera disponible en dev
-            inscripcionPropia = todas.FirstOrDefault();
+            var misInscripciones = await InscripcionService.GetByColaboradorAsync(AuthInfo.ColaboradorId.Value);
+            inscripcionPropia = misInscripciones.FirstOrDefault(i => i.CapacitacionId == Id);
             if (inscripcionPropia is not null)
-            {
-                try { resultadoPropio = await CuestionarioService.GetResultadoAsync(cuestionario.Id, inscripcionPropia.Id); } catch { }
-            }
+                resultadoPropio = await CuestionarioService.GetResultadoAsync(cuestionario.Id, inscripcionPropia.Id);
         }
+        catch { }
     }
 
     private void AbrirModalCuestionario()
@@ -681,7 +751,42 @@
 
     private async Task GuardarCuestionario()
     {
-        if (string.IsNullOrWhiteSpace(cForm.Titulo) || !cForm.Preguntas.Any()) return;
+        // Validación client-side antes de llamar al API
+        if (string.IsNullOrWhiteSpace(cForm.Titulo))
+        {
+            await toast.Show("El título del cuestionario es requerido.", "warning");
+            return;
+        }
+        if (!cForm.Preguntas.Any())
+        {
+            await toast.Show("Agrega al menos una pregunta.", "warning");
+            return;
+        }
+        for (int i = 0; i < cForm.Preguntas.Count; i++)
+        {
+            var p = cForm.Preguntas[i];
+            if (string.IsNullOrWhiteSpace(p.Enunciado))
+            {
+                await toast.Show($"La pregunta {i + 1} no tiene enunciado.", "warning");
+                return;
+            }
+            if (p.Opciones.Count < 2)
+            {
+                await toast.Show($"La pregunta {i + 1} necesita al menos 2 opciones.", "warning");
+                return;
+            }
+            if (p.Opciones.Any(o => string.IsNullOrWhiteSpace(o.Texto)))
+            {
+                await toast.Show($"Todas las opciones de la pregunta {i + 1} deben tener texto.", "warning");
+                return;
+            }
+            if (!p.Opciones.Any(o => o.EsCorrecta))
+            {
+                await toast.Show($"Marca la respuesta correcta en la pregunta {i + 1}.", "warning");
+                return;
+            }
+        }
+
         guardandoCuestionario = true;
         bool ok;
         if (cuestionario is null)
@@ -689,8 +794,9 @@
         else
             ok = (await CuestionarioService.UpdateAsync(cuestionario.Id, cForm)) is not null;
         guardandoCuestionario = false;
+
         if (ok) { CerrarModalCuestionario(); await CargarCuestionario(); await toast.Show("Cuestionario guardado."); }
-        else await toast.Show("Error al guardar.", "error");
+        else await toast.Show("Error al guardar el cuestionario. Verifica que todos los campos estén completos.", "error");
     }
 
     private async Task EliminarCuestionario()
@@ -717,6 +823,8 @@
         { await toast.Show("Responde todas las preguntas antes de enviar.", "error"); return; }
 
         enviandoCuestionario = true;
+        StateHasChanged();
+
         var dto = new ResponderCuestionarioDto
         {
             CuestionarioId = cuestionario.Id,
@@ -727,10 +835,22 @@
                 OpcionElegidaId = r.Value
             }).ToList()
         };
+
         resultadoPropio = await CuestionarioService.ResponderAsync(dto);
         enviandoCuestionario = false;
         respondiendo = false;
+        StateHasChanged();
+
         if (resultadoPropio is not null)
-            await toast.Show(resultadoPropio.Aprobado ? "¡Aprobaste el cuestionario!" : "No alcanzaste el puntaje mínimo.");
+        {
+            var msg = resultadoPropio.Aprobado
+                ? $"🎉 ¡Aprobaste! {resultadoPropio.Puntaje:0.#}% — {resultadoPropio.Correctas}/{resultadoPropio.TotalPreguntas} correctas"
+                : $"❌ No aprobaste. {resultadoPropio.Puntaje:0.#}% — mínimo {resultadoPropio.PuntajeAprobacion}%";
+            await toast.Show(msg, resultadoPropio.Aprobado ? "success" : "error");
+        }
+        else
+        {
+            await toast.Show("Error al guardar el resultado.", "error");
+        }
     }
 }

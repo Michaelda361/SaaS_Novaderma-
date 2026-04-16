@@ -77,6 +77,18 @@ public class CuestionarioService(ICuestionarioRepository repository)
         var cuestionario = await repository.GetByIdAsync(dto.CuestionarioId)
             ?? throw new InvalidOperationException("Cuestionario no encontrado.");
 
+        // Solo se permite un intento — si ya respondió, devolver el resultado existente
+        var existente = await repository.GetRespuestaAsync(dto.CuestionarioId, dto.InscripcionId);
+        if (existente is not null)
+            return new ResultadoCuestionarioDto
+            {
+                Puntaje = existente.Puntaje,
+                Aprobado = existente.Aprobado,
+                PuntajeAprobacion = cuestionario.PuntajeAprobacion,
+                TotalPreguntas = cuestionario.Preguntas.Count,
+                Correctas = existente.TotalCorrectas
+            };
+
         int correctas = 0;
         var respuestasEntidad = new List<RespuestaPregunta>();
 

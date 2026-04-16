@@ -3,6 +3,7 @@
 @inject CapacitacionApiService ApiService
 @inject AreaApiService AreaService
 @inject ColaboradorApiService ColaboradorService
+@inject AuthInfoService AuthInfo
 @inject NavigationManager Nav
 <Toast @ref="toast" />
 <ConfirmDialog Visible="confirmVisible"
@@ -13,7 +14,7 @@
 <div class="card">
     <div class="card-header">
         <span class="card-title">Capacitaciones</span>
-        @if (EsMicrosoftUser)
+        @if (PuedeGestionar)
         {
             <button class="btn btn-primary btn-sm" @onclick="AbrirModal">+ Nueva capacitación</button>
         }
@@ -46,7 +47,7 @@
         <div class="empty-state">
             <div class="empty-state-icon">📚</div>
             <h3>Sin capacitaciones</h3>
-            <p>Crea la primera capacitación para comenzar.</p>
+            <p>@(PuedeGestionar ? "Crea la primera capacitación para comenzar." : "No hay capacitaciones disponibles aún.")</p>
         </div>
     }
     else if (Filtradas.Count == 0)
@@ -64,6 +65,7 @@
                 <thead>
                     <tr>
                         <th>Nombre</th>
+                        <th>Estado</th>
                         <th>Asignación</th>
                         <th>Duración</th>
                         <th>Inicio</th>
@@ -75,6 +77,7 @@
                 <tbody>
                     @foreach (var c in Filtradas)
                     {
+                        var estado = EstadoCapacitacion(c);
                         <tr>
                             <td>
                                 <div class="font-medium">@c.Nombre</div>
@@ -83,6 +86,7 @@
                                     <div class="text-sm text-muted truncate" style="max-width:200px">@c.Descripcion</div>
                                 }
                             </td>
+                            <td><span class="badge @estado.Clase">@estado.Texto</span></td>
                             <td>
                                 @if (c.AreaId.HasValue)
                                 {
@@ -105,7 +109,7 @@
                                 <div class="flex gap-2">
                                     <button class="btn btn-ghost btn-sm btn-icon"
                                             @onclick="() => VerDetalle(c.Id)" title="Ver detalle">👁️</button>
-                                    @if (EsMicrosoftUser)
+                                    @if (PuedeGestionar)
                                     {
                                         <button class="btn btn-ghost btn-sm btn-icon"
                                                 @onclick="() => AbrirEditar(c)" title="Editar">✏️</button>
@@ -135,7 +139,7 @@
                 <div class="modal-body">
                     <div class="form-grid">
                         <div class="form-group full">
-                            <label>Nombre</label>
+                            <label>Nombre *</label>
                             <InputText @bind-Value="form.Nombre" placeholder="Nombre de la capacitación" />
                             <ValidationMessage For="() => form.Nombre" class="validation-message" />
                         </div>
@@ -156,7 +160,6 @@
                             <label>Fecha fin</label>
                             <InputDate @bind-Value="form.FechaFin" />
                         </div>
-
                         <div class="form-group full">
                             <label>Asignar a</label>
                             <select @bind="tipoAsignacion" class="form-select">
@@ -165,7 +168,6 @@
                                 <option value="colaborador">Colaborador específico</option>
                             </select>
                         </div>
-
                         @if (tipoAsignacion == "area")
                         {
                             <div class="form-group full">
@@ -206,7 +208,7 @@
 }
 
 @code {
-    [CascadingParameter(Name = "EsMicrosoftUser")] private bool EsMicrosoftUser { get; set; }
+    private bool PuedeGestionar => AuthInfo.EsJefe || AuthInfo.EsMicrosoftUser;
 
     private List<CapacitacionDto>? capacitaciones;
     private List<AreaDto> areas = [];
@@ -228,6 +230,12 @@
         get
         {
             var lista = capacitaciones ?? [];
+            // Colaboradores solo ven las generales o las asignadas a ellos
+            if (AuthInfo.EsSoloColaborador && AuthInfo.ColaboradorId.HasValue)
+                lista = lista.Where(c =>
+                    c.TipoAsignacion == "General" ||
+                    c.ColaboradorId == AuthInfo.ColaboradorId).ToList();
+
             if (!string.IsNullOrWhiteSpace(busqueda))
                 lista = lista.Where(c => c.Nombre.Contains(busqueda, StringComparison.OrdinalIgnoreCase)).ToList();
             if (!string.IsNullOrWhiteSpace(filtroTipo))
@@ -236,8 +244,17 @@
         }
     }
 
+    private static (string Texto, string Clase) EstadoCapacitacion(CapacitacionDto c)
+    {
+        var hoy = DateTime.Today;
+        if (c.FechaFin < hoy)    return ("Finalizada", "badge-gray");
+        if (c.FechaInicio > hoy) return ("Próxima",    "badge-info");
+        return ("En curso", "badge-success");
+    }
+
     protected override async Task OnInitializedAsync()
     {
+        await AuthInfo.LoadAsync();
         await Task.WhenAll(Cargar(), CargarSelectores());
     }
 
@@ -285,7 +302,6 @@
 
     private async Task Guardar()
     {
-        // Limpiar el campo que no aplica según el tipo
         if (tipoAsignacion != "area") form.AreaId = null;
         if (tipoAsignacion != "colaborador") form.ColaboradorId = null;
 

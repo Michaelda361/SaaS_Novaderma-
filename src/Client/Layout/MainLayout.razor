@@ -1,6 +1,7 @@
 ﻿@inherits LayoutComponentBase
 @inject ThemeService Theme
 @inject DocumentoApiService DocumentoApi
+@inject PlantillaDocumentoApiService CartasApi
 @inject AuthenticationStateProvider AuthState
 @inject IConfiguration Config
 @inject HttpClient Http
@@ -11,7 +12,6 @@
 <CascadingValue Value="AuthInfo.EsMicrosoftUser" Name="EsMicrosoftUser">
 <CascadingValue Value="AuthInfo.EsSoloColaborador" Name="EsSoloColaborador">
 <div class="app-layout @(sidebarOpen ? "sidebar-open" : "")">
-    <!-- Overlay para cerrar sidebar en móvil -->
     @if (sidebarOpen)
     {
         <div class="sidebar-overlay" @onclick="CloseSidebar"></div>
@@ -35,36 +35,63 @@
             </NavLink>
 
             <span class="nav-section-label">Gestión</span>
-            <NavLink class="nav-link" href="colaboradores">
-                <span class="nav-icon">👥</span> Colaboradores
-            </NavLink>
-            <NavLink class="nav-link" href="capacitaciones">
-                <span class="nav-icon">📚</span> Capacitaciones
-            </NavLink>
+
+            @if (!AuthInfo.EsSoloColaborador)
+            {
+                <NavLink class="nav-link" href="colaboradores">
+                    <span class="nav-icon">👥</span> Colaboradores
+                </NavLink>
+                <NavLink class="nav-link" href="capacitaciones">
+                    <span class="nav-icon">📚</span> Capacitaciones
+                </NavLink>
+            }
+
             <NavLink class="nav-link" href="certificados">
                 <span class="nav-icon">🏆</span> Certificados
             </NavLink>
-            <NavLink class="nav-link" href="documentos">
-                <span class="nav-icon">📄</span> Documentos
-                @if (propuestasPendientes > 0)
-                {
-                    <span class="badge badge-warning badge-pill">@propuestasPendientes</span>
-                }
-            </NavLink>
+
+            @if (!AuthInfo.EsSoloColaborador)
+            {
+                <NavLink class="nav-link" href="documentos">
+                    <span class="nav-icon">📄</span> Documentos
+                    @if (propuestasPendientes > 0)
+                    {
+                        <span class="badge badge-warning badge-pill">@propuestasPendientes</span>
+                    }
+                </NavLink>
+            }
+
             <NavLink class="nav-link" href="cartas">
-                <span class="nav-icon">📋</span> Cartas Laborales
+                <span class="nav-icon">📋</span> Mis Cartas
             </NavLink>
 
-            <span class="nav-section-label">Configuración</span>
-            <NavLink class="nav-link" href="areas">
-                <span class="nav-icon">🏢</span> Áreas
-            </NavLink>
-            <NavLink class="nav-link" href="cargos">
-                <span class="nav-icon">💼</span> Cargos
-            </NavLink>
-            <NavLink class="nav-link" href="cartas/admin">
-                <span class="nav-icon">⚙️</span> Plantillas de Cartas
-            </NavLink>
+            @if (AuthInfo.PuedeResolverSolicitudes || AuthInfo.EsMicrosoftUser)
+            {
+                <NavLink class="nav-link" href="cartas/admin">
+                    <span class="nav-icon">✅</span> Aprobar Cartas
+                    @if (cartasPendientes > 0)
+                    {
+                        <span class="badge badge-warning badge-pill">@cartasPendientes</span>
+                    }
+                </NavLink>
+            }
+
+            @if (!AuthInfo.EsSoloColaborador)
+            {
+                <span class="nav-section-label">Configuración</span>
+                <NavLink class="nav-link" href="areas">
+                    <span class="nav-icon">🏢</span> Áreas
+                </NavLink>
+                <NavLink class="nav-link" href="cargos">
+                    <span class="nav-icon">💼</span> Cargos
+                </NavLink>
+                @if (AuthInfo.EsMicrosoftUser)
+                {
+                    <NavLink class="nav-link" href="cartas/admin">
+                        <span class="nav-icon">⚙️</span> Plantillas de Cartas
+                    </NavLink>
+                }
+            }
         </nav>
 
         <div class="sidebar-footer">
@@ -72,7 +99,16 @@
                 <div class="avatar avatar-sm" style="background:#312e81;color:#a5b4fc;">@userInitials</div>
                 <div class="sidebar-user-info">
                     <div class="sidebar-user-name">@userName</div>
-                    <div class="sidebar-user-role">@userEmail</div>
+                    <div class="sidebar-user-role">
+                        <span class="sidebar-rol-badge sidebar-rol-badge--@AuthInfo.Rol.ToLower()">
+                            @(AuthInfo.Rol switch {
+                                "Admin"       => "🔑 Admin",
+                                "Jefe"        => "👔 Jefe",
+                                "Colaborador" => "👤 Colaborador",
+                                _             => AuthInfo.Rol
+                            })
+                        </span>
+                    </div>
                 </div>
             </div>
             @if (isDevMode)
@@ -120,6 +156,7 @@
 
     private bool sidebarOpen = false;
     private int propuestasPendientes = 0;
+    private int cartasPendientes = 0;
     private string userName = "Usuario";
     private string userEmail = "";
     private string userInitials = "U";
@@ -128,73 +165,69 @@
     private void OpenSidebar() => sidebarOpen = true;
     private void CloseSidebar() => sidebarOpen = false;
 
+    protected override async Task OnInitializedAsync()
+    {
+        // Cargar perfil antes de que @Body renderice — así las páginas hijas ya tienen AuthInfo listo
+        await AuthInfo.LoadAsync();
+    }
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (firstRender)
+        if (!firstRender) return;
+
+        isDevMode = Config.GetValue<bool>("DevMode");
+        Theme.OnChange += StateHasChanged;
+        await Theme.InitAsync();
+
+        // Nombre e iniciales
+        if (isDevMode)
         {
-            isDevMode = Config.GetValue<bool>("DevMode");
-            Theme.OnChange += StateHasChanged;
-            await Theme.InitAsync();
-            await AuthInfo.LoadAsync();
-
-            if (isDevMode)
-            {
-                try
-                {
-                    var devInfo = await Http.GetFromJsonAsync<DevUsuarioActivoDto>(
-                        "api/v1/dev/usuario-activo");
-                    if (devInfo?.Activo == true && !string.IsNullOrWhiteSpace(devInfo.Email))
-                    {
-                        userEmail = devInfo.Email;
-                        userName = devInfo.Email switch
-                        {
-                            "dev.colaborador@test.local" => "Andrés Martínez",
-                            "dev.jefe@test.local"        => "Carlos Herrera",
-                            "dev.jeferrhh@test.local"    => "Francy Gutiérrez",
-                            _                            => devInfo.Email.Split('@')[0]
-                        };
-                        var parts = userName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-                        userInitials = parts.Length >= 2
-                            ? $"{parts[0][0]}{parts[1][0]}".ToUpper()
-                            : userName[0..1].ToUpper();
-                    }
-                }
-                catch { /* silencioso */ }
-            }
-            else
-            {
-                var auth = await AuthState.GetAuthenticationStateAsync();
-                var user = auth.User;
-                if (user.Identity?.IsAuthenticated == true)
-                {
-                    var name = user.FindFirst("name")?.Value
-                            ?? user.FindFirst("preferred_username")?.Value
-                            ?? user.Identity.Name
-                            ?? "Usuario";
-                    userEmail = user.FindFirst("preferred_username")?.Value
-                             ?? user.FindFirst("upn")?.Value
-                             ?? "";
-                    userName = name;
-                    var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-                    userInitials = parts.Length >= 2
-                        ? $"{parts[0][0]}{parts[1][0]}".ToUpper()
-                        : name.Length > 0 ? name[0..1].ToUpper() : "U";
-                }
-            }
-
+            // Leer el usuario activo desde el servidor (puede haber cambiado con el selector)
             try
             {
-                propuestasPendientes = await DocumentoApi.GetPropuestasPendientesCountAsync();
+                var devInfo = await Http.GetFromJsonAsync<DevUsuarioInfo>("api/v1/dev/usuario-activo");
+                userEmail = devInfo?.Email ?? Config["DevUser"] ?? string.Empty;
             }
-            catch (AccessTokenNotAvailableException ex)
+            catch
             {
-                if (!isDevMode) ex.Redirect();
-                return;
+                userEmail = Config["DevUser"] ?? string.Empty;
             }
-            catch { /* silencioso — no crítico */ }
-
-            StateHasChanged();
+            userName = userEmail switch
+            {
+                "dev.colaborador@test.local" => "Andrés Martínez",
+                "dev.jefe@test.local"        => "Carlos Herrera",
+                "dev.jeferrhh@test.local"    => "Francy Gutiérrez",
+                _                            => userEmail.Split('@')[0]
+            };
         }
+        else
+        {
+            var auth = await AuthState.GetAuthenticationStateAsync();
+            var user = auth.User;
+            if (user.Identity?.IsAuthenticated == true)
+            {
+                var name = user.FindFirst("name")?.Value
+                        ?? user.FindFirst("preferred_username")?.Value
+                        ?? user.Identity.Name ?? "Usuario";
+                userEmail = user.FindFirst("preferred_username")?.Value ?? "";
+                userName = name;
+            }
+        }
+
+        var parts = userName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        userInitials = parts.Length >= 2
+            ? $"{parts[0][0]}{parts[1][0]}".ToUpper()
+            : userName.Length > 0 ? userName[0..1].ToUpper() : "U";
+
+        // Badges de pendientes
+        try { propuestasPendientes = await DocumentoApi.GetPropuestasPendientesCountAsync(); } catch { }
+
+        if (AuthInfo.PuedeResolverSolicitudes || AuthInfo.EsMicrosoftUser)
+        {
+            try { cartasPendientes = await CartasApi.CountPendientesAsync(); } catch { }
+        }
+
+        StateHasChanged();
     }
 
     private async Task CambiarUsuarioDevAsync(ChangeEventArgs e)
@@ -203,12 +236,13 @@
         {
             var email = e.Value?.ToString();
             await Http.PostAsJsonAsync("api/v1/dev/usuario-activo", new { email });
+            AuthInfo.Invalidar();
             Nav.NavigateTo(Nav.Uri, forceLoad: true);
         }
-        catch { /* silencioso */ }
+        catch { }
     }
 
-    private record DevUsuarioActivoDto(string? Email, bool Activo);
+    private record DevUsuarioInfo(string? Email, bool Activo);
 
     private async Task ToggleTheme() => await Theme.ToggleAsync();
 
@@ -216,19 +250,20 @@
 
     private string GetPageTitle() => RouteData?.PageType?.Name switch
     {
-        "Home"                    => "Dashboard",
-        "Colaboradores"           => "Colaboradores",
-        "Capacitaciones"          => "Capacitaciones",
-        "CapacitacionDetalle"     => "Detalle de Capacitación",
-        "Certificados"            => "Certificados",
-        "Areas"                   => "Áreas",
-        "AreaDetalle"             => "Detalle de Área",
-        "Cargos"                  => "Cargos",
-        "Documentos"              => "Documentos",
-        "DocumentoDetalle"        => "Detalle de Documento",
-        "DocumentosPropuestas"    => "Propuestas Pendientes",
-        "CartasLaborales"         => "Mis Cartas Laborales",
-        "CartasLaboralesAdmin"    => "Plantillas de Cartas",
-        _                         => "NovaHub"
+        "Home"                 => "Dashboard",
+        "Colaboradores"        => "Colaboradores",
+        "Capacitaciones"       => "Capacitaciones",
+        "CapacitacionDetalle"  => "Detalle de Capacitación",
+        "Certificados"         => "Certificados",
+        "Areas"                => "Áreas",
+        "AreaDetalle"          => "Detalle de Área",
+        "Cargos"               => "Cargos",
+        "Documentos"           => "Documentos",
+        "DocumentoDetalle"     => "Detalle de Documento",
+        "DocumentosPropuestas" => "Propuestas Pendientes",
+        "CartasLaborales"      => "Mis Cartas Laborales",
+        "CartasLaboralesAdmin" => "Administración de Cartas",
+        "Landing"              => "Bienvenido",
+        _                      => "NovaHub"
     };
 }

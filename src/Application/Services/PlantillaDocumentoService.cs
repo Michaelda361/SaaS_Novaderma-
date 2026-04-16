@@ -220,6 +220,10 @@ public class PlantillaDocumentoService(
         var colaborador = await colaboradorRepository.GetByEmailAsync(email)
             ?? throw new UnauthorizedAccessException("Usuario no registrado como colaborador");
 
+        // Prevenir solicitudes duplicadas
+        if (await repository.ExisteSolicitudPendienteAsync(plantillaId, colaborador.Id))
+            throw new InvalidOperationException("Ya tienes una solicitud pendiente para esta carta.");
+
         var solicitud = new SolicitudDocumento
         {
             PlantillaDocumentoId = plantillaId,
@@ -227,11 +231,11 @@ public class PlantillaDocumentoService(
             FechaSolicitud = DateTime.UtcNow,
             Estado = Domain.Enums.EstadoSolicitud.Pendiente,
             PdfBytes = pdfBytes,
+            NotificadoColaborador = true,
         };
 
         await repository.CreateSolicitudAsync(solicitud);
 
-        // Construir DTO sin segunda query — la plantilla ya fue validada antes
         var plantilla = await repository.GetByIdAsync(plantillaId);
         solicitud.Colaborador = colaborador;
         solicitud.PlantillaDocumento = plantilla!;
@@ -245,6 +249,7 @@ public class PlantillaDocumentoService(
         s.Estado = Domain.Enums.EstadoSolicitud.Aprobada;
         s.ComentarioAdmin = comentario;
         s.FechaResolucion = DateTime.UtcNow;
+        s.NotificadoColaborador = false;
         await repository.UpdateSolicitudAsync(s);
         return MapSolicitud(s);
     }
@@ -256,8 +261,16 @@ public class PlantillaDocumentoService(
         s.Estado = Domain.Enums.EstadoSolicitud.Rechazada;
         s.ComentarioAdmin = comentario;
         s.FechaResolucion = DateTime.UtcNow;
+        s.NotificadoColaborador = false;
         await repository.UpdateSolicitudAsync(s);
         return MapSolicitud(s);
+    }
+
+    public async Task MarcarComoVistasAsync(string email)
+    {
+        var colaborador = await colaboradorRepository.GetByEmailAsync(email);
+        if (colaborador is null) return;
+        await repository.MarcarSolicitudesComoVistaAsync(colaborador.Id);
     }
 
     public async Task<byte[]?> DescargarSolicitudAprobadaAsync(int solicitudId, string emailSolicitante)
@@ -328,7 +341,8 @@ public class PlantillaDocumentoService(
         Estado = s.Estado.ToString(),
         ComentarioAdmin = s.ComentarioAdmin,
         FechaResolucion = s.FechaResolucion,
-        TienePdf = s.PdfBytes is { Length: > 0 },
+        TienePdf = s.PdfBytes is not null,
+        TieneNovedad = !s.NotificadoColaborador,
     };
 
     // ── Helpers ──────────────────────────────────────────────────────────────

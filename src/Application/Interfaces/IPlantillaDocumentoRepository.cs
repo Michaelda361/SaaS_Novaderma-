@@ -19,4 +19,6 @@ public interface IPlantillaDocumentoRepository
     Task<IEnumerable<SolicitudDocumento>> GetTodasSolicitudesAsync();
     Task<IEnumerable<SolicitudDocumento>> GetSolicitudesPendientesAsync();
     Task<int> CountPendientesAsync();
+    Task<bool> ExisteSolicitudPendienteAsync(int plantillaId, int colaboradorId);
+    Task MarcarSolicitudesComoVistaAsync(int colaboradorId);
 }

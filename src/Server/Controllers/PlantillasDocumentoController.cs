@@ -22,8 +22,11 @@ public class PlantillasDocumentoController(
     // ── Admin: CRUD (solo usuario Microsoft) ─────────────────────────────────
 
     [HttpGet]
-    public async Task<IActionResult> GetAll() =>
-        Ok(await service.GetAllAsync());
+    public async Task<IActionResult> GetAll()
+    {
+        if (!await currentUser.PuedeGestionarPlantillasAsync()) return Forbid();
+        return Ok(await service.GetAllAsync());
+    }
 
     [HttpGet("{id:int}")]
     public async Task<IActionResult> GetById(int id)
@@ -35,7 +38,7 @@ public class PlantillasDocumentoController(
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreatePlantillaDocumentoDto dto)
     {
-        if (!currentUser.EsMicrosoftUser()) return Forbid();
+        if (!await currentUser.PuedeGestionarPlantillasAsync()) return Forbid();
         var created = await service.CreateAsync(dto);
         return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
     }
@@ -43,7 +46,7 @@ public class PlantillasDocumentoController(
     [HttpPut("{id:int}")]
     public async Task<IActionResult> Update(int id, [FromBody] CreatePlantillaDocumentoDto dto)
     {
-        if (!currentUser.EsMicrosoftUser()) return Forbid();
+        if (!await currentUser.PuedeGestionarPlantillasAsync()) return Forbid();
         var result = await service.UpdateAsync(id, dto);
         return result is null ? NotFound() : Ok(result);
     }
@@ -51,7 +54,7 @@ public class PlantillasDocumentoController(
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> Delete(int id)
     {
-        if (!currentUser.EsMicrosoftUser()) return Forbid();
+        if (!await currentUser.PuedeGestionarPlantillasAsync()) return Forbid();
         var ok = await service.DeleteAsync(id);
         return ok ? NoContent() : NotFound();
     }
@@ -321,6 +324,7 @@ public class PlantillasDocumentoController(
         }
         catch (KeyNotFoundException ex) { return NotFound(ex.Message); }
         catch (UnauthorizedAccessException ex) { return Forbid(ex.Message); }
+        catch (InvalidOperationException ex) { return Conflict(ex.Message); }
         catch (Exception ex) { return StatusCode(500, ex.Message); }
     }
 
@@ -396,9 +400,22 @@ public class PlantillasDocumentoController(
         catch (Exception ex) { return StatusCode(500, ex.Message); }
     }
 
+    [HttpPost("mis-solicitudes/marcar-vistas")]
+    public async Task<IActionResult> MarcarSolicitudesVistas()
+    {
+        try
+        {
+            var email = currentUser.GetEmail();
+            await service.MarcarComoVistasAsync(email);
+            return NoContent();
+        }
+        catch (Exception ex) { return StatusCode(500, ex.Message); }
+    }
+
     [HttpGet("solicitudes")]
     public async Task<IActionResult> GetTodasSolicitudes()
     {
+        if (!await currentUser.PuedeResolverSolicitudesAsync()) return Forbid();
         var result = await service.GetTodasSolicitudesAsync();
         return Ok(result);
     }
@@ -406,11 +423,15 @@ public class PlantillasDocumentoController(
     [HttpGet("solicitudes/pendientes")]
     public async Task<IActionResult> GetPendientes()
     {
+        if (!await currentUser.PuedeResolverSolicitudesAsync()) return Forbid();
         var result = await service.GetPendientesAsync();
         return Ok(result);
     }
 
     [HttpGet("solicitudes/count-pendientes")]
-    public async Task<IActionResult> CountPendientes() =>
-        Ok(new { count = await service.CountPendientesAsync() });
+    public async Task<IActionResult> CountPendientes()
+    {
+        if (!await currentUser.PuedeResolverSolicitudesAsync()) return Ok(new { count = 0 });
+        return Ok(new { count = await service.CountPendientesAsync() });
+    }
 }

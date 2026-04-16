@@ -32,11 +32,11 @@ else
         <div>
             <h2 class="page-title">Cartas Laborales — Administración</h2>
             <p class="page-subtitle">
-                @if (AuthInfo.EsMicrosoftUser) { <span>Gestiona plantillas y aprueba solicitudes</span> }
+                @if (AuthInfo.EsMicrosoftUser || AuthInfo.EsJefe) { <span>Gestiona plantillas y aprueba solicitudes</span> }
                 else { <span>Revisa y aprueba las solicitudes de cartas laborales</span> }
             </p>
         </div>
-        @if (AuthInfo.EsMicrosoftUser)
+        @if (AuthInfo.EsMicrosoftUser || AuthInfo.EsJefe)
         {
             <div class="flex gap-2">
                 <a href="cartas" class="btn btn-ghost btn-sm">👁 Ver como colaborador</a>
@@ -47,7 +47,7 @@ else
 
     <!-- Tabs: plantillas solo para Microsoft, pendientes e historial para todos los no-colaboradores -->
     <div class="admin-tabs">
-        @if (AuthInfo.EsMicrosoftUser)
+        @if (AuthInfo.EsMicrosoftUser || AuthInfo.EsJefe)
         {
             <button class="admin-tab @(tabActiva == "plantillas" ? "admin-tab--active" : "")"
                     @onclick='() => tabActiva = "plantillas"'>
@@ -256,7 +256,7 @@ else
                 <div class="table-wrapper">
                     <table>
                         <thead>
-                            <tr><th>Colaborador</th><th>Documento</th><th>Fecha</th><th>Estado</th></tr>
+                            <tr><th>Colaborador</th><th>Documento</th><th>Fecha</th><th>Estado</th><th>Comentario</th></tr>
                         </thead>
                         <tbody>
                             @foreach (var s in SolicitudesFiltradas.Take(100))
@@ -274,6 +274,13 @@ else
                                         @if (s.Estado == "Pendiente")      { <span class="badge badge-warning">⏳ Pendiente</span> }
                                         else if (s.Estado == "Aprobada")   { <span class="badge badge-success">✅ Aprobada</span> }
                                         else                               { <span class="badge badge-danger">❌ Rechazada</span> }
+                                    </td>
+                                    <td class="text-sm text-muted">
+                                        @if (!string.IsNullOrWhiteSpace(s.ComentarioAdmin))
+                                        {
+                                            <span style="font-style:italic;">@s.ComentarioAdmin</span>
+                                        }
+                                        else { <span>—</span> }
                                     </td>
                                 </tr>
                             }
@@ -339,7 +346,7 @@ else
 @if (showModal)
 {
     <div class="modal-backdrop" @onclick="CerrarModal">
-        <div class="modal" style="max-width:740px;" @onclick:stopPropagation>
+        <div class="modal plantilla-modal" @onclick:stopPropagation>
             <div class="modal-header">
                 <span class="modal-title">@(editandoId.HasValue ? "Editar plantilla" : "Nueva plantilla")</span>
                 <button class="btn btn-ghost btn-sm btn-icon" @onclick="CerrarModal">✕</button>
@@ -356,6 +363,8 @@ else
                         <label>Descripción</label>
                         <InputText @bind-Value="form.Descripcion" placeholder="Descripción breve (opcional)" />
                     </div>
+
+                    <div class="plantilla-divider"></div>
 
                     <div class="form-group">
                         <label>Tipo de plantilla</label>
@@ -420,7 +429,7 @@ else
                                 <div class="instructivo-body">
                                     <ol class="instructivo-steps">
                                         <li>Abre tu documento Word y escribe las variables con doble llave: <code>&#123;&#123;nombre_variable&#125;&#125;</code></li>
-                                        <li>Escribe cada variable de un solo trazo sin interrupciones para que Word no la fragmente.</li>
+                                        <li>Escribe cada variable de un solo trazo sin interrupciones para que Word no las fragmente.</li>
                                         <li>Guarda como <strong>.docx</strong> y súbelo aquí.</li>
                                     </ol>
                                     <div class="instructivo-ejemplo">
@@ -447,6 +456,8 @@ else
                         </div>
                     }
 
+                    <div class="plantilla-divider"></div>
+
                     <div class="form-grid">
                         <div class="form-group">
                             <label>Nombre del firmante</label>
@@ -454,7 +465,7 @@ else
                         </div>
                         <div class="form-group">
                             <label>Cargo del firmante</label>
-                            <InputText @bind-Value="form.CargoFirmante" placeholder="Ej: Director de RRHH" />
+                            <InputText @bind-Value="form.CargoFirmante" placeholder="Ej: Directora de RRHH" />
                         </div>
                     </div>
 
@@ -473,6 +484,8 @@ else
                             </div>
                         }
                     </div>
+
+                    <div class="plantilla-divider"></div>
 
                     <div class="form-group">
                         <label>Disponible para</label>
@@ -497,12 +510,13 @@ else
                         }
                     </div>
 
+                    <div class="plantilla-divider"></div>
+
                     <div class="form-group">
                         <label>
                             Campos editables por el colaborador
                             <span class="text-muted text-sm" style="font-weight:400;margin-left:.25rem;">— el colaborador puede personalizar estos valores antes de descargar</span>
                         </label>
-                        <!-- Variables predefinidas -->
                         <div class="areas-check-list">
                             @foreach (var v in VariablesEditablesOpciones)
                             {
@@ -516,7 +530,6 @@ else
                                 </label>
                             }
                         </div>
-                        <!-- Variables personalizadas ya agregadas -->
                         @foreach (var custom in form.VariablesEditables.Where(k => !VariablesEditablesOpciones.ContainsKey(k)))
                         {
                             var customKey = custom;
@@ -529,7 +542,6 @@ else
                                         @onclick="() => form.VariablesEditables.Remove(customKey)">✕</button>
                             </div>
                         }
-                        <!-- Agregar variable personalizada -->
                         <div style="display:flex;gap:.5rem;margin-top:.6rem;align-items:center;">
                             <input type="text" class="form-control" style="font-size:.8rem;max-width:200px;"
                                    placeholder="nombre_variable"
@@ -553,6 +565,10 @@ else
                 <div class="modal-footer">
                     <button type="button" class="btn btn-ghost" @onclick="CerrarModal">Cancelar</button>
                     <button type="submit" class="btn btn-primary" disabled="@guardando">
+                        @if (guardando)
+                        {
+                            <span class="spinner" style="width:.9rem;height:.9rem;border-width:2px;border-color:rgba(255,255,255,.3);border-top-color:#fff;"></span>
+                        }
                         @(guardando ? "Guardando..." : (editandoId.HasValue ? "Guardar cambios" : "Crear plantilla"))
                     </button>
                 </div>
@@ -560,30 +576,29 @@ else
         </div>
     </div>
 }
-
 <!-- Modal aprobar/rechazar con vista previa del PDF -->
 @if (solicitudResolviendo is not null)
 {
     <div class="modal-backdrop" @onclick="CerrarModalResolucion">
-        <div class="modal" style="max-width:860px;width:95vw;overflow:hidden;" @onclick:stopPropagation>
+        <div class="modal revision-modal" @onclick:stopPropagation>
             <div class="modal-header">
                 <div>
                     <span class="modal-title">Revisar solicitud</span>
-                    <div class="text-muted text-sm" style="margin-top:.2rem;">
+                    <div class="revision-time">
                         <strong>@solicitudResolviendo.ColaboradorNombre</strong>
                         · @solicitudResolviendo.PlantillaNombre
-                        · @solicitudResolviendo.FechaSolicitud.ToLocalTime().ToString("dd/MM/yyyy HH:mm")
+                        · @TiempoRelativo(solicitudResolviendo.FechaSolicitud)
                     </div>
                 </div>
                 <button class="btn btn-ghost btn-sm btn-icon" @onclick="CerrarModalResolucion">✕</button>
             </div>
 
-            <div style="display:grid;grid-template-columns:1fr 300px;height:calc(90vh - 130px);max-height:580px;min-height:0;">
+            <div class="revision-modal-body">
                 <!-- Vista previa del PDF -->
-                <div style="border-right:1px solid var(--border);overflow:hidden;position:relative;">
+                <div class="revision-pdf-panel">
                     @if (cargandoPdfPreview)
                     {
-                        <div style="display:flex;align-items:center;justify-content:center;height:100%;flex-direction:column;gap:.75rem;color:var(--text-muted);">
+                        <div class="revision-pdf-empty">
                             <div class="spinner"></div>
                             <span class="text-sm">Cargando documento...</span>
                         </div>
@@ -591,13 +606,13 @@ else
                     else if (!string.IsNullOrEmpty(pdfPreviewBase64))
                     {
                         <iframe src="data:application/pdf;base64,@pdfPreviewBase64"
-                                style="width:100%;height:100%;border:none;"
+                                class="revision-pdf-frame"
                                 title="Vista previa del documento"></iframe>
                     }
                     else
                     {
-                        <div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-muted);flex-direction:column;gap:.5rem;">
-                            <span style="font-size:2rem;">📄</span>
+                        <div class="revision-pdf-empty">
+                            <span class="revision-pdf-empty-icon">📄</span>
                             <span class="text-sm">Sin vista previa disponible</span>
                             <span class="text-xs text-muted">La solicitud no tiene PDF adjunto</span>
                         </div>
@@ -605,33 +620,32 @@ else
                 </div>
 
                 <!-- Panel de decisión -->
-                <div style="display:flex;flex-direction:column;padding:1.25rem;gap:1rem;">
-                    <p class="text-sm text-muted">Revisa el documento y decide si apruebas o rechazas la solicitud.</p>
+                <div class="revision-decision-panel">
+                    <p class="revision-decision-hint">Revisa el documento y decide si apruebas o rechazas la solicitud.</p>
 
-                    <div class="form-group" style="flex:1;">
+                    <div class="form-group">
                         <label>Comentario (opcional)</label>
-                        <textarea class="form-control"
-                                  style="height:120px;resize:none;"
+                        <textarea class="revision-comment-area"
                                   placeholder="Mensaje opcional para el colaborador..."
                                   @bind="comentarioResolucion"></textarea>
                     </div>
 
-                    <div style="display:flex;flex-direction:column;gap:.5rem;margin-top:auto;">
+                    <div class="revision-actions">
                         <button class="btn btn-primary"
                                 disabled="@resolviendo"
-                                @onclick='() => { accionResolucion = "aprobar"; _ = ConfirmarResolucion(); }'>
+                                @onclick="AprobarSolicitud">
                             @if (resolviendo && accionResolucion == "aprobar")
                             {
-                                <span class="spinner" style="width:.9rem;height:.9rem;border-width:2px;border-color:rgba(255,255,255,.3);border-top-color:#fff;"></span>
+                                <div class="spinner" style="width:.9rem;height:.9rem;border-width:2px;border-color:rgba(255,255,255,.3);border-top-color:#fff;"></div>
                             }
                             <span>✅ Aprobar</span>
                         </button>
                         <button class="btn btn-danger"
                                 disabled="@resolviendo"
-                                @onclick='() => { accionResolucion = "rechazar"; _ = ConfirmarResolucion(); }'>
+                                @onclick="RechazarSolicitud">
                             @if (resolviendo && accionResolucion == "rechazar")
                             {
-                                <span class="spinner" style="width:.9rem;height:.9rem;border-width:2px;border-color:rgba(255,255,255,.3);border-top-color:#fff;"></span>
+                                <div class="spinner" style="width:.9rem;height:.9rem;border-width:2px;border-color:rgba(255,255,255,.3);border-top-color:#fff;"></div>
                             }
                             <span>❌ Rechazar</span>
                         </button>
@@ -717,7 +731,7 @@ else
         await AuthInfo.LoadAsync();
         if (!AuthInfo.EsSoloColaborador)
         {
-            if (AuthInfo.EsMicrosoftUser)
+            if (AuthInfo.EsMicrosoftUser || AuthInfo.EsJefe)
             {
                 var t1 = ApiService.GetAllAsync();
                 var t2 = AreaApi.GetAllAsync();
@@ -760,9 +774,22 @@ else
     private async Task CargarPendientes()
     {
         cargandoPendientes = true;
-        pendientes = await ApiService.GetPendientesAsync();
-        countPendientes = pendientes.Count;
-        cargandoPendientes = false;
+        StateHasChanged();
+        try
+        {
+            pendientes = await ApiService.GetPendientesAsync();
+            countPendientes = pendientes.Count;
+        }
+        catch
+        {
+            pendientes = [];
+            countPendientes = 0;
+        }
+        finally
+        {
+            cargandoPendientes = false;
+            StateHasChanged();
+        }
     }
 
     private async Task AbrirAprobar(SolicitudDocumentoDto s)
@@ -781,6 +808,28 @@ else
         comentarioResolucion = string.Empty;
         StateHasChanged();
         await CargarPdfPreviewAsync(s);
+    }
+
+    private async Task AprobarSolicitud()
+    {
+        accionResolucion = "aprobar";
+        await ConfirmarResolucion();
+    }
+
+    private async Task RechazarSolicitud()
+    {
+        accionResolucion = "rechazar";
+        await ConfirmarResolucion();
+    }
+
+    private static string TiempoRelativo(DateTime fecha)
+    {
+        var diff = DateTime.UtcNow - fecha.ToUniversalTime();
+        if (diff.TotalMinutes < 1)   return "hace un momento";
+        if (diff.TotalMinutes < 60)  return $"hace {(int)diff.TotalMinutes} min";
+        if (diff.TotalHours < 24)    return $"hace {(int)diff.TotalHours} h";
+        if (diff.TotalDays < 7)      return $"hace {(int)diff.TotalDays} día(s)";
+        return fecha.ToLocalTime().ToString("dd/MM/yyyy HH:mm");
     }
 
     private async Task CargarPdfPreviewAsync(SolicitudDocumentoDto s)
@@ -839,9 +888,21 @@ else
     {
         if (historialCargado) return;
         cargandoHistorial = true;
-        solicitudes = await ApiService.GetTodasSolicitudesAsync();
-        cargandoHistorial = false;
-        historialCargado = true;
+        StateHasChanged();
+        try
+        {
+            solicitudes = await ApiService.GetTodasSolicitudesAsync();
+            historialCargado = true;
+        }
+        catch
+        {
+            solicitudes = [];
+        }
+        finally
+        {
+            cargandoHistorial = false;
+            StateHasChanged();
+        }
     }
 
     private void AbrirNueva()
@@ -877,6 +938,8 @@ else
         showModal = false;
         form = new();
         editandoId = null;
+        nuevaVariableCustom = string.Empty;
+        errorVariableCustom = string.Empty;
     }
 
     private async Task Guardar()

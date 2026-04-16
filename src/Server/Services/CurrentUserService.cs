@@ -57,4 +57,20 @@ public class CurrentUserService(
         }
         catch { return false; }
     }
+
+    /// <summary>
+    /// True si puede crear/editar/eliminar plantillas y gestionar capacitaciones:
+    /// Microsoft O rol Jefe en BD.
+    /// </summary>
+    public async Task<bool> PuedeGestionarPlantillasAsync()
+    {
+        if (EsMicrosoftUser()) return true;
+        try
+        {
+            var email = GetEmail();
+            var colaborador = await colaboradorRepo.GetByEmailAsync(email);
+            return colaborador?.Rol == Domain.Enums.RolUsuario.Jefe;
+        }
+        catch { return false; }
+    }
 }

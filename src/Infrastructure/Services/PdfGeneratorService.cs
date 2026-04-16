@@ -148,14 +148,6 @@ public class PdfGeneratorService(LibreOfficeConverterService libreOffice)
                         RenderFirma(col, plantilla);
                     }
                 });
-
-                page.Footer().AlignCenter().Text(t =>
-                {
-                    t.Span("Página ").FontSize(9).FontColor(Colors.Grey.Medium);
-                    t.CurrentPageNumber().FontSize(9).FontColor(Colors.Grey.Medium);
-                    t.Span(" de ").FontSize(9).FontColor(Colors.Grey.Medium);
-                    t.TotalPages().FontSize(9).FontColor(Colors.Grey.Medium);
-                });
             });
         }).GeneratePdf();
     }
@@ -189,13 +181,12 @@ public class PdfGeneratorService(LibreOfficeConverterService libreOffice)
                     });
                 });
             }
-            col.Item().PaddingTop(4);
             return;
         }
 
         if (!bloque.Spans.Any()) return;
 
-        var item2 = col.Item();
+        var item2 = col.Item().PaddingBottom(4);
         if (bloque.Alineacion == "center") item2 = item2.AlignCenter();
         else if (bloque.Alineacion == "right") item2 = item2.AlignRight();
 
@@ -275,10 +266,22 @@ public class PdfGeneratorService(LibreOfficeConverterService libreOffice)
             var runs = para.Elements<Run>().ToList();
             if (!runs.Any()) continue;
 
-            // Poner todo el texto en el primer run y eliminar los demás
+            // Usar el run más largo como base de formato (es el texto "normal" del párrafo)
+            var runBase = runs.OrderByDescending(r =>
+                r.GetFirstChild<Text>()?.Text?.Length ?? 0).First();
+
             var primerRun = runs[0];
             var primerText = primerRun.GetFirstChild<Text>();
             if (primerText is null) continue;
+
+            // Copiar propiedades del run base si es distinto al primero
+            if (runBase != primerRun && runBase.RunProperties is not null)
+            {
+                primerRun.RunProperties?.Remove();
+                primerRun.InsertBefore(
+                    (RunProperties)runBase.RunProperties.CloneNode(true),
+                    primerRun.GetFirstChild<Text>());
+            }
 
             primerText.Text = textoFinal;
             primerText.Space = DocumentFormat.OpenXml.SpaceProcessingModeValues.Preserve;
@@ -290,19 +293,29 @@ public class PdfGeneratorService(LibreOfficeConverterService libreOffice)
     }
 
     /// <summary>
-    /// Elimina el override de fuente (<w:rFonts>) del run para que el texto reemplazado
-    /// herede la fuente del párrafo/estilo del documento en lugar de la fuente del placeholder.
-    /// Preserva el resto del formato (negrita, cursiva, tamaño, color, etc.).
+    /// Normaliza el run reemplazado para que herede el formato del párrafo:
+    /// quita overrides de fuente, tamaño y color que venían del placeholder.
+    /// Preserva negrita, cursiva y subrayado intencionales.
     /// </summary>
     private static void NormalizarFuenteRun(Run run)
     {
         var rPr = run.RunProperties;
         if (rPr is null) return;
 
-        // Quitar override de fuente — el texto hereda la fuente del párrafo
+        // Quitar override de fuente
         rPr.RemoveAllChildren<RunFonts>();
+        // Quitar override de tamaño (sz = half-points, szCs = complex script)
+        rPr.RemoveAllChildren<FontSize>();
+        rPr.RemoveAllChildren<FontSizeComplexScript>();
+        // Quitar override de color
+        rPr.RemoveAllChildren<DocumentFormat.OpenXml.Wordprocessing.Color>();
+        // Quitar highlight y shading que pudiera tener el placeholder
+        rPr.RemoveAllChildren<Highlight>();
+        rPr.RemoveAllChildren<Shading>();
+        // Quitar spacing de caracteres y kern
+        rPr.RemoveAllChildren<Spacing>();
+        rPr.RemoveAllChildren<Kern>();
 
-        // Si el rPr quedó vacío, eliminarlo también para mayor limpieza
         if (!rPr.HasChildren)
             rPr.Remove();
     }
@@ -371,7 +384,6 @@ public class PdfGeneratorService(LibreOfficeConverterService libreOffice)
             if (currentSpans.Any(s => !string.IsNullOrEmpty(s.Texto)))
             {
                 bloques.Add(new HtmlBloque { Spans = new(currentSpans), Alineacion = currentAlineacion });
-                bloques.Add(new HtmlBloque { EsEspaciado = true, Espaciado = 3 });
             }
             currentSpans.Clear();
         }
@@ -412,18 +424,29 @@ public class PdfGeneratorService(LibreOfficeConverterService libreOffice)
             if (string.IsNullOrEmpty(tagName))
             {
                 // Etiqueta inline (b, i, u, strong, em, span, etc.)
-                var inlineMatch = System.Text.RegularExpressions.Regex.Match(m.Value, @"<(/?)(b|strong|i|em|u)\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                var inlineMatch = System.Text.RegularExpressions.Regex.Match(m.Value, @"<(/?)(b|strong|i|em|u|span)\b([^>]*)?", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
                 if (inlineMatch.Success)
                 {
                     var tag = inlineMatch.Groups[2].Value.ToLower();
-                    if (inlineMatch.Groups[1].Value == "/")
+                    var isClosingTag = inlineMatch.Groups[1].Value == "/";
+
+                    if (tag == "span")
+                    {
+                        // Los <span> del editor pueden tener style="font-size:..." pero
+                        // los ignoramos como contenedores transparentes — el tamaño base
+                        // del documento es uniforme (11pt definido en QuestPDF).
+                    }
+                    else if (isClosingTag)
                     {
                         var tmp = new Stack<string>();
                         while (inlineStack.Count > 0 && inlineStack.Peek() != tag) tmp.Push(inlineStack.Pop());
                         if (inlineStack.Count > 0) inlineStack.Pop();
                         while (tmp.Count > 0) inlineStack.Push(tmp.Pop());
                     }
-                    else inlineStack.Push(tag);
+                    else
+                    {
+                        inlineStack.Push(tag);
+                    }
                 }
                 continue;
             }

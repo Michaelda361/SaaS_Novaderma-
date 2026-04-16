@@ -13,13 +13,15 @@ public class CuestionarioApiService(HttpClient http)
     public async Task<CuestionarioDto?> CreateAsync(CreateCuestionarioDto dto)
     {
         var r = await http.PostAsJsonAsync(Base, dto);
-        return r.IsSuccessStatusCode ? await r.Content.ReadFromJsonAsync<CuestionarioDto>() : null;
+        if (!r.IsSuccessStatusCode) return null;
+        return await r.Content.ReadFromJsonAsync<CuestionarioDto>();
     }
 
     public async Task<CuestionarioDto?> UpdateAsync(int id, CreateCuestionarioDto dto)
     {
         var r = await http.PutAsJsonAsync($"{Base}/{id}", dto);
-        return r.IsSuccessStatusCode ? await r.Content.ReadFromJsonAsync<CuestionarioDto>() : null;
+        if (!r.IsSuccessStatusCode) return null;
+        return await r.Content.ReadFromJsonAsync<CuestionarioDto>();
     }
 
     public async Task<bool> DeleteAsync(int id) =>

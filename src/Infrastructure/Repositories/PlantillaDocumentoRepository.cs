@@ -93,54 +93,102 @@ public class PlantillaDocumentoRepository(AppDbContext context) : IPlantillaDocu
         return solicitud;
     }
 
-    public async Task<IEnumerable<SolicitudDocumento>> GetSolicitudesByColaboradorAsync(int colaboradorId) =>
-        await context.SolicitudesDocumento
+    public async Task<IEnumerable<SolicitudDocumento>> GetSolicitudesByColaboradorAsync(int colaboradorId)
+    {
+        var rows = await context.SolicitudesDocumento
             .Include(s => s.PlantillaDocumento)
             .Include(s => s.Colaborador)
             .Where(s => s.ColaboradorId == colaboradorId)
             .OrderByDescending(s => s.FechaSolicitud)
-            .Select(s => new SolicitudDocumento
+            .Select(s => new
             {
-                Id = s.Id, PlantillaDocumentoId = s.PlantillaDocumentoId,
-                PlantillaDocumento = s.PlantillaDocumento, ColaboradorId = s.ColaboradorId,
-                Colaborador = s.Colaborador, FechaSolicitud = s.FechaSolicitud,
-                Estado = s.Estado, ComentarioAdmin = s.ComentarioAdmin,
-                FechaResolucion = s.FechaResolucion, PdfBytes = null, Activo = s.Activo,
+                s.Id, s.PlantillaDocumentoId, s.PlantillaDocumento,
+                s.ColaboradorId, s.Colaborador, s.FechaSolicitud,
+                s.Estado, s.ComentarioAdmin, s.FechaResolucion, s.Activo,
+                s.NotificadoColaborador,
+                TienePdf = s.PdfBytes != null,
             })
             .AsNoTracking().ToListAsync();
 
-    public async Task<IEnumerable<SolicitudDocumento>> GetTodasSolicitudesAsync() =>
-        await context.SolicitudesDocumento
+        return rows.Select(s => new SolicitudDocumento
+        {
+            Id = s.Id, PlantillaDocumentoId = s.PlantillaDocumentoId,
+            PlantillaDocumento = s.PlantillaDocumento, ColaboradorId = s.ColaboradorId,
+            Colaborador = s.Colaborador, FechaSolicitud = s.FechaSolicitud,
+            Estado = s.Estado, ComentarioAdmin = s.ComentarioAdmin,
+            FechaResolucion = s.FechaResolucion, Activo = s.Activo,
+            NotificadoColaborador = s.NotificadoColaborador,
+            PdfBytes = s.TienePdf ? [] : null,
+        });
+    }
+
+    public async Task<IEnumerable<SolicitudDocumento>> GetTodasSolicitudesAsync()
+    {
+        var rows = await context.SolicitudesDocumento
             .Include(s => s.PlantillaDocumento)
             .Include(s => s.Colaborador)
             .OrderByDescending(s => s.FechaSolicitud)
-            .Select(s => new SolicitudDocumento
+            .Select(s => new
             {
-                Id = s.Id, PlantillaDocumentoId = s.PlantillaDocumentoId,
-                PlantillaDocumento = s.PlantillaDocumento, ColaboradorId = s.ColaboradorId,
-                Colaborador = s.Colaborador, FechaSolicitud = s.FechaSolicitud,
-                Estado = s.Estado, ComentarioAdmin = s.ComentarioAdmin,
-                FechaResolucion = s.FechaResolucion, PdfBytes = null, Activo = s.Activo,
+                s.Id, s.PlantillaDocumentoId, s.PlantillaDocumento,
+                s.ColaboradorId, s.Colaborador, s.FechaSolicitud,
+                s.Estado, s.ComentarioAdmin, s.FechaResolucion, s.Activo,
+                TienePdf = s.PdfBytes != null,
             })
             .AsNoTracking().ToListAsync();
 
-    public async Task<IEnumerable<SolicitudDocumento>> GetSolicitudesPendientesAsync() =>
-        await context.SolicitudesDocumento
+        return rows.Select(s => new SolicitudDocumento
+        {
+            Id = s.Id, PlantillaDocumentoId = s.PlantillaDocumentoId,
+            PlantillaDocumento = s.PlantillaDocumento, ColaboradorId = s.ColaboradorId,
+            Colaborador = s.Colaborador, FechaSolicitud = s.FechaSolicitud,
+            Estado = s.Estado, ComentarioAdmin = s.ComentarioAdmin,
+            FechaResolucion = s.FechaResolucion, Activo = s.Activo,
+            PdfBytes = s.TienePdf ? [] : null,
+        });
+    }
+
+    public async Task<IEnumerable<SolicitudDocumento>> GetSolicitudesPendientesAsync()
+    {
+        var rows = await context.SolicitudesDocumento
             .Include(s => s.PlantillaDocumento)
             .Include(s => s.Colaborador)
             .Where(s => s.Estado == Domain.Enums.EstadoSolicitud.Pendiente)
             .OrderByDescending(s => s.FechaSolicitud)
-            .Select(s => new SolicitudDocumento
+            .Select(s => new
             {
-                Id = s.Id, PlantillaDocumentoId = s.PlantillaDocumentoId,
-                PlantillaDocumento = s.PlantillaDocumento, ColaboradorId = s.ColaboradorId,
-                Colaborador = s.Colaborador, FechaSolicitud = s.FechaSolicitud,
-                Estado = s.Estado, ComentarioAdmin = s.ComentarioAdmin,
-                FechaResolucion = s.FechaResolucion, PdfBytes = null, Activo = s.Activo,
+                s.Id, s.PlantillaDocumentoId, s.PlantillaDocumento,
+                s.ColaboradorId, s.Colaborador, s.FechaSolicitud,
+                s.Estado, s.ComentarioAdmin, s.FechaResolucion, s.Activo,
+                TienePdf = s.PdfBytes != null,
             })
             .AsNoTracking().ToListAsync();
+
+        return rows.Select(s => new SolicitudDocumento
+        {
+            Id = s.Id, PlantillaDocumentoId = s.PlantillaDocumentoId,
+            PlantillaDocumento = s.PlantillaDocumento, ColaboradorId = s.ColaboradorId,
+            Colaborador = s.Colaborador, FechaSolicitud = s.FechaSolicitud,
+            Estado = s.Estado, ComentarioAdmin = s.ComentarioAdmin,
+            FechaResolucion = s.FechaResolucion, Activo = s.Activo,
+            PdfBytes = s.TienePdf ? [] : null,
+        });
+    }
 
     public Task<int> CountPendientesAsync() =>
         context.SolicitudesDocumento
             .CountAsync(s => s.Estado == Domain.Enums.EstadoSolicitud.Pendiente);
+
+    public Task<bool> ExisteSolicitudPendienteAsync(int plantillaId, int colaboradorId) =>
+        context.SolicitudesDocumento.AnyAsync(s =>
+            s.PlantillaDocumentoId == plantillaId &&
+            s.ColaboradorId == colaboradorId &&
+            s.Estado == EstadoSolicitud.Pendiente);
+
+    public async Task MarcarSolicitudesComoVistaAsync(int colaboradorId)
+    {
+        await context.SolicitudesDocumento
+            .Where(s => s.ColaboradorId == colaboradorId && !s.NotificadoColaborador)
+            .ExecuteUpdateAsync(s => s.SetProperty(x => x.NotificadoColaborador, true));
+    }
 }
