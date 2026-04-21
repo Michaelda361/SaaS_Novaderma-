@@ -27,6 +27,7 @@ public class NotificacionesService : IAsyncDisposable
     public event Action? OnCambio;
     public event Action<SolicitudDocumentoDto>? OnNuevaSolicitud;
     public event Action<SolicitudDocumentoDto>? OnSolicitudResuelta;
+    public event Action<TalentManagement.Shared.DTOs.Cuestionarios.CuestionarioRespondidoDto>? OnCuestionarioRespondido;
 
     public bool Conectado => _hub?.State == HubConnectionState.Connected;
 
@@ -82,6 +83,19 @@ public class NotificacionesService : IAsyncDisposable
                 Url: "cartas",
                 Fecha: DateTime.Now));
             OnSolicitudResuelta?.Invoke(s);
+        });
+
+        _hub.On<TalentManagement.Shared.DTOs.Cuestionarios.CuestionarioRespondidoDto>("CuestionarioRespondido", n =>
+        {
+            var estado = n.Aprobado ? "✅ Aprobó" : "❌ No aprobó";
+            AgregarNotificacion(new NotificacionItem(
+                Id: Guid.NewGuid().ToString(),
+                Titulo: $"Cuestionario respondido — {estado}",
+                Cuerpo: $"{n.ColaboradorNombre} completó \"{n.CapacitacionNombre}\" con {n.Puntaje:0.#}% ({n.Correctas}/{n.TotalPreguntas} correctas)",
+                Tipo: "cuestionario_respondido",
+                Url: $"capacitaciones/{n.CapacitacionId}",
+                Fecha: DateTime.Now));
+            OnCuestionarioRespondido?.Invoke(n);
         });
 
         try { await _hub.StartAsync(); }

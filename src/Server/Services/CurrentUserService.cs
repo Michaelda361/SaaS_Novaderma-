@@ -13,19 +13,31 @@ public class CurrentUserService(
     {
         var ctx = httpContextAccessor.HttpContext;
 
+        // Si hay Bearer token real, usarlo siempre — tiene prioridad sobre DevUserStore
+        if (ctx?.Request.Headers.TryGetValue("Authorization", out var authHeader) == true
+            && authHeader.ToString().StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+        {
+            var user = ctx.User;
+            return user?.FindFirstValue("preferred_username")
+                ?? user?.FindFirstValue(ClaimTypes.Email)
+                ?? throw new UnauthorizedAccessException("No se pudo obtener el email del usuario");
+        }
+
+        // Dev: header X-Dev-User o DevUserStore
         if (env.IsDevelopment() || devStore is not null)
         {
             if (ctx?.Request.Headers.TryGetValue("X-Dev-User", out var headerEmail) == true
                 && !string.IsNullOrWhiteSpace(headerEmail.ToString()))
                 return headerEmail.ToString().Trim();
 
-            if (devStore?.ActiveEmail is { Length: > 0 } storeEmail)
+            if (devStore?.ActiveEmail is { Length: > 0 } storeEmail
+                && !string.IsNullOrWhiteSpace(storeEmail))
                 return storeEmail;
         }
 
-        var user = ctx?.User;
-        return user?.FindFirstValue("preferred_username")
-            ?? user?.FindFirstValue(ClaimTypes.Email)
+        var userFallback = ctx?.User;
+        return userFallback?.FindFirstValue("preferred_username")
+            ?? userFallback?.FindFirstValue(ClaimTypes.Email)
             ?? throw new UnauthorizedAccessException("No se pudo obtener el email del usuario");
     }
 
@@ -42,11 +54,10 @@ public class CurrentUserService(
     }
 
     /// <summary>
-    /// True si puede aprobar/rechazar solicitudes: Microsoft (admin) O rol Jefe/Admin en BD.
+    /// True si puede aprobar/rechazar solicitudes: rol Jefe o Admin en BD.
     /// </summary>
     public async Task<bool> PuedeResolverSolicitudesAsync()
     {
-        if (EsMicrosoftUser()) return true;
         try
         {
             var email = GetEmail();
@@ -60,16 +71,16 @@ public class CurrentUserService(
 
     /// <summary>
     /// True si puede crear/editar/eliminar plantillas y gestionar capacitaciones:
-    /// Microsoft O rol Jefe en BD.
+    /// rol Jefe o Admin en BD.
     /// </summary>
     public async Task<bool> PuedeGestionarPlantillasAsync()
     {
-        if (EsMicrosoftUser()) return true;
         try
         {
             var email = GetEmail();
             var colaborador = await colaboradorRepo.GetByEmailAsync(email);
-            return colaborador?.Rol == Domain.Enums.RolUsuario.Jefe;
+            return colaborador?.Rol == Domain.Enums.RolUsuario.Jefe
+                || colaborador?.Rol == Domain.Enums.RolUsuario.Admin;
         }
         catch { return false; }
     }

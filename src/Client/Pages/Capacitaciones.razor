@@ -208,7 +208,7 @@
 }
 
 @code {
-    private bool PuedeGestionar => AuthInfo.EsJefe || AuthInfo.EsMicrosoftUser;
+    private bool PuedeGestionar => AuthInfo.EsJefe || AuthInfo.EsAdmin;
 
     private List<CapacitacionDto>? capacitaciones;
     private List<AreaDto> areas = [];
@@ -255,7 +255,10 @@
     protected override async Task OnInitializedAsync()
     {
         await AuthInfo.LoadAsync();
-        await Task.WhenAll(Cargar(), CargarSelectores());
+        if (PuedeGestionar)
+            await Task.WhenAll(Cargar(), CargarSelectores());
+        else
+            await Cargar();
     }
 
     private void VerDetalle(int id) => Nav.NavigateTo($"/capacitaciones/{id}");

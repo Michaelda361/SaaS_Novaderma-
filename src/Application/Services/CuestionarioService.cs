@@ -4,12 +4,44 @@ using TalentManagement.Shared.DTOs.Cuestionarios;
 
 namespace TalentManagement.Application.Services;
 
-public class CuestionarioService(ICuestionarioRepository repository)
+public class CuestionarioService(
+    ICuestionarioRepository repository,
+    IColaboradorRepository colaboradorRepository,
+    ICapacitacionRepository capacitacionRepository)
 {
     public async Task<CuestionarioDto?> GetByCapacitacionAsync(int capacitacionId)
     {
         var c = await repository.GetByCapacitacionAsync(capacitacionId);
         return c is null ? null : MapToDto(c);
+    }
+
+    /// <summary>Construye el DTO de notificación para enviar al Jefe via SignalR.</summary>
+    public async Task<CuestionarioRespondidoDto?> BuildNotificacionAsync(
+        int cuestionarioId, string emailColaborador, ResultadoCuestionarioDto resultado)
+    {
+        try
+        {
+            var cuestionario = await repository.GetByIdAsync(cuestionarioId);
+            if (cuestionario is null) return null;
+
+            var colaborador = await colaboradorRepository.GetByEmailAsync(emailColaborador);
+            if (colaborador is null) return null;
+
+            var capacitacion = await capacitacionRepository.GetByIdAsync(cuestionario.CapacitacionId);
+            if (capacitacion is null) return null;
+
+            return new CuestionarioRespondidoDto
+            {
+                ColaboradorNombre = $"{colaborador.Nombre} {colaborador.Apellido}",
+                CapacitacionNombre = capacitacion.Nombre,
+                CapacitacionId = capacitacion.Id,
+                Puntaje = resultado.Puntaje,
+                Aprobado = resultado.Aprobado,
+                Correctas = resultado.Correctas,
+                TotalPreguntas = resultado.TotalPreguntas,
+            };
+        }
+        catch { return null; }
     }
 
     public async Task<CuestionarioDto> CreateAsync(CreateCuestionarioDto dto)

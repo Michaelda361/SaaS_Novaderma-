@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using TalentManagement.Application.Services;
+using TalentManagement.Server.Hubs;
 using TalentManagement.Server.Services;
 using TalentManagement.Shared.DTOs.Cuestionarios;
 
@@ -11,9 +13,9 @@ namespace TalentManagement.Server.Controllers;
 [Route("api/v1/[controller]")]
 public class CuestionariosController(
     CuestionarioService service,
-    CurrentUserService currentUser) : ControllerBase
+    CurrentUserService currentUser,
+    IHubContext<NotificacionesHub> hub) : ControllerBase
 {
-
     [HttpGet("capacitacion/{capacitacionId:int}")]
     public async Task<IActionResult> GetByCapacitacion(int capacitacionId)
     {
@@ -50,6 +52,16 @@ public class CuestionariosController(
     public async Task<IActionResult> Responder([FromBody] ResponderCuestionarioDto dto)
     {
         var resultado = await service.ResponderAsync(dto);
+
+        // Notificar al grupo admins en background — no bloquea la respuesta al colaborador
+        var email = currentUser.GetEmail();
+        _ = Task.Run(async () =>
+        {
+            var notif = await service.BuildNotificacionAsync(dto.CuestionarioId, email, resultado);
+            if (notif is not null)
+                await hub.Clients.Group("admins").SendAsync("CuestionarioRespondido", notif);
+        });
+
         return Ok(resultado);
     }
 

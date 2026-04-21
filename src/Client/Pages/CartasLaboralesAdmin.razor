@@ -32,11 +32,11 @@ else
         <div>
             <h2 class="page-title">Cartas Laborales — Administración</h2>
             <p class="page-subtitle">
-                @if (AuthInfo.EsMicrosoftUser || AuthInfo.EsJefe) { <span>Gestiona plantillas y aprueba solicitudes</span> }
+                @if (AuthInfo.EsJefe || AuthInfo.EsAdmin) { <span>Gestiona plantillas y aprueba solicitudes</span> }
                 else { <span>Revisa y aprueba las solicitudes de cartas laborales</span> }
             </p>
         </div>
-        @if (AuthInfo.EsMicrosoftUser || AuthInfo.EsJefe)
+        @if (AuthInfo.EsJefe || AuthInfo.EsAdmin)
         {
             <div class="flex gap-2">
                 <a href="cartas" class="btn btn-ghost btn-sm">👁 Ver como colaborador</a>
@@ -45,9 +45,9 @@ else
         }
     </div>
 
-    <!-- Tabs: plantillas solo para Microsoft, pendientes e historial para todos los no-colaboradores -->
+    <!-- Tabs: plantillas solo para Jefe/Admin, pendientes e historial para todos los no-colaboradores -->
     <div class="admin-tabs">
-        @if (AuthInfo.EsMicrosoftUser || AuthInfo.EsJefe)
+        @if (AuthInfo.EsJefe || AuthInfo.EsAdmin)
         {
             <button class="admin-tab @(tabActiva == "plantillas" ? "admin-tab--active" : "")"
                     @onclick='() => tabActiva = "plantillas"'>
@@ -251,7 +251,15 @@ else
                         <input type="text" placeholder="Buscar colaborador o plantilla..."
                                @bind="filtroHistorial" @bind:event="oninput" />
                     </div>
-                    <span class="text-muted text-sm">@SolicitudesFiltradas.Count() solicitud(es)</span>
+                    <div style="display:flex;align-items:center;gap:.75rem;">
+                        <span class="text-muted text-sm">@SolicitudesFiltradas.Count() solicitud(es)</span>
+                        @if (historialCargadoEn.HasValue)
+                        {
+                            <span class="text-xs text-muted">Actualizado @historialCargadoEn.Value.ToString("HH:mm")</span>
+                        }
+                        <button class="btn btn-ghost btn-sm btn-icon" title="Recargar historial"
+                                @onclick="RecargarHistorial">🔄</button>
+                    </div>
                 </div>
                 <div class="table-wrapper">
                     <table>
@@ -667,6 +675,7 @@ else
     private bool cargandoHistorial = false;
     private bool cargandoPendientes = false;
     private bool historialCargado = false;
+    private DateTime? historialCargadoEn;
     private bool showModal = false;
     private bool showVariables = false;
     private bool showConfirm = false;
@@ -731,7 +740,7 @@ else
         await AuthInfo.LoadAsync();
         if (!AuthInfo.EsSoloColaborador)
         {
-            if (AuthInfo.EsMicrosoftUser || AuthInfo.EsJefe)
+            if (AuthInfo.EsJefe || AuthInfo.EsAdmin)
             {
                 var t1 = ApiService.GetAllAsync();
                 var t2 = AreaApi.GetAllAsync();
@@ -893,6 +902,7 @@ else
         {
             solicitudes = await ApiService.GetTodasSolicitudesAsync();
             historialCargado = true;
+            historialCargadoEn = DateTime.Now;
         }
         catch
         {
@@ -903,6 +913,12 @@ else
             cargandoHistorial = false;
             StateHasChanged();
         }
+    }
+
+    private async Task RecargarHistorial()
+    {
+        historialCargado = false;
+        await CargarHistorial();
     }
 
     private void AbrirNueva()

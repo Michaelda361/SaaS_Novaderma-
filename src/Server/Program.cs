@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Authentication;
+﻿using Microsoft.AspNetCore.Authentication;
 using Microsoft.Identity.Web;
 using Scalar.AspNetCore;
 using TalentManagement.Infrastructure;
@@ -22,6 +22,7 @@ if (esModoDev)
 {
     // Dev: acepta JWT de Entra ID Y el esquema DevUser (header X-Dev-User)
     builder.Services.AddMicrosoftIdentityWebApiAuthentication(builder.Configuration);
+
     builder.Services.AddAuthentication()
         .AddScheme<AuthenticationSchemeOptions, DevAuthHandler>("DevUser", _ => { });
     builder.Services.AddAuthorization(options =>
@@ -34,9 +35,19 @@ if (esModoDev)
 }
 else
 {
-    // Producción: solo JWT
+    // Producción: solo JWT, multi-tenant
     builder.Services.AddMicrosoftIdentityWebApiAuthentication(builder.Configuration);
 }
+
+// PostConfigure garantiza que se aplica DESPUÉS de que Microsoft.Identity.Web
+// registre sus propias opciones, evitando que las sobreescriba.
+builder.Services.PostConfigure<Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerOptions>(
+    Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerDefaults.AuthenticationScheme,
+    options =>
+    {
+        options.TokenValidationParameters.ValidateIssuer = false;
+        options.TokenValidationParameters.ValidateAudience = false;
+    });
 
 builder.Services.AddOpenApi();
 builder.Services.AddRazorPages();
@@ -130,27 +141,37 @@ app.MapGet("/api/v1/auth/perfil", async (
 {
     try
     {
-        // EsMicrosoftUser se basa en el Bearer token del request, no en el DevUserStore
         var esMicrosoft = currentUser.EsMicrosoftUser();
         var email = currentUser.GetEmail();
         var colaborador = await colaboradorRepo.GetByEmailAsync(email);
         var esJefe = colaborador is not null &&
                      await colaboradorRepo.EsJefeDeAreaAsync(colaborador.Id);
         var puedeResolver = await currentUser.PuedeResolverSolicitudesAsync();
+
+        // Nombre: usar el de la BD si existe, si no el del token
+        var nombreMostrar = colaborador is not null
+            ? $"{colaborador.Nombre} {colaborador.Apellido}"
+            : ctx.User.FindFirst("name")?.Value
+              ?? ctx.User.FindFirst("preferred_username")?.Value
+              ?? email;
+
         return Results.Ok(new
         {
             email,
+            nombre = nombreMostrar,
             esColaborador = colaborador is not null,
             esJefe,
             colaboradorId = colaborador?.Id,
+            areaId = colaborador?.AreaId,
             esDevUser = !esMicrosoft,
-            rol = colaborador?.Rol.ToString() ?? "Admin",
+            // Si no tiene colaborador en BD: mínimo privilegio (Colaborador), no Admin
+            rol = colaborador?.Rol.ToString() ?? "Colaborador",
             puedeResolverSolicitudes = puedeResolver,
         });
     }
     catch
     {
-        return Results.Ok(new { email = "", esColaborador = false, esJefe = false, colaboradorId = (int?)null, esDevUser = true });
+        return Results.Ok(new { email = "", nombre = "Usuario", esColaborador = false, esJefe = false, colaboradorId = (int?)null, esDevUser = false, rol = "Colaborador", puedeResolverSolicitudes = false });
     }
 }).RequireAuthorization();
 

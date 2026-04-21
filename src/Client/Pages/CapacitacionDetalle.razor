@@ -39,7 +39,11 @@
         }
     </div>
 
-    @if (recursos.Count == 0)
+    @if (cargandoRecursos)
+    {
+        <div class="loading"><div class="spinner"></div> Cargando recursos...</div>
+    }
+    else if (recursos.Count == 0)
     {
         <div class="empty-state" style="padding:1.5rem;">
             <div class="empty-state-icon">📂</div>
@@ -213,11 +217,18 @@
 
     @if (cuestionario is null)
     {
-        <div class="empty-state" style="padding:1.5rem;">
-            <div class="empty-state-icon">📝</div>
-            <h3>Sin cuestionario</h3>
-            <p>@(PuedeGestionar ? "Crea un cuestionario para evaluar a los inscritos." : "Esta capacitación no tiene cuestionario aún.")</p>
-        </div>
+        @if (cargandoCuestionario)
+        {
+            <div class="loading"><div class="spinner"></div> Cargando cuestionario...</div>
+        }
+        else
+        {
+            <div class="empty-state" style="padding:1.5rem;">
+                <div class="empty-state-icon">📝</div>
+                <h3>Sin cuestionario</h3>
+                <p>@(PuedeGestionar ? "Crea un cuestionario para evaluar a los inscritos." : "Esta capacitación no tiene cuestionario aún.")</p>
+            </div>
+        }
     }
     else if (resultadoPropio is not null)
     {
@@ -236,11 +247,23 @@
                 </span>
             </div>
         </div>
+        @if (PuedeGestionar)
+        {
+            <div style="padding:.75rem 1.5rem;border-top:1px solid var(--border);background:var(--bg);">
+                <p class="text-xs text-muted">📊 @cuestionario.Titulo · @cuestionario.Preguntas.Count pregunta(s) · Mínimo @cuestionario.PuntajeAprobacion%</p>
+            </div>
+        }
     }
     else if (inscripcionPropia is not null)
     {
         <!-- Cualquier usuario inscrito puede responder -->
         <div style="padding:1rem;">
+            @if (PuedeGestionar)
+            {
+                <div class="alert alert-warning" style="margin-bottom:1rem;padding:.6rem .875rem;font-size:.8125rem;">
+                    ℹ️ Estás inscrito en esta capacitación — puedes responder el cuestionario como participante.
+                </div>
+            }
             @if (!respondiendo)
             {
                 <div class="cuest-info-card">
@@ -324,6 +347,15 @@
         <!-- Admin ve resumen del cuestionario -->
         <div style="padding:1rem;">
             <p class="text-sm text-muted">@cuestionario.Titulo · @cuestionario.Preguntas.Count pregunta(s) · Mínimo @cuestionario.PuntajeAprobacion%</p>
+        </div>
+    }
+    else
+    {
+        <!-- Colaborador no inscrito — no puede responder -->
+        <div class="empty-state" style="padding:1.5rem;">
+            <div class="empty-state-icon">🔒</div>
+            <h3>No estás inscrito</h3>
+            <p>Debes estar inscrito en esta capacitación para responder el cuestionario.</p>
         </div>
     }
 </div>
@@ -519,7 +551,7 @@
     [CascadingParameter(Name = "EsMicrosoftUser")] private bool EsMicrosoftUserCascade { get; set; }
     [CascadingParameter(Name = "EsSoloColaborador")] private bool EsSoloColaborador { get; set; }
 
-    private bool PuedeGestionar => AuthInfo.EsJefe || AuthInfo.EsMicrosoftUser;
+    private bool PuedeGestionar => AuthInfo.EsJefe || AuthInfo.EsAdmin;
 
     private CapacitacionDto? capacitacion;
     private List<InscripcionDto> inscripciones = [];
@@ -541,6 +573,7 @@
     private bool guardandoRecurso = false;
     private int? editandoRecursoId;
     private CreateRecursoDto recursoForm = new();
+    private bool cargandoRecursos = true;
 
     // Cuestionario
     private CuestionarioDto? cuestionario;
@@ -549,6 +582,7 @@
     private CreateCuestionarioDto cForm = new();
     private bool respondiendo = false;
     private bool enviandoCuestionario = false;
+    private bool cargandoCuestionario = true;
     private Dictionary<int, int> respuestasColaborador = new(); // preguntaId -> opcionId
     private ResultadoCuestionarioDto? resultadoPropio;
     private InscripcionDto? inscripcionPropia;
@@ -578,8 +612,12 @@
         cargando = false;
     }
 
-    private async Task CargarRecursos() =>
+    private async Task CargarRecursos()
+    {
+        cargandoRecursos = true;
         recursos = await RecursoService.GetByCapacitacionAsync(Id);
+        cargandoRecursos = false;
+    }
 
     // --- Inscripciones ---
     private async Task AbrirModal()
@@ -674,10 +712,13 @@
     // --- Cuestionario ---
     private async Task CargarCuestionario()
     {
+        cargandoCuestionario = true;
         try { cuestionario = await CuestionarioService.GetByCapacitacionAsync(Id); } catch { }
-        if (cuestionario is null || !AuthInfo.ColaboradorId.HasValue) return;
-
-        // Buscar inscripción propia para cualquier usuario (Jefe también puede responder)
+        if (cuestionario is null || !AuthInfo.ColaboradorId.HasValue)
+        {
+            cargandoCuestionario = false;
+            return;
+        }
         try
         {
             var misInscripciones = await InscripcionService.GetByColaboradorAsync(AuthInfo.ColaboradorId.Value);
@@ -686,6 +727,7 @@
                 resultadoPropio = await CuestionarioService.GetResultadoAsync(cuestionario.Id, inscripcionPropia.Id);
         }
         catch { }
+        finally { cargandoCuestionario = false; }
     }
 
     private void AbrirModalCuestionario()

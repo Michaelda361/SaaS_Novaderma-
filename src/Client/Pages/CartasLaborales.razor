@@ -1,4 +1,4 @@
-@page "/cartas"
+﻿@page "/cartas"
 @attribute [Authorize]
 @inject PlantillaDocumentoApiService ApiService
 @inject NotificacionesService Notificaciones
@@ -13,7 +13,7 @@
         <h2 class="page-title">Mis Cartas Laborales</h2>
         <p class="page-subtitle">Solicita y descarga tus documentos laborales</p>
     </div>
-    @if (!AuthInfo.EsSoloColaborador)
+    @if (AuthInfo.EsJefe || AuthInfo.EsAdmin)
     {
         <a href="cartas/admin" class="btn btn-ghost btn-sm">⚙️ Administrar</a>
     }
@@ -70,15 +70,26 @@ else
                     </div>
                 </div>
                 <div class="carta-card-actions">
-                    <button class="btn btn-primary btn-sm"
-                            disabled="@(cargandoPreview && plantillaSeleccionada?.Id == p.Id)"
-                            @onclick="() => AbrirPreview(plantilla)">
-                        @if (cargandoPreview && plantillaSeleccionada?.Id == p.Id)
-                        {
-                            <span class="spinner" style="width:.9rem;height:.9rem;border-width:2px;"></span>
-                        }
-                        else { <span>👁 Ver y solicitar</span> }
-                    </button>
+                    @{
+                        var tienePendiente = solicitudes.Any(s =>
+                            s.PlantillaDocumentoId == p.Id && s.Estado == "Pendiente");
+                    }
+                    @if (tienePendiente)
+                    {
+                        <span class="badge badge-warning" style="font-size:.75rem;padding:.35rem .75rem;">⏳ Solicitud pendiente</span>
+                    }
+                    else
+                    {
+                        <button class="btn btn-primary btn-sm"
+                                disabled="@(cargandoPreview && plantillaSeleccionada?.Id == p.Id)"
+                                @onclick="() => AbrirPreview(plantilla)">
+                            @if (cargandoPreview && plantillaSeleccionada?.Id == p.Id)
+                            {
+                                <span class="spinner" style="width:.9rem;height:.9rem;border-width:2px;"></span>
+                            }
+                            else { <span>👁 Ver y solicitar</span> }
+                        </button>
+                    }
                 </div>
             </div>
         }

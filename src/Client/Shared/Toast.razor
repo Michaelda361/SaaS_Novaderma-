@@ -3,9 +3,10 @@
     <div class="toast-container">
         @foreach (var m in messages)
         {
-            <div class="toast toast-@m.Type">
+            <div class="toast toast-@m.Type" @onclick="() => Cerrar(m)" style="cursor:pointer;">
                 <span>@m.Icon</span>
-                <span>@m.Text</span>
+                <span style="flex:1;">@m.Text</span>
+                <span style="opacity:.6;font-size:.75rem;margin-left:.5rem;">✕</span>
             </div>
         }
     </div>
@@ -18,10 +19,18 @@
     public async Task Show(string text, string type = "success")
     {
         var icon = type switch { "error" => "❌", "warning" => "⚠️", _ => "✅" };
+        // Errores y advertencias duran más
+        var duracion = type switch { "error" => 6000, "warning" => 5000, _ => 3000 };
         var msg = new ToastMessage(text, type, icon);
         messages.Add(msg);
         StateHasChanged();
-        await Task.Delay(3000);
+        await Task.Delay(duracion);
+        messages.Remove(msg);
+        StateHasChanged();
+    }
+
+    private void Cerrar(ToastMessage msg)
+    {
         messages.Remove(msg);
         StateHasChanged();
     }
