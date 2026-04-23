@@ -22,37 +22,37 @@
             </div>
             <div class="sidebar-brand-text">
                 <h1>NovaHub</h1>
-                <span>Gesti&#xF3;n de Talento</span>
+                <span>Gestion de Talento</span>
             </div>
-            <button class="sidebar-close-btn" @onclick="CloseSidebar">&#x2715;</button>
+            <button class="sidebar-close-btn" @onclick="CloseSidebar">x</button>
         </div>
 
         <nav class="sidebar-nav">
             <span class="nav-section-label">Principal</span>
             <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
-                <span class="nav-icon">&#x1F3E0;</span> Dashboard
+                <span class="nav-icon">🏠</span> Dashboard
             </NavLink>
 
-            <span class="nav-section-label">Gesti&#xF3;n</span>
+            <span class="nav-section-label">Gestion</span>
 
             @if (!AuthInfo.EsSoloColaborador)
             {
                 <NavLink class="nav-link" href="colaboradores">
-                    <span class="nav-icon">&#x1F465;</span> Colaboradores
-                </NavLink>
-                <NavLink class="nav-link" href="capacitaciones">
-                    <span class="nav-icon">&#x1F4DA;</span> Capacitaciones
+                    <span class="nav-icon">👥</span> Colaboradores
                 </NavLink>
             }
+            <NavLink class="nav-link" href="capacitaciones">
+                <span class="nav-icon">📚</span> Capacitaciones
+            </NavLink>
 
             <NavLink class="nav-link" href="certificados">
-                <span class="nav-icon">&#x1F3C6;</span> Certificados
+                <span class="nav-icon">🏆</span> Certificados
             </NavLink>
 
             @if (!AuthInfo.EsSoloColaborador)
             {
                 <NavLink class="nav-link" href="documentos">
-                    <span class="nav-icon">&#x1F4C4;</span> Documentos
+                    <span class="nav-icon">📄</span> Documentos
                     @if (propuestasPendientes > 0)
                     {
                         <span class="badge badge-warning badge-pill">@propuestasPendientes</span>
@@ -61,13 +61,13 @@
             }
 
             <NavLink class="nav-link" href="cartas">
-                <span class="nav-icon">&#x1F4CB;</span> Mis Cartas
+                <span class="nav-icon">📋</span> Mis Cartas
             </NavLink>
 
             @if (AuthInfo.PuedeResolverSolicitudes)
             {
                 <NavLink class="nav-link" href="cartas/admin">
-                    <span class="nav-icon">&#x2705;</span> Aprobar Cartas
+                    <span class="nav-icon">✅</span> Aprobar Cartas
                     @if (cartasPendientes > 0)
                     {
                         <span class="badge badge-warning badge-pill">@cartasPendientes</span>
@@ -77,48 +77,42 @@
 
             @if (AuthInfo.EsJefe || AuthInfo.EsAdmin)
             {
-                <span class="nav-section-label">Configuraci&#xF3;n</span>
+                <span class="nav-section-label">Configuracion</span>
                 <NavLink class="nav-link" href="areas">
-                    <span class="nav-icon">&#x1F3E2;</span> &#xC1;reas
+                    <span class="nav-icon">🏢</span> Areas
                 </NavLink>
                 <NavLink class="nav-link" href="cargos">
-                    <span class="nav-icon">&#x1F4BC;</span> Cargos
+                    <span class="nav-icon">💼</span> Cargos
                 </NavLink>
                 <NavLink class="nav-link" href="cartas/admin">
-                    <span class="nav-icon">&#x2699;&#xFE0F;</span> Plantillas de Cartas
+                    <span class="nav-icon">⚙️</span> Plantillas de Cartas
                 </NavLink>
             }
         </nav>
 
         <div class="sidebar-footer">
             <div class="sidebar-user">
-                <div class="avatar avatar-sm" style="background:#312e81;color:#a5b4fc;">@userInitials</div>
+                <div class="avatar avatar-sm" style="background:#312e81;color:#a5b4fc;">@AuthInfo.Iniciales</div>
                 <div class="sidebar-user-info">
-                    <div class="sidebar-user-name">@userName</div>
+                    <div class="sidebar-user-name">@AuthInfo.Nombre</div>
                     <div class="sidebar-user-role">
                         <span class="sidebar-rol-badge sidebar-rol-badge--@AuthInfo.Rol.ToLower()">
-                            @(AuthInfo.Rol switch {
-                                "Admin"       => "&#x1F511; Admin",
-                                "Jefe"        => "&#x1F454; Jefe",
-                                "Colaborador" => "&#x1F464; Colaborador",
-                                _             => AuthInfo.Rol
-                            })
+                            @RolLabel(AuthInfo.Rol)
                         </span>
                     </div>
                 </div>
             </div>
         </div>
     </aside>
-
     <div class="main-content">
         <header class="topbar">
             <div class="topbar-left">
-                <button class="hamburger-btn" @onclick="OpenSidebar" title="Abrir men&#xFA;">&#x2630;</button>
+                <button class="hamburger-btn" @onclick="OpenSidebar" title="Abrir menu">☰</button>
                 <span class="topbar-title">@GetPageTitle()</span>
             </div>
             <div class="topbar-right">
-                <button class="theme-toggle" @onclick="ToggleTheme" title="@(Theme.IsDark ? "Tema claro" : "Tema oscuro")">
-                    @(Theme.IsDark ? "&#x2600;&#xFE0F;" : "&#x1F319;")
+                <button class="theme-toggle" @onclick="ToggleTheme">
+                    @(Theme.IsDark ? "☀️" : "🌙")
                 </button>
                 <LoginDisplay />
             </div>
@@ -133,68 +127,40 @@
 
 @code {
     [CascadingParameter] private RouteData? RouteData { get; set; }
-
     private bool sidebarOpen = false;
     private int propuestasPendientes = 0;
     private int cartasPendientes = 0;
-    private string userName = "Usuario";
-    private string userEmail = "";
-    private string userInitials = "U";
     private Toast layoutToast = default!;
-
     private void OpenSidebar() => sidebarOpen = true;
     private void CloseSidebar() => sidebarOpen = false;
 
     protected override async Task OnInitializedAsync()
     {
-        // Cargar perfil antes de que @Body renderice
         await AuthInfo.LoadAsync();
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
-
         Theme.OnChange += StateHasChanged;
         await Theme.InitAsync();
-
-        userName = AuthInfo.Nombre;
-        userEmail = AuthInfo.Email;
-
-        var parts = userName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        userInitials = parts.Length >= 2
-            ? $"{parts[0][0]}{parts[1][0]}".ToUpper()
-            : userName.Length > 0 ? userName[0..1].ToUpper() : "U";
-
         try { propuestasPendientes = await DocumentoApi.GetPropuestasPendientesCountAsync(); } catch { }
-
         if (AuthInfo.PuedeResolverSolicitudes)
-        {
             try { cartasPendientes = await CartasApi.CountPendientesAsync(); } catch { }
-        }
-
-        // Conectar al hub solo para Jefe/Admin
         if (AuthInfo.EsJefe || AuthInfo.EsAdmin)
         {
             await Notificaciones.ConectarAsync();
             await Notificaciones.UnirseGrupoAdminAsync();
             Notificaciones.OnCuestionarioRespondido += OnCuestionarioRespondido;
         }
-
         StateHasChanged();
     }
 
-    private void OnCuestionarioRespondido(
-        TalentManagement.Shared.DTOs.Cuestionarios.CuestionarioRespondidoDto n)
+    private void OnCuestionarioRespondido(TalentManagement.Shared.DTOs.Cuestionarios.CuestionarioRespondidoDto n)
     {
-        var estado = n.Aprobado ? "&#x2705; Aprob&#xF3;" : "&#x274C; No aprob&#xF3;";
-        var msg = $"&#x1F4DD; {n.ColaboradorNombre} complet&#xF3; \"{n.CapacitacionNombre}\" &#x2014; {estado} ({n.Puntaje:0.#}%)";
-        InvokeAsync(async () =>
-        {
-            StateHasChanged();
-            if (layoutToast is not null)
-                await layoutToast.Show(msg, n.Aprobado ? "success" : "warning");
-        });
+        var estado = n.Aprobado ? "✅ Aprobó" : "❌ No aprobó";
+        var msg = $"📝 {n.ColaboradorNombre} completó \"{n.CapacitacionNombre}\" — {estado} ({n.Puntaje:0.#}%)";
+        InvokeAsync(async () => { StateHasChanged(); if (layoutToast is not null) await layoutToast.Show(msg, n.Aprobado ? "success" : "warning"); });
     }
 
     private async Task ToggleTheme() => await Theme.ToggleAsync();
@@ -205,21 +171,29 @@
         Notificaciones.OnCuestionarioRespondido -= OnCuestionarioRespondido;
     }
 
+    private static string RolLabel(string rol) => rol switch
+    {
+        "Admin"       => "🔑 Admin",
+        "Jefe"        => "👔 Jefe",
+        "Colaborador" => "👤 Colaborador",
+        _             => rol
+    };
+
     private string GetPageTitle() => RouteData?.PageType?.Name switch
     {
         "Home"                 => "Dashboard",
         "Colaboradores"        => "Colaboradores",
         "Capacitaciones"       => "Capacitaciones",
-        "CapacitacionDetalle"  => "Detalle de Capacitaci&#xF3;n",
+        "CapacitacionDetalle"  => "Detalle de Capacitacion",
         "Certificados"         => "Certificados",
-        "Areas"                => "&#xC1;reas",
-        "AreaDetalle"          => "Detalle de &#xC1;rea",
+        "Areas"                => "Areas",
+        "AreaDetalle"          => "Detalle de Area",
         "Cargos"               => "Cargos",
         "Documentos"           => "Documentos",
         "DocumentoDetalle"     => "Detalle de Documento",
         "DocumentosPropuestas" => "Propuestas Pendientes",
         "CartasLaborales"      => "Mis Cartas Laborales",
-        "CartasLaboralesAdmin" => "Administraci&#xF3;n de Cartas",
+        "CartasLaboralesAdmin" => "Administracion de Cartas",
         "Landing"              => "Bienvenido",
         _                      => "NovaHub"
     };

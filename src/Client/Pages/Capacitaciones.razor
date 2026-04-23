@@ -1,4 +1,4 @@
-@page "/capacitaciones"
+﻿@page "/capacitaciones"
 @attribute [Authorize]
 @inject CapacitacionApiService ApiService
 @inject AreaApiService AreaService
@@ -230,11 +230,12 @@
         get
         {
             var lista = capacitaciones ?? [];
-            // Colaboradores solo ven las generales o las asignadas a ellos
-            if (AuthInfo.EsSoloColaborador && AuthInfo.ColaboradorId.HasValue)
+            // Colaboradores ven: generales, las de su área, o las asignadas a ellos
+            if (AuthInfo.EsSoloColaborador)
                 lista = lista.Where(c =>
                     c.TipoAsignacion == "General" ||
-                    c.ColaboradorId == AuthInfo.ColaboradorId).ToList();
+                    (c.AreaId.HasValue && c.AreaId == AuthInfo.AreaId) ||
+                    (c.ColaboradorId.HasValue && c.ColaboradorId == AuthInfo.ColaboradorId)).ToList();
 
             if (!string.IsNullOrWhiteSpace(busqueda))
                 lista = lista.Where(c => c.Nombre.Contains(busqueda, StringComparison.OrdinalIgnoreCase)).ToList();

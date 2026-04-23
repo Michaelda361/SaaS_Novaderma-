@@ -1,19 +1,21 @@
-@using Microsoft.AspNetCore.Components.Authorization
+﻿@using Microsoft.AspNetCore.Components.Authorization
 @using Microsoft.AspNetCore.Components.WebAssembly.Authentication
+@inject AuthInfoService AuthInfo
 @inject NavigationManager Navigation
+@inject AuthenticationStateProvider AuthStateProvider
 
 <AuthorizeView>
     <Authorized>
         <div class="topbar-user">
             <div class="avatar avatar-sm" style="background:#312e81;color:#a5b4fc;">
-                @Iniciales(context.User.Identity?.Name)
+                @AuthInfo.Iniciales
             </div>
-            <span class="topbar-user-name">@NombreCorto(context.User.Identity?.Name)</span>
+            <span class="topbar-user-name">@AuthInfo.Nombre</span>
             <button class="btn btn-ghost btn-sm" @onclick="LogoutLocal">Salir</button>
         </div>
     </Authorized>
     <NotAuthorized>
-        <button class="btn btn-primary btn-sm" @onclick="Login">Iniciar sesión</button>
+        <button class="btn btn-primary btn-sm" @onclick="Login">Iniciar sesion</button>
     </NotAuthorized>
 </AuthorizeView>
 
@@ -21,19 +23,15 @@
     private void Login() => Navigation.NavigateToLogin("authentication/login");
     private void LogoutLocal() => Navigation.NavigateToLogout("authentication/logout", "landing");
 
-    private static string Iniciales(string? nombre)
+    protected override async Task OnInitializedAsync()
     {
-        if (string.IsNullOrEmpty(nombre)) return "?";
-        var parts = nombre.Split(new[] { ' ', '@' }, StringSplitOptions.RemoveEmptyEntries);
-        return parts.Length >= 2
-            ? $"{parts[0][0]}{parts[1][0]}".ToUpper()
-            : nombre[0..1].ToUpper();
-    }
-
-    private static string NombreCorto(string? nombre)
-    {
-        if (string.IsNullOrEmpty(nombre)) return "Usuario";
-        var at = nombre.IndexOf('@');
-        return at > 0 ? nombre[..at] : nombre.Split(' ')[0];
+        // Esperar a que el estado de autenticacion este listo
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        if (authState.User.Identity?.IsAuthenticated == true)
+        {
+            AuthInfo.Invalidar();
+            await AuthInfo.LoadAsync();
+            StateHasChanged();
+        }
     }
 }
