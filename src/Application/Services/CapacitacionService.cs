@@ -1,4 +1,4 @@
-using TalentManagement.Application.Interfaces;
+﻿using TalentManagement.Application.Interfaces;
 using TalentManagement.Domain.Entities;
 using TalentManagement.Shared.DTOs.Capacitaciones;
 
@@ -42,7 +42,10 @@ public class CapacitacionService(
             FechaInicio = dto.FechaInicio,
             FechaFin = dto.FechaFin,
             AreaId = dto.AreaId,
-            ColaboradorId = dto.ColaboradorId
+            ColaboradorId = dto.ColaboradorId,
+            EmiteCertificado = dto.EmiteCertificado,
+            NombreCertificado = string.IsNullOrWhiteSpace(dto.NombreCertificado) ? null : dto.NombreCertificado,
+            PlantillaNombreCertificado = string.IsNullOrWhiteSpace(dto.PlantillaNombreCertificado) ? null : dto.PlantillaNombreCertificado
         };
 
         var created = await repository.CreateAsync(capacitacion);
@@ -74,11 +77,31 @@ public class CapacitacionService(
         cap.FechaFin = dto.FechaFin;
         cap.AreaId = dto.AreaId;
         cap.ColaboradorId = dto.ColaboradorId;
+        cap.EmiteCertificado = dto.EmiteCertificado;
+        cap.NombreCertificado = string.IsNullOrWhiteSpace(dto.NombreCertificado) ? null : dto.NombreCertificado;
+        cap.PlantillaNombreCertificado = string.IsNullOrWhiteSpace(dto.PlantillaNombreCertificado) ? null : dto.PlantillaNombreCertificado;
 
         var updated = await repository.UpdateAsync(cap);
         return MapToDto(updated);
     }
 
+
+    public async Task<CapacitacionDto?> ConfigurarCertificadoAsync(int id, ConfigurarCertificadoDto dto)
+    {
+        var cap = await repository.GetByIdAsync(id);
+        if (cap is null) return null;
+        cap.EmiteCertificado = dto.EmiteCertificado;
+        cap.PlantillaNombreCertificado = string.IsNullOrWhiteSpace(dto.PlantillaNombreCertificado) ? null : dto.PlantillaNombreCertificado;
+
+        // Gestionar el DOCX
+        if (!string.IsNullOrWhiteSpace(dto.ArchivoDocxBase64))
+            cap.ArchivoDocxCertificado = Convert.FromBase64String(dto.ArchivoDocxBase64);
+        else if (dto.EliminarDocx)
+            cap.ArchivoDocxCertificado = null;
+
+        var updated = await repository.UpdateAsync(cap);
+        return MapToDto(updated);
+    }
     public async Task<bool> DeleteAsync(int id)
     {
         var cap = await repository.GetByIdAsync(id);
@@ -99,6 +122,10 @@ public class CapacitacionService(
         AreaId = c.AreaId,
         AreaNombre = c.Area?.Nombre,
         ColaboradorId = c.ColaboradorId,
-        ColaboradorNombre = c.Colaborador is null ? null : $"{c.Colaborador.Nombre} {c.Colaborador.Apellido}"
+        ColaboradorNombre = c.Colaborador is null ? null : $"{c.Colaborador.Nombre} {c.Colaborador.Apellido}",
+        EmiteCertificado = c.EmiteCertificado,
+        NombreCertificado = c.NombreCertificado,
+        PlantillaNombreCertificado = c.PlantillaNombreCertificado,
+        TienePlantillaDocx = c.ArchivoDocxCertificado is not null && c.ArchivoDocxCertificado.Length > 0
     };
 }

@@ -18,6 +18,22 @@ public class CertificadosController(CertificadoService service) : ControllerBase
     public async Task<IActionResult> GetByColaborador(int colaboradorId) =>
         Ok(await service.GetByColaboradorAsync(colaboradorId));
 
+    /// <summary>Devuelve los certificados del colaborador autenticado.</summary>
+    [HttpGet("mis")]
+    public async Task<IActionResult> GetMios(
+        [FromServices] TalentManagement.Server.Services.CurrentUserService currentUser,
+        [FromServices] TalentManagement.Application.Interfaces.IColaboradorRepository colaboradorRepo)
+    {
+        try
+        {
+            var email = currentUser.GetEmail();
+            var colaborador = await colaboradorRepo.GetByEmailAsync(email);
+            if (colaborador is null) return Ok(new List<CertificadoDto>());
+            return Ok(await service.GetByColaboradorAsync(colaborador.Id));
+        }
+        catch { return Ok(new List<CertificadoDto>()); }
+    }
+
     [HttpGet("{id:int}")]
     public async Task<IActionResult> GetById(int id)
     {
@@ -52,5 +68,13 @@ public class CertificadosController(CertificadoService service) : ControllerBase
     {
         var deleted = await service.DeleteAsync(id);
         return deleted ? NoContent() : NotFound();
+    }
+
+    [HttpGet("{id:int}/pdf")]
+    public async Task<IActionResult> DescargarPdf(int id)
+    {
+        var pdf = await service.GetPdfAsync(id);
+        if (pdf is null || pdf.Length == 0) return NotFound();
+        return File(pdf, "application/pdf", $"certificado_{id}.pdf");
     }
 }

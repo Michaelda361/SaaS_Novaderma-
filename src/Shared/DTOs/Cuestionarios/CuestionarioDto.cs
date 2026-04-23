@@ -37,3 +37,13 @@ public class CuestionarioRespondidoDto
     public int Correctas { get; set; }
     public int TotalPreguntas { get; set; }
 }
+
+/// <summary>Payload enviado via SignalR al colaborador cuando se emite su certificado.</summary>
+public class CertificadoEmitidoDto
+{
+    public string NombreCertificado { get; set; } = string.Empty;
+    public string CapacitacionNombre { get; set; } = string.Empty;
+    public int CapacitacionId { get; set; }
+    public decimal Puntaje { get; set; }
+    public DateTime FechaEmision { get; set; }
+}

@@ -1,4 +1,4 @@
-using System.Net.Http.Json;
+﻿using System.Net.Http.Json;
 using TalentManagement.Shared.DTOs.Capacitaciones;
 
 namespace TalentManagement.Client.Services;
@@ -31,6 +31,13 @@ public class CapacitacionApiService(HttpClient http)
         return r.IsSuccessStatusCode ? await r.Content.ReadFromJsonAsync<CapacitacionDto>() : null;
     }
 
+    public async Task<CapacitacionDto?> ConfigurarCertificadoAsync(int id, ConfigurarCertificadoDto dto)
+    {
+        var r = await http.PatchAsJsonAsync($"{Base}/{id}/certificado", dto);
+        return r.IsSuccessStatusCode ? await r.Content.ReadFromJsonAsync<CapacitacionDto>() : null;
+    }
+
     public Task<bool> DeleteAsync(int id) =>
         http.DeleteAsync($"{Base}/{id}").ContinueWith(t => t.Result.IsSuccessStatusCode);
 }
+

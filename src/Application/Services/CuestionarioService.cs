@@ -7,7 +7,10 @@ namespace TalentManagement.Application.Services;
 public class CuestionarioService(
     ICuestionarioRepository repository,
     IColaboradorRepository colaboradorRepository,
-    ICapacitacionRepository capacitacionRepository)
+    ICapacitacionRepository capacitacionRepository,
+    ICertificadoRepository certificadoRepository,
+    IInscripcionRepository inscripcionRepository,
+    ICertificadoPdfService certificadoPdfService)
 {
     public async Task<CuestionarioDto?> GetByCapacitacionAsync(int capacitacionId)
     {
@@ -155,6 +158,93 @@ public class CuestionarioService(
         };
 
         await repository.SaveRespuestaAsync(respuesta);
+
+        // Emitir certificado automáticamente si la capacitación lo tiene configurado y el colaborador aprobó
+        if (aprobado)
+        {
+            try
+            {
+                var inscripcion = await inscripcionRepository.GetByIdAsync(dto.InscripcionId);
+                if (inscripcion is not null)
+                {
+                    var capacitacion = await capacitacionRepository.GetByIdAsync(cuestionario.CapacitacionId);
+                    if (capacitacion is not null && capacitacion.EmiteCertificado)
+                    {
+                        // Cargar datos del colaborador para resolver variables
+                        var colEntity = await colaboradorRepository.GetByIdAsync(inscripcion.ColaboradorId);
+
+                        string nombreCert;
+                        if (!string.IsNullOrWhiteSpace(capacitacion.PlantillaNombreCertificado) && colEntity is not null)
+                        {
+                            // Resolver variables: {{nombre_completo}}, {{cargo}}, {{area}},
+                            // {{capacitacion}}, {{fecha_emision}}, {{puntaje}}
+                            nombreCert = capacitacion.PlantillaNombreCertificado
+                                .Replace("{{nombre_completo}}", $"{colEntity.Nombre} {colEntity.Apellido}")
+                                .Replace("{{cargo}}", colEntity.Cargo?.Nombre ?? "")
+                                .Replace("{{area}}", colEntity.Area?.Nombre ?? "")
+                                .Replace("{{capacitacion}}", capacitacion.Nombre)
+                                .Replace("{{fecha_emision}}", DateTime.Today.ToString("dd/MM/yyyy"))
+                                .Replace("{{puntaje}}", $"{puntaje:0.#}%");
+                        }
+                        else
+                        {
+                            nombreCert = !string.IsNullOrWhiteSpace(capacitacion.NombreCertificado)
+                                ? capacitacion.NombreCertificado
+                                : capacitacion.Nombre;
+                        }
+
+                        // Solo emitir si no existe ya un certificado de esta capacitación para este colaborador
+                        var existentes = await certificadoRepository.GetByColaboradorAsync(inscripcion.ColaboradorId);
+                        var yaExiste = existentes.Any(c => c.CapacitacionId == capacitacion.Id);
+
+                        if (!yaExiste)
+                        {
+                            // Generar PDF si hay plantilla DOCX
+                            byte[]? pdfBytes = null;
+                            if (capacitacion.ArchivoDocxCertificado is { Length: > 0 })
+                            {
+                                try
+                                {
+                                    var vars = new Dictionary<string, string>
+                                    {
+                                        ["{{nombre_completo}}"] = colEntity is not null ? $"{colEntity.Nombre} {colEntity.Apellido}" : "",
+                                        ["{{cargo}}"]           = colEntity?.Cargo?.Nombre ?? "",
+                                        ["{{area}}"]            = colEntity?.Area?.Nombre ?? "",
+                                        ["{{capacitacion}}"]    = capacitacion.Nombre,
+                                        ["{{fecha_emision}}"]   = DateTime.Today.ToString("dd/MM/yyyy"),
+                                        ["{{puntaje}}"]         = $"{puntaje:0.#}%"
+                                    };
+                                    pdfBytes = certificadoPdfService.GenerarPdf(capacitacion.ArchivoDocxCertificado, vars);
+                                }
+                                catch { /* No bloquear si falla la generacion del PDF */ }
+                            }
+
+                            await certificadoRepository.CreateAsync(new Certificado
+                            {
+                                Nombre = nombreCert,
+                                Institucion = "NovaHub",
+                                FechaEmision = DateTime.Today,
+                                ColaboradorId = inscripcion.ColaboradorId,
+                                CapacitacionId = capacitacion.Id,
+                                PdfBytes = pdfBytes
+                            });
+
+                            return new ResultadoCuestionarioDto
+                            {
+                                Puntaje = puntaje,
+                                Aprobado = aprobado,
+                                PuntajeAprobacion = cuestionario.PuntajeAprobacion,
+                                TotalPreguntas = total,
+                                Correctas = correctas,
+                                CertificadoEmitido = true,
+                                NombreCertificado = nombreCert
+                            };
+                        }
+                    }
+                }
+            }
+            catch { /* No bloquear el resultado si falla la emisión del certificado */ }
+        }
 
         return new ResultadoCuestionarioDto
         {

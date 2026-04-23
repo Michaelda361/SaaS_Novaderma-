@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using TalentManagement.Infrastructure.Persistence;
 
@@ -11,9 +12,11 @@ using TalentManagement.Infrastructure.Persistence;
 namespace TalentManagement.Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260423155242_AddCertificadoToCapacitacion")]
+    partial class AddCertificadoToCapacitacion
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -111,9 +114,6 @@ namespace TalentManagement.Infrastructure.Migrations
                     b.Property<bool>("Activo")
                         .HasColumnType("bit");
 
-                    b.Property<byte[]>("ArchivoDocxCertificado")
-                        .HasColumnType("varbinary(max)");
-
                     b.Property<int?>("AreaId")
                         .HasColumnType("int");
 
@@ -141,9 +141,6 @@ namespace TalentManagement.Infrastructure.Migrations
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("NombreCertificado")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("PlantillaNombreCertificado")
                         .HasColumnType("nvarchar(max)");
 
                     b.HasKey("Id");
@@ -195,9 +192,6 @@ namespace TalentManagement.Infrastructure.Migrations
                     b.Property<bool>("Activo")
                         .HasColumnType("bit");
 
-                    b.Property<int?>("CapacitacionId")
-                        .HasColumnType("int");
-
                     b.Property<int>("ColaboradorId")
                         .HasColumnType("int");
 
@@ -215,15 +209,10 @@ namespace TalentManagement.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<byte[]>("PdfBytes")
-                        .HasColumnType("varbinary(max)");
-
                     b.Property<string>("UrlDocumento")
                         .HasColumnType("nvarchar(max)");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("CapacitacionId");
 
                     b.HasIndex("ColaboradorId");
 
@@ -857,17 +846,11 @@ namespace TalentManagement.Infrastructure.Migrations
 
             modelBuilder.Entity("TalentManagement.Domain.Entities.Certificado", b =>
                 {
-                    b.HasOne("TalentManagement.Domain.Entities.Capacitacion", "Capacitacion")
-                        .WithMany()
-                        .HasForeignKey("CapacitacionId");
-
                     b.HasOne("TalentManagement.Domain.Entities.Colaborador", "Colaborador")
                         .WithMany("Certificados")
                         .HasForeignKey("ColaboradorId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.Navigation("Capacitacion");
 
                     b.Navigation("Colaborador");
                 });

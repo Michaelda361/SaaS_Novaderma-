@@ -1,7 +1,9 @@
-@page "/certificados"
+﻿@page "/certificados"
 @attribute [Authorize]
 @inject CertificadoApiService ApiService
 @inject ColaboradorApiService ColaboradorService
+@inject AuthInfoService AuthInfo
+@inject IJSRuntime JS
 
 <Toast @ref="toast" />
 <ConfirmDialog Visible="confirmVisible"
@@ -9,25 +11,12 @@
                OnConfirm="ConfirmarEliminar"
                OnCancel="() => confirmVisible = false" />
 
-<div class="card">
-    <div class="card-header">
-        <span class="card-title">Certificados</span>
-        <button class="btn btn-primary btn-sm" @onclick="AbrirModal">+ Nuevo certificado</button>
-    </div>
-
-    <div class="filter-bar">
-        <div class="search-input-wrap">
-            <span class="search-icon">🔍</span>
-            <input type="search" placeholder="Buscar por nombre o colaborador..."
-                   @bind="busqueda" @bind:event="oninput" />
-        </div>
-        <div class="flex gap-2">
-            <button class="btn btn-ghost btn-sm @(filtroEstado == "todos" ? "active" : "")"
-                    @onclick='() => filtroEstado = "todos"'>Todos</button>
-            <button class="btn btn-ghost btn-sm @(filtroEstado == "vencidos" ? "active" : "")"
-                    @onclick='() => filtroEstado = "vencidos"'>Vencidos</button>
-            <button class="btn btn-ghost btn-sm @(filtroEstado == "proximos" ? "active" : "")"
-                    @onclick='() => filtroEstado = "proximos"'>Próximos a vencer</button>
+@if (AuthInfo.EsSoloColaborador)
+{
+    <div class="page-header">
+        <div>
+            <h2 class="page-title">Mis Certificados</h2>
+            <p class="page-subtitle">Certificados obtenidos en tus capacitaciones</p>
         </div>
     </div>
 
@@ -35,72 +24,77 @@
     {
         <div class="loading"><div class="spinner"></div> Cargando...</div>
     }
-    else if (!Filtrados.Any())
+    else if (!certificados?.Any() ?? true)
     {
         <div class="empty-state">
             <div class="empty-state-icon">🏆</div>
-            <h3>Sin certificados</h3>
-            <p>Agrega el primer certificado para comenzar.</p>
+            <h3>Sin certificados aún</h3>
+            <p>Completa y aprueba una capacitación para obtener tu primer certificado.</p>
+            <a href="capacitaciones" class="btn btn-primary" style="margin-top:1rem;">Ver capacitaciones</a>
         </div>
     }
     else
     {
-        <div class="table-wrapper">
-            <table>
-                <thead>
-                    <tr>
-                        <th>Certificado</th>
-                        <th>Colaborador</th>
-                        <th>Institución</th>
-                        <th>Emisión</th>
-                        <th>Vencimiento</th>
-                        <th>Estado</th>
-                        <th></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var c in Filtrados)
-                    {
-                        <tr>
-                            <td><strong>@c.Nombre</strong></td>
-                            <td class="text-sm">@c.ColaboradorNombre</td>
-                            <td class="text-muted text-sm">@c.Institucion</td>
-                            <td class="text-sm">@c.FechaEmision.ToString("dd/MM/yyyy")</td>
-                            <td class="text-sm">@(c.FechaVencimiento?.ToString("dd/MM/yyyy") ?? "Sin vencimiento")</td>
-                            <td>
-                                @if (c.EstaVencido)
-                                {
-                                    <span class="badge badge-danger">Vencido</span>
-                                }
-                                else if (c.VenceProximamente)
-                                {
-                                    <span class="badge badge-warning">Próximo a vencer</span>
-                                }
-                                else
-                                {
-                                    <span class="badge badge-success">Vigente</span>
-                                }
-                            </td>
-                            <td>
-                                <div class="flex gap-2">
-                                    @if (!string.IsNullOrEmpty(c.UrlDocumento))
-                                    {
-                                        <a href="@c.UrlDocumento" target="_blank"
-                                           class="btn btn-ghost btn-sm btn-icon" title="Ver documento">📄</a>
-                                    }
-                                    <button class="btn btn-ghost btn-sm btn-icon"
-                                            @onclick="() => AbrirEditar(c)" title="Editar">✏️</button>
-                                    <button class="btn btn-danger btn-sm btn-icon"
-                                            @onclick="() => PedirConfirmacion(c)" title="Eliminar">🗑️</button>
-                                </div>
-                            </td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
+        <div style="display:flex;flex-direction:column;gap:1rem;">
+            @foreach (var c in certificados!)
+            {
+                var cert = c;
+                <div class="card" style="padding:0;">
+                    <div style="padding:1rem 1.25rem;display:flex;align-items:center;gap:1rem;flex-wrap:wrap;">
+                        <span style="font-size:2rem;">🏆</span>
+                        <div style="flex:1;min-width:0;">
+                            <div class="font-medium" style="font-size:1rem;">@c.Nombre</div>
+                            <div style="display:flex;gap:1rem;flex-wrap:wrap;margin-top:.3rem;">
+                                <span class="text-sm text-muted">🏢 @c.Institucion</span>
+                                <span class="text-sm text-muted">📅 Emitido el @c.FechaEmision.ToString("dd/MM/yyyy")</span>
+                                @if (c.FechaVencimiento.HasValue) { <span class="text-sm text-muted">⏳ Vence el @c.FechaVencimiento.Value.ToString("dd/MM/yyyy")</span> }
+                                @if (!string.IsNullOrWhiteSpace(c.CapacitacionNombre)) { <span class="text-sm text-muted">📚 @c.CapacitacionNombre</span> }
+                            </div>
+                        </div>
+                        <div style="display:flex;align-items:center;gap:.5rem;flex-shrink:0;">
+                            @if (c.EstaVencido) { <span class="badge badge-danger">Vencido</span> }
+                            else if (c.VenceProximamente) { <span class="badge badge-warning">Próximo a vencer</span> }
+                            else { <span class="badge badge-success">Vigente</span> }
+                            @if (c.TienePdf) { <button class="btn btn-primary btn-sm" @onclick="@(() => DescargarPdf(cert.Id))">⬇ Descargar</button> }
+                            @if (!string.IsNullOrEmpty(c.UrlDocumento)) { <a href="@c.UrlDocumento" target="_blank" class="btn btn-ghost btn-sm">📄 Ver</a> }
+                        </div>
+                    </div>
+                </div>
+            }
         </div>
     }
-</div>
+}
+else
+{
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">Certificados</span>
+            <button class="btn btn-primary btn-sm" @onclick="AbrirModal">+ Nuevo certificado</button>
+        </div>
+        <div class="filter-bar">
+            <div class="search-input-wrap"><span class="search-icon">🔍</span><input type="search" placeholder="Buscar..." @bind="busqueda" @bind:event="oninput" /></div>
+            <div class="flex gap-2"><button class="btn btn-ghost btn-sm @(filtroEstado == "todos" ? "active" : "")" @onclick='() => filtroEstado = "todos"'>Todos</button><button class="btn btn-ghost btn-sm @(filtroEstado == "vencidos" ? "active" : "")" @onclick='() => filtroEstado = "vencidos"'>Vencidos</button><button class="btn btn-ghost btn-sm @(filtroEstado == "proximos" ? "active" : "")" @onclick='() => filtroEstado = "proximos"'>Próximos</button></div>
+        </div>
+        @if (cargando) { <div class="loading"><div class="spinner"></div> Cargando...</div> }
+        else if (!Filtrados.Any()) { <div class="empty-state"><div class="empty-state-icon">��</div><h3>Sin certificados</h3></div> }
+        else
+        {
+            <div class="table-wrapper"><table><thead><tr><th>Certificado</th><th>Colaborador</th><th>Institución</th><th>Emisión</th><th>Vencimiento</th><th>Estado</th><th></th></tr></thead><tbody>
+            @foreach (var c in Filtrados) { var cert = c;
+                <tr>
+                    <td><div class="font-medium">@c.Nombre</div>@if (!string.IsNullOrWhiteSpace(c.CapacitacionNombre)){<div class="text-xs text-muted">📚 @c.CapacitacionNombre</div>}</td>
+                    <td class="text-sm">@c.ColaboradorNombre</td>
+                    <td class="text-muted text-sm">@c.Institucion</td>
+                    <td class="text-sm">@c.FechaEmision.ToString("dd/MM/yyyy")</td>
+                    <td class="text-sm">@(c.FechaVencimiento?.ToString("dd/MM/yyyy") ?? "Sin vencimiento")</td>
+                    <td>@if(c.EstaVencido){<span class="badge badge-danger">Vencido</span>}else if(c.VenceProximamente){<span class="badge badge-warning">Próximo</span>}else{<span class="badge badge-success">Vigente</span>}</td>
+                    <td><div class="flex gap-2">@if(c.TienePdf){<button class="btn btn-primary btn-sm btn-icon" @onclick="@(() => DescargarPdf(cert.Id))">⬇ PDF</button>}@if(!string.IsNullOrEmpty(c.UrlDocumento)){<a href="@c.UrlDocumento" target="_blank" class="btn btn-ghost btn-sm btn-icon">📄</a>}<button class="btn btn-ghost btn-sm btn-icon" @onclick="@(() => AbrirEditar(cert))">✏️</button><button class="btn btn-danger btn-sm btn-icon" @onclick="@(() => PedirConfirmacion(cert))">🗑️</button></div></td>
+                </tr>
+            }
+            </tbody></table></div>
+        }
+    </div>
+}
 
 @if (mostrarModal)
 {
@@ -195,15 +189,29 @@
 
     protected override async Task OnInitializedAsync()
     {
-        var t1 = ApiService.GetAllAsync();
-        var t2 = ColaboradorService.GetAllAsync();
-        await Task.WhenAll(t1, t2);
-        certificados = t1.Result;
-        colaboradores = t2.Result;
+        await AuthInfo.LoadAsync();
+
+        if (AuthInfo.EsSoloColaborador)
+        {
+            certificados = await ApiService.GetMisAsync();
+        }
+        else
+        {
+            var t1 = ApiService.GetAllAsync();
+            var t2 = ColaboradorService.GetAllAsync();
+            await Task.WhenAll(t1, t2);
+            certificados = t1.Result;
+            colaboradores = t2.Result;
+        }
         cargando = false;
     }
 
-    private async Task Cargar() => certificados = await ApiService.GetAllAsync();
+    private async Task Cargar()
+    {
+        certificados = AuthInfo.EsSoloColaborador
+            ? await ApiService.GetMisAsync()
+            : await ApiService.GetAllAsync();
+    }
 
     private void AbrirModal()
     {
@@ -250,5 +258,13 @@
         confirmVisible = false;
         if (await ApiService.DeleteAsync(eliminandoId)) { await Cargar(); await toast.Show("Certificado eliminado."); }
         else await toast.Show("No se pudo eliminar.", "error");
+    }
+
+    private async Task DescargarPdf(int id)
+    {
+        var (bytes, fileName) = await ApiService.DescargarPdfAsync(id);
+        if (bytes is null) { await toast.Show("No se pudo descargar el PDF.", "error"); return; }
+        await JS.InvokeVoidAsync("descargarArchivo", Convert.ToBase64String(bytes), fileName, "application/pdf");
+        await toast.Show("Certificado descargado.");
     }
 }

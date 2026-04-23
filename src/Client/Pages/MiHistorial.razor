@@ -1,0 +1,139 @@
+@page "/mi-historial"
+@attribute [Authorize]
+@inject InscripcionApiService InscripcionService
+@inject CuestionarioApiService CuestionarioService
+@inject AuthInfoService AuthInfo
+@inject NavigationManager Nav
+
+<div class="page-header">
+    <div>
+        <h2 class="page-title">Mi Historial de Capacitaciones</h2>
+        <p class="page-subtitle">Capacitaciones en las que has participado y tus resultados</p>
+    </div>
+</div>
+
+@if (cargando)
+{
+    <div class="loading"><div class="spinner"></div> Cargando historial...</div>
+}
+else if (!items.Any())
+{
+    <div class="empty-state">
+        <div class="empty-state-icon">📚</div>
+        <h3>Sin historial</h3>
+        <p>Aún no estás inscrito en ninguna capacitación.</p>
+        <a href="capacitaciones" class="btn btn-primary" style="margin-top:1rem;">Ver capacitaciones</a>
+    </div>
+}
+else
+{
+    <div style="display:flex;flex-direction:column;gap:1rem;">
+        @foreach (var item in items)
+        {
+            var i = item;
+            <div class="card" style="padding:0;">
+                <div style="padding:1rem 1.25rem;display:flex;align-items:flex-start;gap:1rem;flex-wrap:wrap;">
+                    <div style="font-size:2rem;line-height:1;flex-shrink:0;">
+                        @if (i.Resultado is not null)
+                        { @(i.Resultado.Aprobado ? "🎉" : "😔") }
+                        else if (i.Inscripcion.Asistio)
+                        { <span>✅</span> }
+                        else
+                        { <span>📚</span> }
+                    </div>
+
+                    <div style="flex:1;min-width:0;">
+                        <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;">
+                            <span class="font-medium" style="font-size:1rem;">@i.Inscripcion.CapacitacionNombre</span>
+                            @if (i.Resultado is not null)
+                            {
+                                <span class="badge @(i.Resultado.Aprobado ? "badge-success" : "badge-danger")">
+                                    @(i.Resultado.Aprobado ? "Aprobado" : "No aprobado")
+                                </span>
+                            }
+                            else if (i.Inscripcion.Asistio)
+                            { <span class="badge badge-info">Asistió</span> }
+                            else
+                            { <span class="badge badge-gray">Inscrito</span> }
+                        </div>
+
+                        <div style="display:flex;gap:1.25rem;flex-wrap:wrap;margin-top:.4rem;">
+                            <span class="text-sm text-muted">
+                                📅 Inscrito el @i.Inscripcion.FechaInscripcion.ToString("dd/MM/yyyy")
+                            </span>
+                            @if (i.Inscripcion.Calificacion.HasValue)
+                            {
+                                <span class="text-sm text-muted">
+                                    📊 Calificación: <strong>@i.Inscripcion.Calificacion.Value.ToString("0.##")</strong>
+                                </span>
+                            }
+                            @if (i.Resultado is not null)
+                            {
+                                <span class="text-sm text-muted">
+                                    🎯 Cuestionario: <strong>@i.Resultado.Puntaje.ToString("0.#")%</strong>
+                                    (@i.Resultado.Correctas/@i.Resultado.TotalPreguntas correctas · mínimo @i.Resultado.PuntajeAprobacion%)
+                                </span>
+                            }
+                        </div>
+
+                        @if (!string.IsNullOrWhiteSpace(i.Inscripcion.Observaciones))
+                        {
+                            <div class="text-sm text-muted" style="margin-top:.3rem;font-style:italic;">
+                                💬 @i.Inscripcion.Observaciones
+                            </div>
+                        }
+                    </div>
+
+                    <button class="btn btn-ghost btn-sm" style="flex-shrink:0;"
+                            @onclick="@(() => Nav.NavigateTo($"/capacitaciones/{i.Inscripcion.CapacitacionId}"))">
+                        Ver →
+                    </button>
+                </div>
+            </div>
+        }
+    </div>
+
+    <div class="text-sm text-muted" style="margin-top:1rem;text-align:center;">
+        @items.Count capacitación(es) en total ·
+        @items.Count(x => x.Resultado?.Aprobado == true) aprobada(s) ·
+        @items.Count(x => x.Inscripcion.Asistio) con asistencia
+    </div>
+}
+
+@code {
+    private record HistorialItem(InscripcionDto Inscripcion, ResultadoCuestionarioDto? Resultado);
+
+    private List<HistorialItem> items = [];
+    private bool cargando = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await AuthInfo.LoadAsync();
+
+        if (!AuthInfo.ColaboradorId.HasValue)
+        {
+            cargando = false;
+            return;
+        }
+
+        var inscripciones = await InscripcionService.GetByColaboradorAsync(AuthInfo.ColaboradorId.Value);
+
+        // Para cada inscripción, obtener el resultado del cuestionario en paralelo
+        var tareas = inscripciones.Select(async insc =>
+        {
+            ResultadoCuestionarioDto? resultado = null;
+            try
+            {
+                var cuestionario = await CuestionarioService.GetByCapacitacionAsync(insc.CapacitacionId);
+                if (cuestionario is not null)
+                    resultado = await CuestionarioService.GetResultadoAsync(cuestionario.Id, insc.Id);
+            }
+            catch { }
+            return new HistorialItem(insc, resultado);
+        });
+
+        var resultados = await Task.WhenAll(tareas);
+        items = resultados.OrderByDescending(x => x.Inscripcion.FechaInscripcion).ToList();
+        cargando = false;
+    }
+}

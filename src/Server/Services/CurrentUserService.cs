@@ -84,4 +84,18 @@ public class CurrentUserService(
         }
         catch { return false; }
     }
+
+    /// <summary>
+    /// Devuelve el Id del colaborador autenticado, o null si no tiene registro en BD.
+    /// </summary>
+    public async Task<int?> GetColaboradorIdAsync()
+    {
+        try
+        {
+            var email = GetEmail();
+            var colaborador = await colaboradorRepo.GetByEmailAsync(email);
+            return colaborador?.Id;
+        }
+        catch { return null; }
+    }
 }

@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using TalentManagement.Infrastructure.Persistence;
 
@@ -11,9 +12,11 @@ using TalentManagement.Infrastructure.Persistence;
 namespace TalentManagement.Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260423163024_AddCapacitacionIdToCertificado")]
+    partial class AddCapacitacionIdToCertificado
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -111,9 +114,6 @@ namespace TalentManagement.Infrastructure.Migrations
                     b.Property<bool>("Activo")
                         .HasColumnType("bit");
 
-                    b.Property<byte[]>("ArchivoDocxCertificado")
-                        .HasColumnType("varbinary(max)");
-
                     b.Property<int?>("AreaId")
                         .HasColumnType("int");
 
@@ -141,9 +141,6 @@ namespace TalentManagement.Infrastructure.Migrations
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("NombreCertificado")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("PlantillaNombreCertificado")
                         .HasColumnType("nvarchar(max)");
 
                     b.HasKey("Id");
@@ -214,9 +211,6 @@ namespace TalentManagement.Infrastructure.Migrations
                     b.Property<string>("Nombre")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
-
-                    b.Property<byte[]>("PdfBytes")
-                        .HasColumnType("varbinary(max)");
 
                     b.Property<string>("UrlDocumento")
                         .HasColumnType("nvarchar(max)");

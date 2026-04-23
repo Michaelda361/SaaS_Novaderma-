@@ -44,6 +44,12 @@
             <NavLink class="nav-link" href="capacitaciones">
                 <span class="nav-icon">📚</span> Capacitaciones
             </NavLink>
+            @if (AuthInfo.EsSoloColaborador)
+            {
+                <NavLink class="nav-link" href="mi-historial">
+                    <span class="nav-icon">📋</span> Mi Historial
+                </NavLink>
+            }
 
             <NavLink class="nav-link" href="certificados">
                 <span class="nav-icon">🏆</span> Certificados
@@ -150,6 +156,12 @@
         if (AuthInfo.EsJefe || AuthInfo.EsAdmin)
         {
             await Notificaciones.ConectarAsync();
+            // Reintentar hasta que la conexion este lista (puede tardar unos ms)
+            for (int i = 0; i < 10; i++)
+            {
+                if (Notificaciones.Conectado) break;
+                await Task.Delay(200);
+            }
             await Notificaciones.UnirseGrupoAdminAsync();
             Notificaciones.OnCuestionarioRespondido += OnCuestionarioRespondido;
         }
@@ -194,6 +206,7 @@
         "DocumentosPropuestas" => "Propuestas Pendientes",
         "CartasLaborales"      => "Mis Cartas Laborales",
         "CartasLaboralesAdmin" => "Administracion de Cartas",
+        "MiHistorial"          => "Mi Historial de Capacitaciones",
         "Landing"              => "Bienvenido",
         _                      => "NovaHub"
     };

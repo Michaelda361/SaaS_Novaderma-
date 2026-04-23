@@ -3,6 +3,8 @@
 @inject CapacitacionApiService ApiService
 @inject AreaApiService AreaService
 @inject ColaboradorApiService ColaboradorService
+@inject InscripcionApiService InscripcionService
+@inject CuestionarioApiService CuestionarioService
 @inject AuthInfoService AuthInfo
 @inject NavigationManager Nav
 <Toast @ref="toast" />
@@ -11,13 +13,131 @@
                OnConfirm="ConfirmarEliminar"
                OnCancel="() => confirmVisible = false" />
 
+<div class="page-header">
+    <div>
+        <h2 class="page-title">Capacitaciones</h2>
+        <p class="page-subtitle">
+            @if (PuedeGestionar) { <span>Gestiona y realiza seguimiento de las capacitaciones</span> }
+            else { <span>Capacitaciones disponibles para ti</span> }
+        </p>
+    </div>
+    @if (PuedeGestionar && tabActiva == "capacitaciones")
+    {
+        <button class="btn btn-primary btn-sm" @onclick="AbrirModal">+ Nueva capacitación</button>
+    }
+</div>
+
+@if (PuedeGestionar)
+{
+    <div class="admin-tabs">
+        <button class="admin-tab @(tabActiva == "capacitaciones" ? "admin-tab--active" : "")"
+                @onclick='() => tabActiva = "capacitaciones"'>
+            📚 Capacitaciones
+            @if (capacitaciones is not null)
+            {
+                <span class="admin-tab-count">@capacitaciones.Count</span>
+            }
+        </button>
+        <button class="admin-tab @(tabActiva == "historial" ? "admin-tab--active" : "")"
+                @onclick='() => { tabActiva = "historial"; _ = CargarHistorial(); }'>
+            📋 Historial
+        </button>
+    </div>
+}
+
+@if (tabActiva == "historial" && PuedeGestionar)
+{
+    @if (cargandoHistorial)
+    {
+        <div class="loading"><div class="spinner"></div> Cargando historial...</div>
+    }
+    else if (!historialItems.Any())
+    {
+        <div class="empty-state">
+            <div class="empty-state-icon">📋</div>
+            <h3>Sin historial</h3>
+            <p>Ningún colaborador ha completado capacitaciones aún.</p>
+        </div>
+    }
+    else
+    {
+        <div class="card">
+            <div class="filter-bar">
+                <div class="search-input-wrap">
+                    <span class="search-icon">🔍</span>
+                    <input type="search" placeholder="Buscar colaborador o capacitación..."
+                           @bind="busquedaHistorial" @bind:event="oninput" />
+                </div>
+                <span class="text-sm text-muted">@HistorialFiltrado.Count() registro(s)</span>
+            </div>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Colaborador</th>
+                            <th>Área</th>
+                            <th>Capacitación</th>
+                            <th>Inscripción</th>
+                            <th>Asistió</th>
+                            <th>Calificación</th>
+                            <th>Cuestionario</th>
+                            <th>Resultado</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var h in HistorialFiltrado)
+                        {
+                            <tr>
+                                <td class="font-medium">@h.Inscripcion.ColaboradorNombre</td>
+                                <td class="text-sm text-muted">@h.Inscripcion.ColaboradorArea</td>
+                                <td class="text-sm">@h.Inscripcion.CapacitacionNombre</td>
+                                <td class="text-sm text-muted">@h.Inscripcion.FechaInscripcion.ToString("dd/MM/yyyy")</td>
+                                <td>
+                                    <span class="badge @(h.Inscripcion.Asistio ? "badge-success" : "badge-gray")">
+                                        @(h.Inscripcion.Asistio ? "Sí" : "No")
+                                    </span>
+                                </td>
+                                <td class="text-sm">
+                                    @(h.Inscripcion.Calificacion.HasValue ? h.Inscripcion.Calificacion.Value.ToString("0.##") : "—")
+                                </td>
+                                <td>
+                                    @if (h.Resultado is not null)
+                                    {
+                                        <span class="text-sm font-medium">@h.Resultado.Puntaje.ToString("0.#")%</span>
+                                        <span class="text-muted text-xs"> (@h.Resultado.Correctas/@h.Resultado.TotalPreguntas)</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted text-sm">Sin responder</span>
+                                    }
+                                </td>
+                                <td>
+                                    @if (h.Resultado is null)
+                                    { <span class="badge badge-gray">Pendiente</span> }
+                                    else if (h.Resultado.Aprobado)
+                                    { <span class="badge badge-success">✅ Aprobado</span> }
+                                    else
+                                    { <span class="badge badge-danger">❌ No aprobado</span> }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <div class="text-sm text-muted" style="padding:.75rem 1rem;border-top:1px solid var(--border);">
+                @historialItems.Count(h => h.Resultado?.Aprobado == true) aprobado(s) ·
+                @historialItems.Count(h => h.Resultado is not null && !h.Resultado.Aprobado) no aprobado(s) ·
+                @historialItems.Count(h => h.Resultado is null) pendiente(s)
+            </div>
+        </div>
+    }
+}
+
+@if (tabActiva == "capacitaciones")
+{
 <div class="card">
     <div class="card-header">
         <span class="card-title">Capacitaciones</span>
-        @if (PuedeGestionar)
-        {
-            <button class="btn btn-primary btn-sm" @onclick="AbrirModal">+ Nueva capacitación</button>
-        }
     </div>
 
     <div class="filter-bar">
@@ -125,6 +245,7 @@
         </div>
     }
 </div>
+}
 
 @if (mostrarModal)
 {
@@ -194,6 +315,21 @@
                                 </select>
                             </div>
                         }
+                        <div class="form-group full" style="border-top:1px solid var(--border);padding-top:.75rem;margin-top:.25rem;">
+                            <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-weight:500;">
+                                <input type="checkbox" @bind="form.EmiteCertificado" />
+                                🏆 Emitir certificado al aprobar el cuestionario
+                            </label>
+                            @if (form.EmiteCertificado)
+                            {
+                                <div style="margin-top:.5rem;">
+                                    <label style="font-size:.8rem;font-weight:400;">Nombre del certificado <span class="text-muted">(opcional — si vacío usa el nombre de la capacitación)</span></label>
+                                    <InputText @bind-Value="form.NombreCertificado"
+                                               placeholder="Ej: Certificado de Seguridad Industrial"
+                                               style="margin-top:.25rem;" />
+                                </div>
+                            }
+                        </div>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -224,6 +360,23 @@
     private int eliminandoId;
     private Toast toast = default!;
     private CreateCapacitacionDto form = new();
+
+    // Pestañas
+    private string tabActiva = "capacitaciones";
+
+    // Historial
+    private record HistorialItem(InscripcionDto Inscripcion, ResultadoCuestionarioDto? Resultado);
+    private List<HistorialItem> historialItems = [];
+    private bool cargandoHistorial = false;
+    private bool historialCargado = false;
+    private string busquedaHistorial = string.Empty;
+
+    private IEnumerable<HistorialItem> HistorialFiltrado =>
+        string.IsNullOrWhiteSpace(busquedaHistorial)
+            ? historialItems
+            : historialItems.Where(h =>
+                h.Inscripcion.ColaboradorNombre.Contains(busquedaHistorial, StringComparison.OrdinalIgnoreCase) ||
+                h.Inscripcion.CapacitacionNombre.Contains(busquedaHistorial, StringComparison.OrdinalIgnoreCase));
 
     private List<CapacitacionDto> Filtradas
     {
@@ -295,7 +448,9 @@
             FechaInicio = c.FechaInicio,
             FechaFin = c.FechaFin,
             AreaId = c.AreaId,
-            ColaboradorId = c.ColaboradorId
+            ColaboradorId = c.ColaboradorId,
+            EmiteCertificado = c.EmiteCertificado,
+            NombreCertificado = c.NombreCertificado
         };
         tipoAsignacion = c.AreaId.HasValue ? "area" : c.ColaboradorId.HasValue ? "colaborador" : "general";
         editandoId = c.Id;
@@ -326,5 +481,49 @@
         confirmVisible = false;
         if (await ApiService.DeleteAsync(eliminandoId)) { await Cargar(); await toast.Show("Capacitación eliminada."); }
         else await toast.Show("No se pudo eliminar.", "error");
+    }
+
+    private async Task CargarHistorial()
+    {
+        if (historialCargado) return;
+        cargandoHistorial = true;
+        StateHasChanged();
+
+        var caps = capacitaciones ?? await ApiService.GetAllAsync() ?? [];
+
+        var tareas = caps.Select(async cap =>
+        {
+            var inscritos = new List<InscripcionDto>();
+            CuestionarioDto? cuestionario = null;
+            try
+            {
+                inscritos = await InscripcionService.GetByCapacitacionAsync(cap.Id);
+                cuestionario = await CuestionarioService.GetByCapacitacionAsync(cap.Id);
+            }
+            catch { }
+
+            return inscritos.Select(async insc =>
+            {
+                ResultadoCuestionarioDto? resultado = null;
+                if (cuestionario is not null)
+                {
+                    try { resultado = await CuestionarioService.GetResultadoAsync(cuestionario.Id, insc.Id); }
+                    catch { }
+                }
+                return new HistorialItem(insc, resultado);
+            });
+        });
+
+        var grupos = await Task.WhenAll(tareas);
+        var todos = await Task.WhenAll(grupos.SelectMany(g => g));
+
+        historialItems = todos
+            .OrderBy(h => h.Inscripcion.ColaboradorNombre)
+            .ThenBy(h => h.Inscripcion.CapacitacionNombre)
+            .ToList();
+
+        cargandoHistorial = false;
+        historialCargado = true;
+        StateHasChanged();
     }
 }

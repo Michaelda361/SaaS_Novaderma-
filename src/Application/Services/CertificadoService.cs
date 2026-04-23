@@ -1,4 +1,4 @@
-using TalentManagement.Application.Interfaces;
+﻿using TalentManagement.Application.Interfaces;
 using TalentManagement.Domain.Entities;
 using TalentManagement.Shared.DTOs.Certificados;
 
@@ -64,6 +64,12 @@ public class CertificadoService(ICertificadoRepository repository)
         return certs.Select(MapToDto).ToList();
     }
 
+
+    public async Task<byte[]?> GetPdfAsync(int id)
+    {
+        var cert = await repository.GetByIdAsync(id);
+        return cert?.PdfBytes;
+    }
     public async Task<bool> DeleteAsync(int id)
     {
         var cert = await repository.GetByIdAsync(id);
@@ -71,6 +77,7 @@ public class CertificadoService(ICertificadoRepository repository)
         await repository.DeleteAsync(id);
         return true;
     }
+
 
     private static CertificadoDto MapToDto(Certificado c) => new()
     {
@@ -83,6 +90,9 @@ public class CertificadoService(ICertificadoRepository repository)
         ColaboradorId = c.ColaboradorId,
         ColaboradorNombre = c.Colaborador is null
             ? string.Empty
-            : $"{c.Colaborador.Nombre} {c.Colaborador.Apellido}"
+            : $"{c.Colaborador.Nombre} {c.Colaborador.Apellido}",
+        CapacitacionId = c.CapacitacionId,
+        CapacitacionNombre = c.Capacitacion?.Nombre,
+        TienePdf = c.PdfBytes is { Length: > 0 }
     };
 }

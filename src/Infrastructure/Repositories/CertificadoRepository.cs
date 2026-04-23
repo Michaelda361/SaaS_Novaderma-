@@ -10,12 +10,14 @@ public class CertificadoRepository(AppDbContext context) : ICertificadoRepositor
     public async Task<IEnumerable<Certificado>> GetAllAsync() =>
         await context.Certificados
             .Include(c => c.Colaborador)
+            .Include(c => c.Capacitacion)
             .AsNoTracking()
             .ToListAsync();
 
     public async Task<IEnumerable<Certificado>> GetByColaboradorAsync(int colaboradorId) =>
         await context.Certificados
             .Include(c => c.Colaborador)
+            .Include(c => c.Capacitacion)
             .Where(c => c.ColaboradorId == colaboradorId)
             .AsNoTracking()
             .ToListAsync();
@@ -49,8 +51,7 @@ public class CertificadoRepository(AppDbContext context) : ICertificadoRepositor
     public async Task<IEnumerable<Certificado>> GetVencidosAsync() =>
         await context.Certificados
             .Include(c => c.Colaborador)
-            .IgnoreQueryFilters()
-            .Where(c => c.Activo && c.FechaVencimiento.HasValue && c.FechaVencimiento.Value < DateTime.Today)
+            .Where(c => c.FechaVencimiento.HasValue && c.FechaVencimiento.Value < DateTime.Today)
             .AsNoTracking()
             .ToListAsync();
 

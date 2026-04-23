@@ -28,4 +28,10 @@ public class ResultadoCuestionarioDto
     public int PuntajeAprobacion { get; set; }
     public int TotalPreguntas { get; set; }
     public int Correctas { get; set; }
+
+    /// <summary>True si se emitió un certificado automáticamente al aprobar.</summary>
+    public bool CertificadoEmitido { get; set; }
+
+    /// <summary>Nombre del certificado emitido, si aplica.</summary>
+    public string? NombreCertificado { get; set; }
 }

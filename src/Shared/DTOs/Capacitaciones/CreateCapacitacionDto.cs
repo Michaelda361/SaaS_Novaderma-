@@ -20,4 +20,17 @@ public class CreateCapacitacionDto
 
     public int? AreaId { get; set; }
     public int? ColaboradorId { get; set; }
+
+    /// <summary>Si true, se emite certificado automáticamente al aprobar el cuestionario.</summary>
+    public bool EmiteCertificado { get; set; } = false;
+
+    /// <summary>Nombre fijo del certificado. Si vacío, se usa el nombre de la capacitación.</summary>
+    public string? NombreCertificado { get; set; }
+
+    /// <summary>
+    /// Plantilla con variables: {{nombre_completo}}, {{cargo}}, {{area}},
+    /// {{capacitacion}}, {{fecha_emision}}, {{puntaje}}.
+    /// Tiene prioridad sobre NombreCertificado si está definida.
+    /// </summary>
+    public string? PlantillaNombreCertificado { get; set; }
 }

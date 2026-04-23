@@ -10,6 +10,16 @@ public class CertificadoDto
     public string? UrlDocumento { get; set; }
     public int ColaboradorId { get; set; }
     public string ColaboradorNombre { get; set; } = string.Empty;
+
+    /// <summary>Si fue emitido desde una capacitación, su Id.</summary>
+    public int? CapacitacionId { get; set; }
+
+    /// <summary>Nombre de la capacitación de origen, si aplica.</summary>
+    public string? CapacitacionNombre { get; set; }
+
+    /// <summary>True si tiene un PDF generado disponible para descargar.</summary>
+    public bool TienePdf { get; set; }
+
     public bool EstaVencido => FechaVencimiento.HasValue && FechaVencimiento.Value < DateTime.Today;
     public bool VenceProximamente => FechaVencimiento.HasValue
         && !EstaVencido

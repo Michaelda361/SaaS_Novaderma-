@@ -48,6 +48,7 @@ public static class DependencyInjection
         services.AddScoped<CuestionarioService>();
         services.AddScoped<LibreOfficeConverterService>();
         services.AddScoped<PdfGeneratorService>();
+        services.AddScoped<ICertificadoPdfService, CertificadoPdfService>();
         services.AddScoped<DocxToHtmlConverterService>();
 
         // SharePoint — mock en Development, real en producción

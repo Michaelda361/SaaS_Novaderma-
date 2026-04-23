@@ -10,6 +10,13 @@ public class Certificado : BaseEntity
     public DateTime? FechaVencimiento { get; set; }
     public string? UrlDocumento { get; set; }
 
+    /// <summary>PDF generado automáticamente desde la plantilla DOCX de la capacitación.</summary>
+    public byte[]? PdfBytes { get; set; }
+
     public int ColaboradorId { get; set; }
     public Colaborador Colaborador { get; set; } = null!;
+
+    /// <summary>Si fue emitido automáticamente al aprobar una capacitación, referencia a ella.</summary>
+    public int? CapacitacionId { get; set; }
+    public Capacitacion? Capacitacion { get; set; }
 }

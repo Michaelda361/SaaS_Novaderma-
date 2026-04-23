@@ -16,5 +16,11 @@ public class CapacitacionDto
     public int? ColaboradorId { get; set; }
     public string? ColaboradorNombre { get; set; }
 
+    public bool EmiteCertificado { get; set; }
+    public string? NombreCertificado { get; set; }
+    public string? PlantillaNombreCertificado { get; set; }
+    /// <summary>True si la capacitación tiene un DOCX de plantilla de certificado.</summary>
+    public bool TienePlantillaDocx { get; set; }
+
     public string TipoAsignacion => AreaId.HasValue ? "Área" : ColaboradorId.HasValue ? "Colaborador" : "General";
 }

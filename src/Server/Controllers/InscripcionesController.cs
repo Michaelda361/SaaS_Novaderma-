@@ -22,8 +22,19 @@ public class InscripcionesController(
     }
 
     [HttpGet("colaborador/{colaboradorId:int}")]
-    public async Task<IActionResult> GetByColaborador(int colaboradorId) =>
-        Ok(await service.GetByColaboradorAsync(colaboradorId));
+    public async Task<IActionResult> GetByColaborador(int colaboradorId)
+    {
+        // Jefe/Admin pueden ver inscripciones de cualquier colaborador
+        if (await currentUser.PuedeGestionarPlantillasAsync())
+            return Ok(await service.GetByColaboradorAsync(colaboradorId));
+
+        // Colaborador solo puede ver sus propias inscripciones
+        var miId = await currentUser.GetColaboradorIdAsync();
+        if (miId is null) return Forbid();
+        if (miId != colaboradorId) return Forbid();
+
+        return Ok(await service.GetByColaboradorAsync(colaboradorId));
+    }
 
     [HttpGet("{id:int}")]
     public async Task<IActionResult> GetById(int id)

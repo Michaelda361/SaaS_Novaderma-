@@ -1,4 +1,4 @@
-using System.Net.Http.Json;
+﻿using System.Net.Http.Json;
 using TalentManagement.Shared.DTOs.Certificados;
 
 namespace TalentManagement.Client.Services;
@@ -9,6 +9,9 @@ public class CertificadoApiService(HttpClient http)
 
     public Task<List<CertificadoDto>?> GetAllAsync() =>
         http.GetFromJsonAsync<List<CertificadoDto>>(Base);
+
+    public Task<List<CertificadoDto>?> GetMisAsync() =>
+        http.GetFromJsonAsync<List<CertificadoDto>>($"{Base}/mis");
 
     public Task<List<CertificadoDto>?> GetByColaboradorAsync(int colaboradorId) =>
         http.GetFromJsonAsync<List<CertificadoDto>>($"{Base}/colaborador/{colaboradorId}");
@@ -31,6 +34,15 @@ public class CertificadoApiService(HttpClient http)
     {
         var r = await http.PutAsJsonAsync($"{Base}/{id}", dto);
         return r.IsSuccessStatusCode ? await r.Content.ReadFromJsonAsync<CertificadoDto>() : null;
+    }
+
+    public async Task<(byte[]? bytes, string fileName)> DescargarPdfAsync(int id)
+    {
+        var r = await http.GetAsync($"{Base}/{id}/pdf");
+        if (!r.IsSuccessStatusCode) return (null, "");
+        var bytes = await r.Content.ReadAsByteArrayAsync();
+        var name = r.Content.Headers.ContentDisposition?.FileNameStar ?? $"certificado_{id}.pdf";
+        return (bytes, name);
     }
 
     public Task<bool> DeleteAsync(int id) =>

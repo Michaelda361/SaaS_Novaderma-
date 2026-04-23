@@ -28,6 +28,7 @@ public class NotificacionesService : IAsyncDisposable
     public event Action<SolicitudDocumentoDto>? OnNuevaSolicitud;
     public event Action<SolicitudDocumentoDto>? OnSolicitudResuelta;
     public event Action<TalentManagement.Shared.DTOs.Cuestionarios.CuestionarioRespondidoDto>? OnCuestionarioRespondido;
+    public event Action<TalentManagement.Shared.DTOs.Cuestionarios.CertificadoEmitidoDto>? OnCertificadoEmitido;
 
     public bool Conectado => _hub?.State == HubConnectionState.Connected;
 
@@ -96,6 +97,18 @@ public class NotificacionesService : IAsyncDisposable
                 Url: $"capacitaciones/{n.CapacitacionId}",
                 Fecha: DateTime.Now));
             OnCuestionarioRespondido?.Invoke(n);
+        });
+
+        _hub.On<TalentManagement.Shared.DTOs.Cuestionarios.CertificadoEmitidoDto>("CertificadoEmitido", c =>
+        {
+            AgregarNotificacion(new NotificacionItem(
+                Id: Guid.NewGuid().ToString(),
+                Titulo: "🏆 Certificado emitido",
+                Cuerpo: $"Aprobaste \"{c.CapacitacionNombre}\" con {c.Puntaje:0.#}%. Tu certificado \"{c.NombreCertificado}\" ya está disponible.",
+                Tipo: "certificado_emitido",
+                Url: "certificados",
+                Fecha: DateTime.Now));
+            OnCertificadoEmitido?.Invoke(c);
         });
 
         try { await _hub.StartAsync(); }

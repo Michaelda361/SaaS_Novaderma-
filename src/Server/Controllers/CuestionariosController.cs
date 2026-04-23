@@ -13,6 +13,7 @@ namespace TalentManagement.Server.Controllers;
 [Route("api/v1/[controller]")]
 public class CuestionariosController(
     CuestionarioService service,
+    InscripcionService inscripcionService,
     CurrentUserService currentUser,
     IHubContext<NotificacionesHub> hub) : ControllerBase
 {
@@ -51,18 +52,56 @@ public class CuestionariosController(
     [HttpPost("responder")]
     public async Task<IActionResult> Responder([FromBody] ResponderCuestionarioDto dto)
     {
-        var resultado = await service.ResponderAsync(dto);
-
-        // Notificar al grupo admins en background — no bloquea la respuesta al colaborador
-        var email = currentUser.GetEmail();
-        _ = Task.Run(async () =>
+        try
         {
-            var notif = await service.BuildNotificacionAsync(dto.CuestionarioId, email, resultado);
-            if (notif is not null)
-                await hub.Clients.Group("admins").SendAsync("CuestionarioRespondido", notif);
-        });
+            // Validar que la inscripción pertenece al colaborador autenticado
+            var miColaboradorId = await currentUser.GetColaboradorIdAsync();
+            if (miColaboradorId is null)
+                return Forbid();
 
-        return Ok(resultado);
+            var inscripcion = await inscripcionService.GetByIdAsync(dto.InscripcionId);
+            if (inscripcion is null)
+                return NotFound(new { message = "Inscripción no encontrada." });
+
+            if (inscripcion.ColaboradorId != miColaboradorId)
+                return Forbid();
+
+            var resultado = await service.ResponderAsync(dto);
+
+            // Notificar en background — no bloquea la respuesta al colaborador
+            var email = currentUser.GetEmail();
+            _ = Task.Run(async () =>
+            {
+                // Notificar al grupo admins
+                var notif = await service.BuildNotificacionAsync(dto.CuestionarioId, email, resultado);
+                if (notif is not null)
+                    await hub.Clients.Group("admins").SendAsync("CuestionarioRespondido", notif);
+
+                // Si se emitió certificado, notificar al colaborador en su grupo personal
+                if (resultado.CertificadoEmitido && !string.IsNullOrWhiteSpace(resultado.NombreCertificado))
+                {
+                    var certNotif = new CertificadoEmitidoDto
+                    {
+                        NombreCertificado = resultado.NombreCertificado,
+                        CapacitacionNombre = notif?.CapacitacionNombre ?? "",
+                        CapacitacionId = notif?.CapacitacionId ?? 0,
+                        Puntaje = resultado.Puntaje,
+                        FechaEmision = DateTime.Today
+                    };
+                    await hub.Clients.Group($"user:{email}").SendAsync("CertificadoEmitido", certNotif);
+                }
+            });
+
+            return Ok(resultado);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return UnprocessableEntity(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { message = "Error interno al procesar el cuestionario.", detail = ex.Message });
+        }
     }
 
     [HttpGet("{cuestionarioId:int}/resultado/{inscripcionId:int}")]
