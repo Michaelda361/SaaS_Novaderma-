@@ -247,6 +247,38 @@
 </div>
 }
 
+@* Sección de capacitaciones completadas — solo para colaboradores *@
+@if (AuthInfo.EsSoloColaborador && capacitacionesAprobadas.Any())
+{
+    <div style="margin-top:1.5rem;">
+        <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.75rem;">
+            <span style="font-size:1.1rem;">🎓</span>
+            <span class="font-medium">Completadas (@capacitacionesAprobadas.Count)</span>
+            <span class="text-sm text-muted">— capacitaciones que ya aprobaste</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:.5rem;">
+            @foreach (var c in (capacitaciones ?? []).Where(c => capacitacionesAprobadas.Contains(c.Id)))
+            {
+                var cap = c;
+                <div style="display:flex;align-items:center;gap:.875rem;padding:.75rem 1rem;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);opacity:.75;">
+                    <span style="font-size:1.25rem;">✅</span>
+                    <div style="flex:1;min-width:0;">
+                        <span class="font-medium text-sm">@c.Nombre</span>
+                        @if (!string.IsNullOrEmpty(c.Descripcion))
+                        {
+                            <span class="text-xs text-muted" style="margin-left:.5rem;">@c.Descripcion</span>
+                        }
+                    </div>
+                    <span class="badge badge-success" style="font-size:.7rem;">Aprobada</span>
+                    <button class="btn btn-ghost btn-sm btn-icon"
+                            @onclick="@(() => Nav.NavigateTo($"/capacitaciones/{cap.Id}"))"
+                            title="Ver detalle">👁️</button>
+                </div>
+            }
+        </div>
+    </div>
+}
+
 @if (mostrarModal)
 {
     <div class="modal-backdrop" @onclick="CerrarModal">
@@ -371,6 +403,9 @@
     private bool historialCargado = false;
     private string busquedaHistorial = string.Empty;
 
+    // Capacitaciones aprobadas por el colaborador (excluidas de la lista activa)
+    private HashSet<int> capacitacionesAprobadas = [];
+
     private IEnumerable<HistorialItem> HistorialFiltrado =>
         string.IsNullOrWhiteSpace(busquedaHistorial)
             ? historialItems
@@ -385,10 +420,16 @@
             var lista = capacitaciones ?? [];
             // Colaboradores ven: generales, las de su área, o las asignadas a ellos
             if (AuthInfo.EsSoloColaborador)
+            {
                 lista = lista.Where(c =>
+                    c.Publicada && (
                     c.TipoAsignacion == "General" ||
                     (c.AreaId.HasValue && c.AreaId == AuthInfo.AreaId) ||
-                    (c.ColaboradorId.HasValue && c.ColaboradorId == AuthInfo.ColaboradorId)).ToList();
+                    (c.ColaboradorId.HasValue && c.ColaboradorId == AuthInfo.ColaboradorId))).ToList();
+
+                // Excluir las que ya aprobó — pasan al historial
+                lista = lista.Where(c => !capacitacionesAprobadas.Contains(c.Id)).ToList();
+            }
 
             if (!string.IsNullOrWhiteSpace(busqueda))
                 lista = lista.Where(c => c.Nombre.Contains(busqueda, StringComparison.OrdinalIgnoreCase)).ToList();
@@ -412,7 +453,7 @@
         if (PuedeGestionar)
             await Task.WhenAll(Cargar(), CargarSelectores());
         else
-            await Cargar();
+            await Task.WhenAll(Cargar(), CargarAprobadas());
     }
 
     private void VerDetalle(int id) => Nav.NavigateTo($"/capacitaciones/{id}");
@@ -422,6 +463,32 @@
         cargando = true;
         capacitaciones = await ApiService.GetAllAsync();
         cargando = false;
+    }
+
+    private async Task CargarAprobadas()
+    {
+        if (!AuthInfo.ColaboradorId.HasValue) return;
+        try
+        {
+            var inscripciones = await InscripcionService.GetByColaboradorAsync(AuthInfo.ColaboradorId.Value);
+            var tareas = inscripciones.Select(async insc =>
+            {
+                try
+                {
+                    var cuestionario = await CuestionarioService.GetByCapacitacionAsync(insc.CapacitacionId);
+                    if (cuestionario is null) return (int?)null;
+                    var resultado = await CuestionarioService.GetResultadoAsync(cuestionario.Id, insc.Id);
+                    return resultado?.Aprobado == true ? insc.CapacitacionId : (int?)null;
+                }
+                catch { return (int?)null; }
+            });
+            var resultados = await Task.WhenAll(tareas);
+            capacitacionesAprobadas = resultados
+                .Where(id => id.HasValue)
+                .Select(id => id!.Value)
+                .ToHashSet();
+        }
+        catch { }
     }
 
     private async Task CargarSelectores()

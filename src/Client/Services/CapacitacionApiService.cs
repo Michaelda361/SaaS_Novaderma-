@@ -37,6 +37,18 @@ public class CapacitacionApiService(HttpClient http)
         return r.IsSuccessStatusCode ? await r.Content.ReadFromJsonAsync<CapacitacionDto>() : null;
     }
 
+    public async Task<CapacitacionDto?> PublicarAsync(int id)
+    {
+        var r = await http.PatchAsync($"{Base}/{id}/publicar", null);
+        return r.IsSuccessStatusCode ? await r.Content.ReadFromJsonAsync<CapacitacionDto>() : null;
+    }
+
+    public async Task<CapacitacionDto?> DespublicarAsync(int id)
+    {
+        var r = await http.PatchAsync($"{Base}/{id}/despublicar", null);
+        return r.IsSuccessStatusCode ? await r.Content.ReadFromJsonAsync<CapacitacionDto>() : null;
+    }
+
     public Task<bool> DeleteAsync(int id) =>
         http.DeleteAsync($"{Base}/{id}").ContinueWith(t => t.Result.IsSuccessStatusCode);
 }

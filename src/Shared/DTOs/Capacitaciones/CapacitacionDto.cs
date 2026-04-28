@@ -21,6 +21,8 @@ public class CapacitacionDto
     public string? PlantillaNombreCertificado { get; set; }
     /// <summary>True si la capacitación tiene un DOCX de plantilla de certificado.</summary>
     public bool TienePlantillaDocx { get; set; }
+    /// <summary>True si está publicada y visible para colaboradores. False = Borrador.</summary>
+    public bool Publicada { get; set; }
 
     public string TipoAsignacion => AreaId.HasValue ? "Área" : ColaboradorId.HasValue ? "Colaborador" : "General";
 }

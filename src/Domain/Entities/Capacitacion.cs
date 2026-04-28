@@ -37,6 +37,12 @@ public class Capacitacion : BaseEntity
     /// </summary>
     public byte[]? ArchivoDocxCertificado { get; set; }
 
+    /// <summary>
+    /// Indica si la capacitación está publicada y visible para los colaboradores.
+    /// Mientras está en Borrador (false), solo la ven Jefe/Admin.
+    /// </summary>
+    public bool Publicada { get; set; } = false;
+
     [JsonIgnore]
     public ICollection<Inscripcion> Inscripciones { get; set; } = [];
     [JsonIgnore]

@@ -110,6 +110,24 @@ public class CapacitacionService(
         return true;
     }
 
+    public async Task<CapacitacionDto?> PublicarAsync(int id)
+    {
+        var cap = await repository.GetByIdAsync(id);
+        if (cap is null) return null;
+        cap.Publicada = true;
+        var updated = await repository.UpdateAsync(cap);
+        return MapToDto(updated);
+    }
+
+    public async Task<CapacitacionDto?> DespublicarAsync(int id)
+    {
+        var cap = await repository.GetByIdAsync(id);
+        if (cap is null) return null;
+        cap.Publicada = false;
+        var updated = await repository.UpdateAsync(cap);
+        return MapToDto(updated);
+    }
+
     private static CapacitacionDto MapToDto(Capacitacion c) => new()
     {
         Id = c.Id,
@@ -126,6 +144,7 @@ public class CapacitacionService(
         EmiteCertificado = c.EmiteCertificado,
         NombreCertificado = c.NombreCertificado,
         PlantillaNombreCertificado = c.PlantillaNombreCertificado,
-        TienePlantillaDocx = c.ArchivoDocxCertificado is not null && c.ArchivoDocxCertificado.Length > 0
+        TienePlantillaDocx = c.ArchivoDocxCertificado is not null && c.ArchivoDocxCertificado.Length > 0,
+        Publicada = c.Publicada
     };
 }

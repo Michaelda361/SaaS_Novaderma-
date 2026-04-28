@@ -57,6 +57,22 @@ public class CapacitacionesController(
         return deleted ? NoContent() : NotFound();
     }
 
+    [HttpPatch("{id:int}/publicar")]
+    public async Task<IActionResult> Publicar(int id)
+    {
+        if (!await currentUser.PuedeGestionarPlantillasAsync()) return Forbid();
+        var result = await service.PublicarAsync(id);
+        return result is null ? NotFound() : Ok(result);
+    }
+
+    [HttpPatch("{id:int}/despublicar")]
+    public async Task<IActionResult> Despublicar(int id)
+    {
+        if (!await currentUser.PuedeGestionarPlantillasAsync()) return Forbid();
+        var result = await service.DespublicarAsync(id);
+        return result is null ? NotFound() : Ok(result);
+    }
+
     /// <summary>Configura el certificado de una capacitación existente sin editar todos sus campos.</summary>
     [HttpPatch("{id:int}/certificado")]
     public async Task<IActionResult> ConfigurarCertificado(int id, [FromBody] ConfigurarCertificadoDto dto)

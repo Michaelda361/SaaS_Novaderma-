@@ -1,4 +1,4 @@
-@page "/capacitaciones/{Id:int}"
+﻿@page "/capacitaciones/{Id:int}"
 @attribute [Authorize]
 @inject InscripcionApiService InscripcionService
 @inject CapacitacionApiService CapacitacionService
@@ -25,6 +25,23 @@
         else if (capacitacion.ColaboradorId.HasValue)
         {
             <span class="badge badge-warning">👤 @capacitacion.ColaboradorNombre</span>
+        }
+        @if (PuedeGestionar)
+        {
+            @if (capacitacion.Publicada)
+            {
+                <span class="badge badge-success">✅ Publicada</span>
+                <button class="btn btn-ghost btn-sm" @onclick="Despublicar" disabled="@publicando">
+                    Despublicar
+                </button>
+            }
+            else
+            {
+                <span class="badge badge-warning">📝 Borrador</span>
+                <button class="btn btn-primary btn-sm" @onclick="Publicar" disabled="@publicando">
+                    @(publicando ? "Publicando..." : "🚀 Publicar")
+                </button>
+            }
         }
     }
 </div>
@@ -360,6 +377,141 @@
     }
 </div>
 
+
+<!-- CERTIFICADO (solo Jefe/Admin) -->
+@if (PuedeGestionar && capacitacion is not null)
+{
+<div class="card" style="margin-bottom:1.5rem;">
+    <div class="card-header">
+        <span class="card-title">🏆 Certificado al aprobar</span>
+        @if (!editandoCertificado)
+        {
+            <button class="btn btn-ghost btn-sm" @onclick="AbrirEditarCertificado">✏️ Configurar</button>
+        }
+    </div>
+    @if (!editandoCertificado)
+    {
+        <div style="padding:1rem;">
+            @if (capacitacion.EmiteCertificado)
+            {
+                <div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;">
+                    <span class="badge badge-success">✅ Activo</span>
+                    @if (!string.IsNullOrWhiteSpace(capacitacion.PlantillaNombreCertificado))
+                    {
+                        <span class="text-sm text-muted">Plantilla: <code style="background:var(--bg);padding:.1rem .3rem;border-radius:3px;">@capacitacion.PlantillaNombreCertificado</code></span>
+                    }
+                    @if (capacitacion.TienePlantillaDocx)
+                    {
+                        <span class="badge badge-purple">Word</span>
+                    }
+                </div>
+            }
+            else
+            {
+                <div style="display:flex;align-items:center;gap:.75rem;">
+                    <span class="badge badge-gray">Inactivo</span>
+                    <span class="text-sm text-muted">No se emite certificado al aprobar el cuestionario.</span>
+                </div>
+            }
+        </div>
+    }
+    else
+    {
+        <div style="padding:1rem;display:flex;flex-direction:column;gap:.875rem;">
+            <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-weight:500;">
+                <input type="checkbox" @bind="certForm.EmiteCertificado" />
+                Emitir certificado automaticamente al aprobar el cuestionario
+            </label>
+            @if (certForm.EmiteCertificado)
+            {
+                <div>
+                    <label style="font-size:.85rem;font-weight:500;">Tipo de plantilla</label>
+                    <div class="tipo-selector" style="margin-top:.35rem;">
+                        <label class="tipo-option @(tipoCertificado == "html" ? "tipo-option--active" : "")">
+                            <input type="radio" name="tipoCert" value="html"
+                                   checked="@(tipoCertificado == "html")"
+                                   @onchange='() => tipoCertificado = "html"' />
+                            <span class="tipo-icon">📄</span>
+                            <div><div class="tipo-label">Editor HTML</div><div class="tipo-desc">Escribe el contenido con formato</div></div>
+                        </label>
+                        <label class="tipo-option @(tipoCertificado == "docx" ? "tipo-option--active" : "")">
+                            <input type="radio" name="tipoCert" value="docx"
+                                   checked="@(tipoCertificado == "docx")"
+                                   @onchange='() => tipoCertificado = "docx"' />
+                            <span class="tipo-icon">📝</span>
+                            <div><div class="tipo-label">Archivo Word</div><div class="tipo-desc">Sube un .docx con variables</div></div>
+                        </label>
+                    </div>
+                </div>
+
+                <div>
+                    <label style="font-size:.85rem;font-weight:500;">
+                        Nombre del certificado
+                        <span class="text-muted" style="font-weight:400;"> — usa variables para personalizar</span>
+                    </label>
+                    <input class="form-control" style="margin-top:.35rem;"
+                           @bind="certForm.PlantillaNombreCertificado"
+                           placeholder="Ej: Certificado de {{capacitacion}} — {{nombre_completo}}" />
+                    <div style="margin-top:.4rem;display:flex;flex-wrap:wrap;gap:.3rem;">
+                        @foreach (var vari in variablesCertificado)
+                        {
+                            var v = vari;
+                            <button type="button" class="btn btn-ghost btn-sm"
+                                    style="font-size:.75rem;padding:.2rem .5rem;font-family:monospace;"
+                                    @onclick="() => InsertarVariable(v)">@v</button>
+                        }
+                    </div>
+                </div>
+
+                @if (tipoCertificado == "html")
+                {
+                    <div>
+                        <label style="font-size:.85rem;font-weight:500;">Contenido del certificado</label>
+                        <p class="text-xs text-muted" style="margin:.25rem 0 .5rem;">
+                            Usa las mismas variables de arriba para personalizar el contenido.
+                        </p>
+                        <EditorPlantilla @bind-HtmlContent="certHtmlContent" />
+                    </div>
+                }
+                else
+                {
+                    <div>
+                        <label style="font-size:.85rem;font-weight:500;">Archivo Word (.docx)</label>
+                        @if (capacitacion.TienePlantillaDocx && string.IsNullOrWhiteSpace(certForm.ArchivoDocxBase64))
+                        {
+                            <div style="margin-top:.35rem;display:flex;align-items:center;gap:.75rem;">
+                                <span class="badge badge-success">✅ DOCX cargado</span>
+                                <button type="button" class="btn btn-ghost btn-sm"
+                                        @onclick="() => certForm.EliminarDocx = true">Quitar</button>
+                            </div>
+                        }
+                        @if (!capacitacion.TienePlantillaDocx || certForm.EliminarDocx)
+                        {
+                            <InputFile OnChange="OnDocxCertificadoSeleccionado" accept=".docx"
+                                       style="margin-top:.35rem;" />
+                            @if (!string.IsNullOrWhiteSpace(certForm.ArchivoDocxBase64))
+                            {
+                                <div class="alert alert-success" style="margin-top:.35rem;padding:.4rem .75rem;font-size:.8rem;">
+                                    ✅ Archivo cargado — se guardara al hacer clic en Guardar
+                                </div>
+                            }
+                            <p class="text-xs text-muted" style="margin-top:.3rem;">
+                                Sube un .docx con variables {{nombre_completo}}, {{cargo}}, {{capacitacion}}, etc.
+                            </p>
+                        }
+                    </div>
+                }
+            }
+            <div class="flex gap-2">
+                <button class="btn btn-primary btn-sm" @onclick="GuardarCertificado" disabled="@guardandoCertificado">
+                    @(guardandoCertificado ? "Guardando..." : "Guardar")
+                </button>
+                <button class="btn btn-ghost btn-sm" @onclick="() => editandoCertificado = false">Cancelar</button>
+            </div>
+        </div>
+    }
+</div>
+}
 <!-- MODAL INSCRIBIR -->
 @if (mostrarModal)
 {
@@ -562,6 +714,7 @@
     private bool inscribiendo = false;
     private string? errorInscripcion;
     private Toast toast = default!;
+    private bool publicando = false;
 
     // Inscripciones
     private CreateInscripcionDto nuevaInscripcion = new();
@@ -661,6 +814,32 @@
     {
         if (await InscripcionService.DeleteAsync(id)) { await Cargar(); await toast.Show("Inscripción eliminada."); }
         else await toast.Show("Error al eliminar.", "error");
+    }
+
+    private async Task Publicar()
+    {
+        publicando = true;
+        var result = await CapacitacionService.PublicarAsync(Id);
+        publicando = false;
+        if (result is not null)
+        {
+            capacitacion = result;
+            await toast.Show("✅ Capacitación publicada. Ya es visible para los colaboradores.");
+        }
+        else await toast.Show("Error al publicar.", "error");
+    }
+
+    private async Task Despublicar()
+    {
+        publicando = true;
+        var result = await CapacitacionService.DespublicarAsync(Id);
+        publicando = false;
+        if (result is not null)
+        {
+            capacitacion = result;
+            await toast.Show("Capacitación movida a Borrador.", "warning");
+        }
+        else await toast.Show("Error al despublicar.", "error");
     }
 
     // --- Recursos ---
@@ -894,5 +1073,58 @@
         {
             await toast.Show("Error al guardar el resultado.", "error");
         }
+    }
+    // --- Certificado ---
+    private bool editandoCertificado = false;
+    private bool guardandoCertificado = false;
+    private ConfigurarCertificadoDto certForm = new();
+    private string tipoCertificado = "html";
+    private string certHtmlContent = string.Empty;
+    private static readonly string[] variablesCertificado =
+        ["{{nombre_completo}}", "{{cargo}}", "{{area}}", "{{capacitacion}}", "{{fecha_emision}}", "{{puntaje}}"];
+
+    private void AbrirEditarCertificado()
+    {
+        certForm = new ConfigurarCertificadoDto
+        {
+            EmiteCertificado = capacitacion?.EmiteCertificado ?? false,
+            PlantillaNombreCertificado = capacitacion?.PlantillaNombreCertificado
+        };
+        tipoCertificado = capacitacion?.TienePlantillaDocx == true ? "docx" : "html";
+        editandoCertificado = true;
+    }
+
+    private void InsertarVariable(string variable)
+    {
+        certForm.PlantillaNombreCertificado = (certForm.PlantillaNombreCertificado ?? "") + variable;
+    }
+
+    private async Task OnDocxCertificadoSeleccionado(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        if (!file.Name.EndsWith(".docx", StringComparison.OrdinalIgnoreCase))
+        { await toast.Show("Solo se aceptan archivos .docx", "warning"); return; }
+        if (file.Size > 5 * 1024 * 1024)
+        { await toast.Show("El archivo no puede superar 5 MB.", "warning"); return; }
+        using var ms = new System.IO.MemoryStream();
+        await file.OpenReadStream(5 * 1024 * 1024).CopyToAsync(ms);
+        certForm.ArchivoDocxBase64 = Convert.ToBase64String(ms.ToArray());
+        certForm.EliminarDocx = false;
+    }
+
+    private async Task GuardarCertificado()
+    {
+        guardandoCertificado = true;
+        // Si es HTML, guardar el contenido en el DTO como base64 de un "docx" no aplica
+        // El HTML se guarda en NombreCertificado por ahora — en futuro se puede extender
+        var result = await CapacitacionService.ConfigurarCertificadoAsync(Id, certForm);
+        guardandoCertificado = false;
+        if (result is not null)
+        {
+            capacitacion = result;
+            editandoCertificado = false;
+            await toast.Show("Configuracion de certificado guardada.");
+        }
+        else await toast.Show("Error al guardar la configuracion.", "error");
     }
 }
