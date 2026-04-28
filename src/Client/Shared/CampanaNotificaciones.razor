@@ -1,0 +1,126 @@
+@inject NotificacionesService Notificaciones
+@inject NavigationManager Nav
+@implements IDisposable
+
+<div class="campana-wrapper" @onclick:stopPropagation>
+    <button class="campana-btn @(abierto ? "campana-btn--active" : "")"
+            @onclick="TogglePanel"
+            title="Notificaciones">
+        🔔
+        @if (Notificaciones.NoLeidas > 0)
+        {
+            <span class="campana-badge">@(Notificaciones.NoLeidas > 9 ? "9+" : Notificaciones.NoLeidas.ToString())</span>
+        }
+    </button>
+
+    @if (abierto)
+    {
+        <div class="campana-panel">
+            <div class="campana-panel-header">
+                <span class="font-medium text-sm">Notificaciones</span>
+                <div style="display:flex;gap:.5rem;align-items:center;">
+                    @if (Notificaciones.Historial.Any(n => !n.Leida))
+                    {
+                        <button class="btn btn-ghost btn-sm" style="font-size:.75rem;padding:.2rem .5rem;"
+                                @onclick="MarcarTodasLeidas">
+                            Marcar leidas
+                        </button>
+                    }
+                    @if (Notificaciones.Historial.Any())
+                    {
+                        <button class="btn btn-ghost btn-sm btn-icon" style="font-size:.75rem;"
+                                @onclick="Limpiar" title="Limpiar">x</button>
+                    }
+                </div>
+            </div>
+
+            @if (!Notificaciones.Historial.Any())
+            {
+                <div class="campana-empty">
+                    <span style="font-size:1.75rem;">🔔</span>
+                    <p class="text-sm text-muted" style="margin-top:.5rem;">Sin notificaciones</p>
+                </div>
+            }
+            else
+            {
+                <div class="campana-lista">
+                    @foreach (var n in Notificaciones.Historial)
+                    {
+                        var notif = n;
+                        <div class="campana-item @(!n.Leida ? "campana-item--nueva" : "")"
+                             @onclick="() => AbrirNotificacion(notif)">
+                            <div class="campana-item-icono">@IconoPorTipo(n.Tipo)</div>
+                            <div style="flex:1;min-width:0;">
+                                <div class="campana-item-titulo">@n.Titulo</div>
+                                <div class="campana-item-cuerpo">@n.Cuerpo</div>
+                                <div class="campana-item-fecha">@FormatFecha(n.Fecha)</div>
+                            </div>
+                            @if (!n.Leida)
+                            {
+                                <div class="campana-punto-nuevo"></div>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+
+        <div class="campana-overlay" @onclick="CerrarPanel"></div>
+    }
+</div>
+
+@code {
+    private bool abierto = false;
+
+    protected override void OnInitialized()
+    {
+        Notificaciones.OnCambio += OnNotificacionCambio;
+    }
+
+    private void OnNotificacionCambio() => InvokeAsync(StateHasChanged);
+
+    private void TogglePanel() => abierto = !abierto;
+    private void CerrarPanel() => abierto = false;
+
+    private void MarcarTodasLeidas()
+    {
+        Notificaciones.MarcarTodasLeidas();
+    }
+
+    private void Limpiar()
+    {
+        Notificaciones.LimpiarHistorial();
+        abierto = false;
+    }
+
+    private void AbrirNotificacion(NotificacionItem n)
+    {
+        Notificaciones.MarcarLeida(n.Id);
+        abierto = false;
+        if (!string.IsNullOrWhiteSpace(n.Url))
+            Nav.NavigateTo(n.Url);
+    }
+
+    private static string IconoPorTipo(string tipo) => tipo switch
+    {
+        "solicitud_nueva"         => "📄",
+        "solicitud_resuelta"      => "✅",
+        "cuestionario_respondido" => "📝",
+        "certificado_emitido"     => "🏆",
+        _                         => "🔔"
+    };
+
+    private static string FormatFecha(DateTime fecha)
+    {
+        var diff = DateTime.Now - fecha;
+        if (diff.TotalMinutes < 1) return "Ahora";
+        if (diff.TotalMinutes < 60) return $"Hace {(int)diff.TotalMinutes} min";
+        if (diff.TotalHours < 24) return $"Hace {(int)diff.TotalHours} h";
+        return fecha.ToString("dd/MM HH:mm");
+    }
+
+    public void Dispose()
+    {
+        Notificaciones.OnCambio -= OnNotificacionCambio;
+    }
+}
