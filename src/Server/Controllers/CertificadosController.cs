@@ -77,4 +77,43 @@ public class CertificadosController(CertificadoService service) : ControllerBase
         if (pdf is null || pdf.Length == 0) return NotFound();
         return File(pdf, "application/pdf", $"certificado_{id}.pdf");
     }
+
+    [HttpPost("{id:int}/regenerar-pdf")]
+    public async Task<IActionResult> RegenerarPdf(
+        int id,
+        [FromServices] TalentManagement.Application.Interfaces.ICertificadoPdfService pdfService,
+        [FromServices] TalentManagement.Application.Interfaces.ICapacitacionRepository capRepo,
+        [FromServices] TalentManagement.Application.Interfaces.IColaboradorRepository colRepo)
+    {
+        try
+        {
+            var cert = await service.GetCertificadoEntityAsync(id);
+            if (cert is null) return NotFound();
+            if (!cert.CapacitacionId.HasValue)
+                return BadRequest(new { message = "El certificado no tiene capacitacion asociada." });
+
+            var cap = await capRepo.GetByIdAsync(cert.CapacitacionId.Value);
+            if (cap?.ArchivoDocxCertificado is not { Length: > 0 })
+                return BadRequest(new { message = "La capacitacion no tiene plantilla DOCX configurada." });
+
+            var col = await colRepo.GetByIdAsync(cert.ColaboradorId);
+            var vars = new Dictionary<string, string>
+            {
+                ["{{nombre_completo}}"] = col is not null ? $"{col.Nombre} {col.Apellido}" : "",
+                ["{{cargo}}"]           = col?.Cargo?.Nombre ?? "",
+                ["{{area}}"]            = col?.Area?.Nombre ?? "",
+                ["{{capacitacion}}"]    = cap.Nombre,
+                ["{{fecha_emision}}"]   = cert.FechaEmision.ToString("dd/MM/yyyy"),
+                ["{{puntaje}}"]         = ""
+            };
+
+            var pdf = pdfService.GenerarPdf(cap.ArchivoDocxCertificado, vars);
+            await service.ActualizarPdfAsync(id, pdf);
+            return Ok(new { message = "PDF regenerado correctamente." });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { message = "Error al regenerar el PDF.", detail = ex.Message });
+        }
+    }
 }

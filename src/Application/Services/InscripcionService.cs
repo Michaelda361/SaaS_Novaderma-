@@ -12,6 +12,13 @@ public class InscripcionService(IInscripcionRepository repository)
         return items.Select(MapToDto).ToList();
     }
 
+    // Para el historial del admin: incluye inscripciones de capacitaciones eliminadas
+    public async Task<List<InscripcionDto>> GetByCapacitacionHistorialAsync(int capacitacionId)
+    {
+        var items = await repository.GetByCapacitacionIgnorandoFiltrosAsync(capacitacionId);
+        return items.Select(MapToDto).ToList();
+    }
+
     public async Task<List<InscripcionDto>> GetByColaboradorAsync(int colaboradorId)
     {
         var items = await repository.GetByColaboradorAsync(colaboradorId);

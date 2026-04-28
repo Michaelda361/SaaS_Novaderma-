@@ -1,4 +1,4 @@
-﻿@page "/capacitaciones"
+@page "/capacitaciones"
 @attribute [Authorize]
 @inject CapacitacionApiService ApiService
 @inject AreaApiService AreaService
@@ -7,6 +7,8 @@
 @inject CuestionarioApiService CuestionarioService
 @inject AuthInfoService AuthInfo
 @inject NavigationManager Nav
+@inject NotificacionesService Notificaciones
+@implements IAsyncDisposable
 <Toast @ref="toast" />
 <ConfirmDialog Visible="confirmVisible"
                Message="¿Seguro que deseas eliminar esta capacitación? Esta acción no se puede deshacer."
@@ -451,9 +453,43 @@
     {
         await AuthInfo.LoadAsync();
         if (PuedeGestionar)
+        {
             await Task.WhenAll(Cargar(), CargarSelectores());
+            // Conectar al hub para recibir actualizaciones en tiempo real
+            await Notificaciones.ConectarAsync();
+            for (int i = 0; i < 10; i++) { if (Notificaciones.Conectado) break; await Task.Delay(200); }
+            await Notificaciones.UnirseGrupoAdminAsync();
+            Notificaciones.OnCuestionarioRespondido += OnCuestionarioRespondidoHistorial;
+        }
         else
             await Task.WhenAll(Cargar(), CargarAprobadas());
+    }
+
+    protected override void OnInitialized()
+    {
+        // Escuchar cambios de navegacion para recargar aprobadas cuando el colaborador vuelve
+        Nav.LocationChanged += OnLocationChanged;
+    }
+
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    {
+        if (AuthInfo.EsSoloColaborador && AuthInfo.ColaboradorId.HasValue)
+            InvokeAsync(async () => { await CargarAprobadas(); StateHasChanged(); });
+    }
+
+    private void OnCuestionarioRespondidoHistorial(TalentManagement.Shared.DTOs.Cuestionarios.CuestionarioRespondidoDto n)
+    {
+        // Invalidar caché del historial para que se recargue con el nuevo resultado
+        historialCargado = false;
+        // Si el admin está viendo el historial, recargarlo automáticamente
+        if (tabActiva == "historial")
+            InvokeAsync(async () => { await CargarHistorial(); StateHasChanged(); });
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        Nav.LocationChanged -= OnLocationChanged;
+        Notificaciones.OnCuestionarioRespondido -= OnCuestionarioRespondidoHistorial;
     }
 
     private void VerDetalle(int id) => Nav.NavigateTo($"/capacitaciones/{id}");
@@ -552,7 +588,6 @@
 
     private async Task CargarHistorial()
     {
-        if (historialCargado) return;
         cargandoHistorial = true;
         StateHasChanged();
 
@@ -564,7 +599,7 @@
             CuestionarioDto? cuestionario = null;
             try
             {
-                inscritos = await InscripcionService.GetByCapacitacionAsync(cap.Id);
+                inscritos = await InscripcionService.GetByCapacitacionHistorialAsync(cap.Id);
                 cuestionario = await CuestionarioService.GetByCapacitacionAsync(cap.Id);
             }
             catch { }

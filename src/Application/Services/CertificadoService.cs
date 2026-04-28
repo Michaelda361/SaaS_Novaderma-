@@ -70,6 +70,18 @@ public class CertificadoService(ICertificadoRepository repository)
         var cert = await repository.GetByIdAsync(id);
         return cert?.PdfBytes;
     }
+
+    public async Task<Certificado?> GetCertificadoEntityAsync(int id) =>
+        await repository.GetByIdAsync(id);
+
+    public async Task<bool> ActualizarPdfAsync(int id, byte[] pdf)
+    {
+        var cert = await repository.GetByIdAsync(id);
+        if (cert is null) return false;
+        cert.PdfBytes = pdf;
+        await repository.UpdateAsync(cert);
+        return true;
+    }
     public async Task<bool> DeleteAsync(int id)
     {
         var cert = await repository.GetByIdAsync(id);

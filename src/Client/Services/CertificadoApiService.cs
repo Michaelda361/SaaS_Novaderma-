@@ -45,6 +45,12 @@ public class CertificadoApiService(HttpClient http)
         return (bytes, name);
     }
 
+    public async Task<bool> RegenerarPdfAsync(int id)
+    {
+        var r = await http.PostAsync($"{Base}/{id}/regenerar-pdf", null);
+        return r.IsSuccessStatusCode;
+    }
+
     public Task<bool> DeleteAsync(int id) =>
         http.DeleteAsync($"{Base}/{id}").ContinueWith(t => t.Result.IsSuccessStatusCode);
 }

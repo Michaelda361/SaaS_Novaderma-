@@ -1,4 +1,4 @@
-using System.Net.Http.Json;
+﻿using System.Net.Http.Json;
 using TalentManagement.Shared.DTOs.Inscripciones;
 
 namespace TalentManagement.Client.Services;
@@ -9,6 +9,10 @@ public class InscripcionApiService(HttpClient http)
 
     public async Task<List<InscripcionDto>> GetByCapacitacionAsync(int capacitacionId) =>
         await http.GetFromJsonAsync<List<InscripcionDto>>($"{Base}/capacitacion/{capacitacionId}") ?? [];
+
+    // Para el historial del admin: incluye inscripciones de capacitaciones eliminadas
+    public async Task<List<InscripcionDto>> GetByCapacitacionHistorialAsync(int capacitacionId) =>
+        await http.GetFromJsonAsync<List<InscripcionDto>>($"{Base}/capacitacion/{capacitacionId}/historial") ?? [];
 
     public async Task<List<InscripcionDto>> GetByColaboradorAsync(int colaboradorId) =>
         await http.GetFromJsonAsync<List<InscripcionDto>>($"{Base}/colaborador/{colaboradorId}") ?? [];

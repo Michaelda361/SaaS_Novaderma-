@@ -21,6 +21,14 @@ public class InscripcionesController(
         return Ok(await service.GetByCapacitacionAsync(capacitacionId));
     }
 
+    [HttpGet("capacitacion/{capacitacionId:int}/historial")]
+    public async Task<IActionResult> GetByCapacitacionHistorial(int capacitacionId)
+    {
+        if (!await currentUser.PuedeGestionarPlantillasAsync())
+            return StatusCode(403, new { message = "No tienes permiso." });
+        return Ok(await service.GetByCapacitacionHistorialAsync(capacitacionId));
+    }
+
     [HttpGet("colaborador/{colaboradorId:int}")]
     public async Task<IActionResult> GetByColaborador(int colaboradorId)
     {

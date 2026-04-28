@@ -7,6 +7,7 @@ namespace TalentManagement.Infrastructure.Repositories;
 
 public class InscripcionRepository(AppDbContext context) : IInscripcionRepository
 {
+    // WithIncludes para gestión (solo capacitaciones activas)
     private IQueryable<Inscripcion> WithIncludes() =>
         context.Inscripciones
             .Include(i => i.Colaborador).ThenInclude(c => c.Area)
@@ -18,9 +19,27 @@ public class InscripcionRepository(AppDbContext context) : IInscripcionRepositor
             .Where(i => i.CapacitacionId == capacitacionId)
             .ToListAsync();
 
+    // Para el historial del admin: incluye inscripciones aunque la capacitacion este eliminada
+    public async Task<IEnumerable<Inscripcion>> GetByCapacitacionIgnorandoFiltrosAsync(int capacitacionId) =>
+        await context.Inscripciones
+            .IgnoreQueryFilters()
+            .Include(i => i.Colaborador).ThenInclude(c => c.Area)
+            .Include(i => i.Colaborador).ThenInclude(c => c.Cargo)
+            .Include(i => i.Capacitacion)
+            .Where(i => i.CapacitacionId == capacitacionId && i.Activo)
+            .AsNoTracking()
+            .ToListAsync();
+
     public async Task<IEnumerable<Inscripcion>> GetByColaboradorAsync(int colaboradorId) =>
-        await WithIncludes().AsNoTracking()
-            .Where(i => i.ColaboradorId == colaboradorId)
+        // IgnoreQueryFilters para incluir capacitaciones eliminadas (soft delete)
+        // asi el historial del colaborador no pierde registros cuando se elimina una capacitacion
+        await context.Inscripciones
+            .IgnoreQueryFilters()
+            .Include(i => i.Colaborador).ThenInclude(c => c.Area)
+            .Include(i => i.Colaborador).ThenInclude(c => c.Cargo)
+            .Include(i => i.Capacitacion)
+            .Where(i => i.ColaboradorId == colaboradorId && i.Activo && i.Colaborador.Activo)
+            .AsNoTracking()
             .ToListAsync();
 
     public async Task<Inscripcion?> GetByIdAsync(int id) =>

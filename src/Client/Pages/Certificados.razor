@@ -56,6 +56,7 @@
                             else if (c.VenceProximamente) { <span class="badge badge-warning">Próximo a vencer</span> }
                             else { <span class="badge badge-success">Vigente</span> }
                             @if (c.TienePdf) { <button class="btn btn-primary btn-sm" @onclick="@(() => DescargarPdf(cert.Id))">⬇ Descargar</button> }
+                            @if (!c.TienePdf && c.CapacitacionId.HasValue) { <button class="btn btn-ghost btn-sm" @onclick="@(() => RegenerarPdf(cert.Id))" title="Generar PDF desde plantilla">🔄 Generar PDF</button> }
                             @if (!string.IsNullOrEmpty(c.UrlDocumento)) { <a href="@c.UrlDocumento" target="_blank" class="btn btn-ghost btn-sm">📄 Ver</a> }
                         </div>
                     </div>
@@ -266,5 +267,20 @@ else
         if (bytes is null) { await toast.Show("No se pudo descargar el PDF.", "error"); return; }
         await JS.InvokeVoidAsync("descargarArchivo", Convert.ToBase64String(bytes), fileName, "application/pdf");
         await toast.Show("Certificado descargado.");
+    }
+
+    private async Task RegenerarPdf(int id)
+    {
+        await toast.Show("Generando PDF...", "warning");
+        var ok = await ApiService.RegenerarPdfAsync(id);
+        if (ok)
+        {
+            await Cargar();
+            await toast.Show("PDF generado. Ya puedes descargarlo.");
+        }
+        else
+        {
+            await toast.Show("No se pudo generar el PDF. Verifica que la capacitacion tenga plantilla DOCX configurada.", "error");
+        }
     }
 }
