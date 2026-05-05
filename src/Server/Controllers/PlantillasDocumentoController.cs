@@ -143,8 +143,6 @@ public class PlantillasDocumentoController(
             var plantilla = await service.GetByIdAsync(id);
             if (plantilla is null) return NotFound();
 
-            await service.RegistrarSolicitudAsync(id, email);
-
             var entidad = new TalentManagement.Domain.Entities.PlantillaDocumento
             {
                 NombreFirmante = dto.NombreFirmante,
@@ -152,11 +150,16 @@ public class PlantillasDocumentoController(
                 FirmaImagenBase64 = dto.FirmaImagenBase64,
             };
             var pdfBytes = pdfGenerator.GenerarPdfDesdeHtml(dto.Html, entidad);
+
+            var solicitud = await service.EnviarSolicitudAsync(id, email, pdfBytes);
+            await hub.Clients.Group("admins").SendAsync("NuevaSolicitud", solicitud);
+
             var nombre = $"{plantilla.Nombre.Replace(" ", "_")}_{DateTime.Today:yyyyMMdd}.pdf";
             return File(pdfBytes, "application/pdf", nombre);
         }
         catch (KeyNotFoundException ex) { return NotFound(ex.Message); }
         catch (UnauthorizedAccessException ex) { return Forbid(ex.Message); }
+        catch (InvalidOperationException ex) { return Conflict(ex.Message); }
         catch (Exception ex) { return StatusCode(500, ex.Message); }
     }
 
@@ -220,13 +223,15 @@ public class PlantillasDocumentoController(
             });
             var pdfBytes = pdfGenerator.GenerarPdfDesdeDocx(payloadFinal);
 
-            await service.RegistrarSolicitudAsync(id, email);
+            var solicitud = await service.EnviarSolicitudAsync(id, email, pdfBytes);
+            await hub.Clients.Group("admins").SendAsync("NuevaSolicitud", solicitud);
 
             var nombre = $"{plantilla.Nombre.Replace(" ", "_")}_{DateTime.Today:yyyyMMdd}.pdf";
             return File(pdfBytes, "application/pdf", nombre);
         }
         catch (KeyNotFoundException ex) { return NotFound(ex.Message); }
         catch (UnauthorizedAccessException ex) { return Forbid(ex.Message); }
+        catch (InvalidOperationException ex) { return Conflict(ex.Message); }
         catch (Exception ex) { return StatusCode(500, ex.Message); }
     }
 
@@ -336,8 +341,9 @@ public class PlantillasDocumentoController(
             if (!await currentUser.PuedeResolverSolicitudesAsync()) return Forbid();
             var resultado = await service.AprobarSolicitudAsync(solicitudId, dto.Comentario);
             if (resultado is null) return NotFound();
-            await hub.Clients.Group($"user:{resultado.ColaboradorEmail}")
-                .SendAsync("SolicitudResuelta", resultado);
+            var connIdAprobar = NotificacionesHub.GetConnectionId(resultado.ColaboradorId);
+            if (connIdAprobar is not null)
+                await hub.Clients.Client(connIdAprobar).SendAsync("SolicitudResuelta", resultado);
             return Ok(resultado);
         }
         catch (Exception ex) { return StatusCode(500, ex.Message); }
@@ -351,8 +357,9 @@ public class PlantillasDocumentoController(
             if (!await currentUser.PuedeResolverSolicitudesAsync()) return Forbid();
             var resultado = await service.RechazarSolicitudAsync(solicitudId, dto.Comentario);
             if (resultado is null) return NotFound();
-            await hub.Clients.Group($"user:{resultado.ColaboradorEmail}")
-                .SendAsync("SolicitudResuelta", resultado);
+            var connIdRechazar = NotificacionesHub.GetConnectionId(resultado.ColaboradorId);
+            if (connIdRechazar is not null)
+                await hub.Clients.Client(connIdRechazar).SendAsync("SolicitudResuelta", resultado);
             return Ok(resultado);
         }
         catch (Exception ex) { return StatusCode(500, ex.Message); }

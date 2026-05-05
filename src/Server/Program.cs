@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.Identity.Web;
 using Scalar.AspNetCore;
 using TalentManagement.Infrastructure;
@@ -51,7 +52,11 @@ builder.Services.PostConfigure<Microsoft.AspNetCore.Authentication.JwtBearer.Jwt
 
 builder.Services.AddOpenApi();
 builder.Services.AddRazorPages();
-builder.Services.AddSignalR();
+builder.Services.AddSignalR(options =>
+{
+    options.ClientTimeoutInterval = TimeSpan.FromSeconds(60);
+    options.KeepAliveInterval = TimeSpan.FromSeconds(15);
+});
 builder.Services.AddResponseCompression(opts =>
 {
     opts.EnableForHttps = true;
@@ -106,6 +111,35 @@ if (esModoDev)
     app.MapGet("/api/v1/dev/usuario-activo", (TalentManagement.Server.Services.DevUserStore store) =>
         Results.Ok(new { email = store.ActiveEmail, activo = store.ActiveEmail != null }))
         .AllowAnonymous();
+
+    // Diagnóstico del hub: muestra qué colaboradores están conectados
+    app.MapGet("/api/v1/dev/hub-conexiones", () =>
+        Results.Ok(TalentManagement.Server.Hubs.NotificacionesHub.GetConexionesActivas()))
+        .AllowAnonymous();
+
+    // Test: envía una notificación de prueba directamente a un colaborador
+    app.MapPost("/api/v1/dev/hub-test/{colaboradorId:int}", async (
+        int colaboradorId,
+        IHubContext<TalentManagement.Server.Hubs.NotificacionesHub> hub) =>
+    {
+        var connId = TalentManagement.Server.Hubs.NotificacionesHub.GetConnectionId(colaboradorId);
+        if (connId is null)
+            return Results.NotFound(new { error = $"ColaboradorId={colaboradorId} no está conectado" });
+
+        var testNotif = new TalentManagement.Shared.DTOs.Inscripciones.InscripcionDto
+        {
+            Id = 9999,
+            ColaboradorId = colaboradorId,
+            ColaboradorNombre = "Test",
+            ColaboradorEmail = "test@test.com",
+            CapacitacionId = 9999,
+            CapacitacionNombre = "🧪 Notificación de prueba",
+            FechaInscripcion = DateTime.Now,
+        };
+
+        await hub.Clients.Client(connId).SendAsync("InscripcionCreada", testNotif);
+        return Results.Ok(new { enviado = true, connectionId = connId, colaboradorId });
+    }).AllowAnonymous();
 
     app.MapPost("/api/v1/dev/usuario-activo", (
         TalentManagement.Server.Services.DevUserStore store,

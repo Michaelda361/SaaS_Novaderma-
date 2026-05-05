@@ -346,7 +346,7 @@ else
         if (solicitudes.Any(s => s.TieneNovedad))
             _ = ApiService.MarcarSolicitudesVistasAsync();
 
-        await Notificaciones.ConectarAsync();
+        // La conexión ya fue iniciada por MainLayout
         Notificaciones.OnSolicitudResuelta += OnSolicitudResuelta;
     }
 

@@ -68,28 +68,32 @@ public class CuestionariosController(
 
             var resultado = await service.ResponderAsync(dto);
 
-            // Notificar en background — no bloquea la respuesta al colaborador
+            // Construir las notificaciones dentro del scope del request (service es scoped)
             var email = currentUser.GetEmail();
+            var notif = await service.BuildNotificacionAsync(dto.CuestionarioId, email, resultado);
+
+            CertificadoEmitidoDto? certNotif = null;
+            if (resultado.CertificadoEmitido && !string.IsNullOrWhiteSpace(resultado.NombreCertificado))
+            {
+                certNotif = new CertificadoEmitidoDto
+                {
+                    NombreCertificado = resultado.NombreCertificado,
+                    CapacitacionNombre = notif?.CapacitacionNombre ?? "",
+                    CapacitacionId = notif?.CapacitacionId ?? 0,
+                    Puntaje = resultado.Puntaje,
+                    FechaEmision = DateTime.Today
+                };
+            }
+
+            // Enviar via SignalR en background — IHubContext es singleton, es seguro usarlo fuera del scope
+            var colaboradorConnId = NotificacionesHub.GetConnectionId(miColaboradorId.Value);
             _ = Task.Run(async () =>
             {
-                // Notificar al grupo admins
-                var notif = await service.BuildNotificacionAsync(dto.CuestionarioId, email, resultado);
                 if (notif is not null)
                     await hub.Clients.Group("admins").SendAsync("CuestionarioRespondido", notif);
 
-                // Si se emitió certificado, notificar al colaborador en su grupo personal
-                if (resultado.CertificadoEmitido && !string.IsNullOrWhiteSpace(resultado.NombreCertificado))
-                {
-                    var certNotif = new CertificadoEmitidoDto
-                    {
-                        NombreCertificado = resultado.NombreCertificado,
-                        CapacitacionNombre = notif?.CapacitacionNombre ?? "",
-                        CapacitacionId = notif?.CapacitacionId ?? 0,
-                        Puntaje = resultado.Puntaje,
-                        FechaEmision = DateTime.Today
-                    };
-                    await hub.Clients.Group($"user:{email}").SendAsync("CertificadoEmitido", certNotif);
-                }
+                if (certNotif is not null && colaboradorConnId is not null)
+                    await hub.Clients.Client(colaboradorConnId).SendAsync("CertificadoEmitido", certNotif);
             });
 
             return Ok(resultado);
