@@ -1260,6 +1260,28 @@ textarea { resize: vertical; min-height: 80px; }
 [data-theme="dark"] .badge-gray    { background: #1e293b; color: #94a3b8; }
 [data-theme="dark"] .badge-purple  { background: #2e1065; color: #c4b5fd; }
 
+/* Campana de notificaciones — dark mode */
+[data-theme="dark"] .campana-panel {
+    background: #1e293b;
+    border-color: #334155;
+}
+[data-theme="dark"] .campana-panel-header {
+    background: #1e293b;
+    border-color: #334155;
+}
+[data-theme="dark"] .campana-item {
+    border-color: #334155;
+}
+[data-theme="dark"] .campana-item--nueva {
+    background: #1e1b4b;
+}
+[data-theme="dark"] .campana-item--nueva:hover {
+    background: #2e1065;
+}
+[data-theme="dark"] .campana-badge {
+    border-color: #1e293b;
+}
+
 [data-theme="dark"] .stat-icon.purple { background: #2e1065; color: #c4b5fd; }
 [data-theme="dark"] .stat-icon.blue   { background: #1e3a5f; color: #93c5fd; }
 [data-theme="dark"] .stat-icon.green  { background: #14532d; color: #86efac; }

@@ -55,6 +55,6 @@ builder.Services.AddScoped<OneDriveGraphService>();
 builder.Services.AddScoped<ThemeService>();
 builder.Services.AddScoped<AuthInfoService>();
 builder.Services.AddScoped<CuestionarioApiService>();
-builder.Services.AddScoped<NotificacionesService>();
+builder.Services.AddSingleton<NotificacionesService>();
 
 await builder.Build().RunAsync();

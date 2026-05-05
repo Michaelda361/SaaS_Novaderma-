@@ -1,6 +1,9 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.Logging;
 using TalentManagement.Application.Services;
+using TalentManagement.Server.Hubs;
 using TalentManagement.Server.Services;
 using TalentManagement.Shared.DTOs.Inscripciones;
 
@@ -11,7 +14,9 @@ namespace TalentManagement.Server.Controllers;
 [Route("api/v1/[controller]")]
 public class InscripcionesController(
     InscripcionService service,
-    CurrentUserService currentUser) : ControllerBase
+    CurrentUserService currentUser,
+    IHubContext<NotificacionesHub> hub,
+    ILogger<InscripcionesController> logger) : ControllerBase
 {
     [HttpGet("capacitacion/{capacitacionId:int}")]
     public async Task<IActionResult> GetByCapacitacion(int capacitacionId)
@@ -57,7 +62,16 @@ public class InscripcionesController(
         if (!await currentUser.PuedeGestionarPlantillasAsync()) return Forbid();
         var (result, error) = await service.CreateAsync(dto);
         if (error is not null) return Conflict(new { message = error });
-        return CreatedAtAction(nameof(GetById), new { id = result!.Id }, result);
+
+        // Notificar al colaborador si está conectado al hub
+        var connId = NotificacionesHub.GetConnectionId(result!.ColaboradorId);
+        logger.LogInformation("[Inscripciones] ColaboradorId={Id} ConnId={ConnId}",
+            result.ColaboradorId, connId ?? "(no conectado)");
+
+        if (connId is not null)
+            await hub.Clients.Client(connId).SendAsync("InscripcionCreada", result);
+
+        return CreatedAtAction(nameof(GetById), new { id = result.Id }, result);
     }
 
     [HttpPut("{id:int}")]

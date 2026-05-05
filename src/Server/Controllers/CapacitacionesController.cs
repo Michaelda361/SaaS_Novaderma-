@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using TalentManagement.Application.Services;
+using TalentManagement.Server.Hubs;
 using TalentManagement.Server.Services;
 using TalentManagement.Shared.DTOs.Capacitaciones;
 
@@ -11,7 +13,9 @@ namespace TalentManagement.Server.Controllers;
 [Route("api/v1/[controller]")]
 public class CapacitacionesController(
     CapacitacionService service,
-    CurrentUserService currentUser) : ControllerBase
+    InscripcionService inscripcionService,
+    CurrentUserService currentUser,
+    IHubContext<NotificacionesHub> hub) : ControllerBase
 {
 
     [HttpGet]
@@ -62,7 +66,24 @@ public class CapacitacionesController(
     {
         if (!await currentUser.PuedeGestionarPlantillasAsync()) return Forbid();
         var result = await service.PublicarAsync(id);
-        return result is null ? NotFound() : Ok(result);
+        if (result is null) return NotFound();
+
+        // Notificar a todos los colaboradores inscritos
+        var inscritos = await inscripcionService.GetByCapacitacionAsync(id);
+        var notif = new CapacitacionPublicadaDto
+        {
+            CapacitacionId = result.Id,
+            CapacitacionNombre = result.Nombre,
+            Descripcion = result.Descripcion,
+        };
+        foreach (var inscripcion in inscritos)
+        {
+            var connId = NotificacionesHub.GetConnectionId(inscripcion.ColaboradorId);
+            if (connId is not null)
+                await hub.Clients.Client(connId).SendAsync("CapacitacionPublicada", notif);
+        }
+
+        return Ok(result);
     }
 
     [HttpPatch("{id:int}/despublicar")]

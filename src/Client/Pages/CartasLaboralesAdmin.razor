@@ -762,7 +762,7 @@ else
                 countPendientes = pendientes.Count;
             }
 
-            await Notificaciones.ConectarAsync();
+            // La conexión ya fue iniciada por MainLayout — solo nos unimos al grupo
             await Notificaciones.UnirseGrupoAdminAsync();
             Notificaciones.OnNuevaSolicitud += OnNuevaSolicitud;
         }

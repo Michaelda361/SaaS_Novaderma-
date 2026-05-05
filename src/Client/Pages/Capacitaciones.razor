@@ -455,8 +455,7 @@
         if (PuedeGestionar)
         {
             await Task.WhenAll(Cargar(), CargarSelectores());
-            // Conectar al hub para recibir actualizaciones en tiempo real
-            await Notificaciones.ConectarAsync();
+            // La conexión ya fue iniciada por MainLayout — solo nos unimos al grupo
             for (int i = 0; i < 10; i++) { if (Notificaciones.Conectado) break; await Task.Delay(200); }
             await Notificaciones.UnirseGrupoAdminAsync();
             Notificaciones.OnCuestionarioRespondido += OnCuestionarioRespondidoHistorial;

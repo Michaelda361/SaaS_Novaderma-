@@ -148,25 +148,44 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (!firstRender) return;
-        Theme.OnChange += StateHasChanged;
-        await Theme.InitAsync();
-        try { propuestasPendientes = await DocumentoApi.GetPropuestasPendientesCountAsync(); } catch { }
-        if (AuthInfo.PuedeResolverSolicitudes)
-            try { cartasPendientes = await CartasApi.CountPendientesAsync(); } catch { }
-        if (AuthInfo.EsJefe || AuthInfo.EsAdmin)
+        if (firstRender)
         {
-            await Notificaciones.ConectarAsync();
-            // Reintentar hasta que la conexion este lista (puede tardar unos ms)
-            for (int i = 0; i < 10; i++)
-            {
-                if (Notificaciones.Conectado) break;
-                await Task.Delay(200);
-            }
-            await Notificaciones.UnirseGrupoAdminAsync();
-            Notificaciones.OnCuestionarioRespondido += OnCuestionarioRespondido;
+            Theme.OnChange += StateHasChanged;
+            await Theme.InitAsync();
+            await AuthInfo.LoadAsync();
+
+            try { propuestasPendientes = await DocumentoApi.GetPropuestasPendientesCountAsync(); } catch { }
+            if (AuthInfo.PuedeResolverSolicitudes)
+                try { cartasPendientes = await CartasApi.CountPendientesAsync(); } catch { }
         }
-        StateHasChanged();
+
+        // Reconectar el hub si se desconectó (server reiniciado, etc.)
+        if (!Notificaciones.Conectado && !string.IsNullOrWhiteSpace(AuthInfo.Email))
+        {
+            if (AuthInfo.EsJefe || AuthInfo.EsAdmin)
+            {
+                await Notificaciones.IniciarAsync(AuthInfo.Email, AuthInfo.ColaboradorId, esAdmin: true);
+                for (int i = 0; i < 10; i++)
+                {
+                    if (Notificaciones.Conectado) break;
+                    await Task.Delay(200);
+                }
+                if (Notificaciones.Conectado)
+                    await Notificaciones.UnirseGrupoAdminAsync();
+                if (firstRender)
+                    Notificaciones.OnCuestionarioRespondido += OnCuestionarioRespondido;
+            }
+            else
+            {
+                await Notificaciones.IniciarAsync(AuthInfo.Email, AuthInfo.ColaboradorId);
+                for (int i = 0; i < 10; i++)
+                {
+                    if (Notificaciones.Conectado) break;
+                    await Task.Delay(200);
+                }
+            }
+            StateHasChanged();
+        }
     }
 
     private void OnCuestionarioRespondido(TalentManagement.Shared.DTOs.Cuestionarios.CuestionarioRespondidoDto n)

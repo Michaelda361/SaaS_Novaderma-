@@ -1,5 +1,4 @@
 using Microsoft.AspNetCore.Components;
-using Microsoft.AspNetCore.Components.WebAssembly.Authentication;
 using Microsoft.AspNetCore.SignalR.Client;
 using TalentManagement.Shared.DTOs.PlantillasDocumento;
 
@@ -14,11 +13,17 @@ public record NotificacionItem(
     DateTime Fecha,
     bool Leida = false);
 
+/// <summary>
+/// Servicio Singleton de notificaciones en tiempo real via SignalR.
+/// La conexión se establece una sola vez desde MainLayout con el email del usuario.
+/// Las páginas solo se suscriben/desuscriben a eventos — nunca gestionan la conexión.
+/// </summary>
 public class NotificacionesService : IAsyncDisposable
 {
     private HubConnection? _hub;
     private readonly NavigationManager _nav;
-    private readonly IAccessTokenProvider _tokenProvider;
+    private int? _colaboradorId;
+    private bool _esAdmin;
 
     private readonly List<NotificacionItem> _historial = [];
     public IReadOnlyList<NotificacionItem> Historial => _historial;
@@ -29,38 +34,80 @@ public class NotificacionesService : IAsyncDisposable
     public event Action<SolicitudDocumentoDto>? OnSolicitudResuelta;
     public event Action<TalentManagement.Shared.DTOs.Cuestionarios.CuestionarioRespondidoDto>? OnCuestionarioRespondido;
     public event Action<TalentManagement.Shared.DTOs.Cuestionarios.CertificadoEmitidoDto>? OnCertificadoEmitido;
+    public event Action<TalentManagement.Shared.DTOs.Inscripciones.InscripcionDto>? OnInscripcionCreada;
+    public event Action<TalentManagement.Shared.DTOs.Capacitaciones.CapacitacionPublicadaDto>? OnCapacitacionPublicada;
 
     public bool Conectado => _hub?.State == HubConnectionState.Connected;
 
-    public NotificacionesService(NavigationManager nav, IAccessTokenProvider tokenProvider)
+    public NotificacionesService(NavigationManager nav)
     {
         _nav = nav;
-        _tokenProvider = tokenProvider;
     }
 
-    public async Task ConectarAsync()
+    /// <summary>
+    /// Llamado UNA SOLA VEZ desde MainLayout después de cargar el perfil.
+    /// Si ya hay conexión activa, no hace nada.
+    /// </summary>
+    public async Task IniciarAsync(string email, int? colaboradorId = null, bool esAdmin = false)
     {
         if (_hub is not null) return;
 
-        var hubUrl = _nav.BaseUri
+        if (string.IsNullOrWhiteSpace(email))
+        {
+            Console.WriteLine("[Hub] IniciarAsync: email vacío, no se conecta");
+            return;
+        }
+
+        _colaboradorId = colaboradorId;
+        _esAdmin = esAdmin;
+
+        var baseUrl = _nav.BaseUri
             .Replace("5185", "5194")
             .Replace("localhost:5000", "localhost:5194")
             .TrimEnd('/') + "/hubs/notificaciones";
 
+        Console.WriteLine($"[Hub] Conectando a: {baseUrl}");
+
         _hub = new HubConnectionBuilder()
-            .WithUrl(hubUrl, options =>
-            {
-                options.AccessTokenProvider = async () =>
-                {
-                    var result = await _tokenProvider.RequestAccessToken();
-                    return result.TryGetToken(out var token) ? token.Value : null;
-                };
-            })
-            .WithAutomaticReconnect()
+            .WithUrl(baseUrl)
+            .WithAutomaticReconnect(new SignalRRetryPolicy())
             .Build();
 
-        _hub.On<SolicitudDocumentoDto>("NuevaSolicitud", s =>
+        _hub.Closed += async ex =>
         {
+            _hub = null;
+            await Task.CompletedTask;
+        };
+
+        _hub.Reconnected += async id =>
+        {
+            if (_colaboradorId.HasValue && _hub is not null)
+                await _hub.InvokeAsync("RegistrarColaborador", _colaboradorId.Value);
+            if (_esAdmin && _hub is not null)
+                await _hub.InvokeAsync("JoinAdminGroup");
+        };
+
+        RegistrarHandlers();
+
+        try
+        {
+            await _hub.StartAsync();
+
+            if (_colaboradorId.HasValue)
+                await _hub.InvokeAsync("RegistrarColaborador", _colaboradorId.Value);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Hub] ERROR al conectar: {ex.Message}");
+            _hub = null;
+        }
+    }
+
+    private void RegistrarHandlers()
+    {
+        _hub!.On<SolicitudDocumentoDto>("NuevaSolicitud", s =>
+        {
+            Console.WriteLine($"[Hub] NuevaSolicitud recibida: {s.ColaboradorNombre}");
             AgregarNotificacion(new NotificacionItem(
                 Id: Guid.NewGuid().ToString(),
                 Titulo: "Nueva solicitud de carta",
@@ -73,6 +120,7 @@ public class NotificacionesService : IAsyncDisposable
 
         _hub.On<SolicitudDocumentoDto>("SolicitudResuelta", s =>
         {
+            Console.WriteLine($"[Hub] SolicitudResuelta recibida: {s.Estado}");
             var aprobada = s.Estado == "Aprobada";
             AgregarNotificacion(new NotificacionItem(
                 Id: Guid.NewGuid().ToString(),
@@ -88,6 +136,7 @@ public class NotificacionesService : IAsyncDisposable
 
         _hub.On<TalentManagement.Shared.DTOs.Cuestionarios.CuestionarioRespondidoDto>("CuestionarioRespondido", n =>
         {
+            Console.WriteLine($"[Hub] CuestionarioRespondido recibido: {n.ColaboradorNombre}");
             var estado = n.Aprobado ? "✅ Aprobó" : "❌ No aprobó";
             AgregarNotificacion(new NotificacionItem(
                 Id: Guid.NewGuid().ToString(),
@@ -101,6 +150,7 @@ public class NotificacionesService : IAsyncDisposable
 
         _hub.On<TalentManagement.Shared.DTOs.Cuestionarios.CertificadoEmitidoDto>("CertificadoEmitido", c =>
         {
+            Console.WriteLine($"[Hub] CertificadoEmitido recibido: {c.NombreCertificado}");
             AgregarNotificacion(new NotificacionItem(
                 Id: Guid.NewGuid().ToString(),
                 Titulo: "🏆 Certificado emitido",
@@ -111,8 +161,30 @@ public class NotificacionesService : IAsyncDisposable
             OnCertificadoEmitido?.Invoke(c);
         });
 
-        try { await _hub.StartAsync(); }
-        catch { /* En dev sin MSAL puede fallar */ }
+        _hub.On<TalentManagement.Shared.DTOs.Inscripciones.InscripcionDto>("InscripcionCreada", i =>
+        {
+            Console.WriteLine($"[Hub] InscripcionCreada recibida: {i.CapacitacionNombre} para {i.ColaboradorEmail}");
+            AgregarNotificacion(new NotificacionItem(
+                Id: Guid.NewGuid().ToString(),
+                Titulo: "📚 Nueva inscripción",
+                Cuerpo: $"Fuiste inscrito en la capacitación \"{i.CapacitacionNombre}\".",
+                Tipo: "inscripcion_creada",
+                Url: $"capacitaciones/{i.CapacitacionId}",
+                Fecha: DateTime.Now));
+            OnInscripcionCreada?.Invoke(i);
+        });
+
+        _hub.On<TalentManagement.Shared.DTOs.Capacitaciones.CapacitacionPublicadaDto>("CapacitacionPublicada", c =>
+        {
+            AgregarNotificacion(new NotificacionItem(
+                Id: Guid.NewGuid().ToString(),
+                Titulo: "🎓 Capacitación disponible",
+                Cuerpo: $"La capacitación \"{c.CapacitacionNombre}\" ya está disponible.",
+                Tipo: "capacitacion_publicada",
+                Url: $"capacitaciones/{c.CapacitacionId}",
+                Fecha: DateTime.Now));
+            OnCapacitacionPublicada?.Invoke(c);
+        });
     }
 
     public void MarcarTodasLeidas()
@@ -157,6 +229,30 @@ public class NotificacionesService : IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         if (_hub is not null)
+        {
             await _hub.DisposeAsync();
+            _hub = null;
+        }
+    }
+}
+
+/// <summary>
+/// Política de reconexión indefinida con backoff progresivo.
+/// </summary>
+internal class SignalRRetryPolicy : IRetryPolicy
+{
+    private static readonly TimeSpan[] Delays =
+    [
+        TimeSpan.Zero,
+        TimeSpan.FromSeconds(2),
+        TimeSpan.FromSeconds(5),
+        TimeSpan.FromSeconds(10),
+        TimeSpan.FromSeconds(30),
+    ];
+
+    public TimeSpan? NextRetryDelay(RetryContext retryContext)
+    {
+        var idx = (int)retryContext.PreviousRetryCount;
+        return idx < Delays.Length ? Delays[idx] : TimeSpan.FromSeconds(60);
     }
 }
