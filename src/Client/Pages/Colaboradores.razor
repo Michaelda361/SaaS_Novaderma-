@@ -16,6 +16,18 @@
         <button class="btn btn-primary btn-sm" @onclick="AbrirModal">+ Nuevo colaborador</button>
     </div>
 
+    <!-- Tabs activos / inactivos -->
+    <div style="display:flex;gap:.5rem;padding:.75rem 1rem .25rem;border-bottom:1px solid var(--border);">
+        <button class="btn btn-sm @(mostrarInactivos ? "btn-ghost" : "btn-primary")"
+                @onclick="() => { mostrarInactivos = false; }">
+            Activos @(colaboradores is not null ? $"({colaboradores.Count})" : "")
+        </button>
+        <button class="btn btn-sm @(mostrarInactivos ? "btn-primary" : "btn-ghost")"
+                @onclick="CargarInactivos">
+            🗑 Inactivos @(inactivos is not null ? $"({inactivos.Count})" : "")
+        </button>
+    </div>
+
     <!-- Search bar -->
     <div class="filter-bar">
         <div class="search-input-wrap">
@@ -23,11 +35,72 @@
             <input type="search" placeholder="Buscar por nombre o email..."
                    @bind="busqueda" @bind:event="oninput" />
         </div>
-        @if (!string.IsNullOrEmpty(busqueda))
+        <select @bind="filtroAreaId" style="min-width:160px;">
+            <option value="0">Todas las áreas</option>
+            @foreach (var a in areas ?? [])
+            {
+                <option value="@a.Id">@a.Nombre</option>
+            }
+        </select>
+        @if (!string.IsNullOrEmpty(busqueda) || filtroAreaId > 0)
         {
             <span class="text-sm text-muted">@ColaboradoresFiltrados.Count resultado(s)</span>
+            <button class="btn btn-ghost btn-sm" @onclick="LimpiarFiltros">✕ Limpiar</button>
         }
     </div>
+
+    @if (mostrarInactivos)
+    {
+        @if (cargandoInactivos)
+        {
+            <div class="loading"><div class="spinner"></div> Cargando...</div>
+        }
+        else if (!inactivos?.Any() ?? true)
+        {
+            <div class="empty-state">
+                <div class="empty-state-icon">✅</div>
+                <h3>Sin inactivos</h3>
+                <p>No hay colaboradores eliminados.</p>
+            </div>
+        }
+        else
+        {
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr><th>Colaborador</th><th>Cargo</th><th>Área</th><th></th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var c in inactivos!)
+                        {
+                            var cid = c.Id;
+                            <tr style="opacity:.7;">
+                                <td>
+                                    <div class="user-cell">
+                                        <div class="avatar">@Iniciales(c.Nombre, c.Apellido)</div>
+                                        <div>
+                                            <div class="user-name">@c.NombreCompleto</div>
+                                            <div class="user-email">@c.Email</div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td class="text-sm">@c.CargoNombre</td>
+                                <td><span class="badge badge-gray">@c.AreaNombre</span></td>
+                                <td>
+                                    <button class="btn btn-ghost btn-sm"
+                                            @onclick="() => RestaurarColaborador(cid)">
+                                        ♻️ Restaurar
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    }
+    else
+    {
 
     @if (cargando)
     {
@@ -46,7 +119,7 @@
         <div class="empty-state">
             <div class="empty-state-icon">🔍</div>
             <h3>Sin resultados</h3>
-            <p>No hay colaboradores que coincidan con "@busqueda".</p>
+            <p>No hay colaboradores que coincidan con los filtros aplicados.</p>
         </div>
     }
     else
@@ -105,6 +178,7 @@
             </table>
         </div>
     }
+    } @* cierre else (activos) *@
 </div>
 
 @if (mostrarModal)
@@ -219,7 +293,13 @@
     private bool guardando = false;
     private int? editandoId = null;
     private string busqueda = string.Empty;
+    private int filtroAreaId = 0;
     private Toast toast = default!;
+
+    // Inactivos
+    private List<ColaboradorDto>? inactivos;
+    private bool mostrarInactivos = false;
+    private bool cargandoInactivos = false;
 
     // Confirm dialog state
     private bool confirmVisible = false;
@@ -230,11 +310,18 @@
     private CreateColaboradorDto form = new();
 
     private List<ColaboradorDto> ColaboradoresFiltrados =>
-        string.IsNullOrWhiteSpace(busqueda)
-            ? colaboradores ?? []
-            : (colaboradores ?? []).Where(c =>
-                c.NombreCompleto.Contains(busqueda, StringComparison.OrdinalIgnoreCase) ||
-                c.Email.Contains(busqueda, StringComparison.OrdinalIgnoreCase)).ToList();
+        (colaboradores ?? [])
+            .Where(c => filtroAreaId == 0 || c.AreaId == filtroAreaId)
+            .Where(c => string.IsNullOrWhiteSpace(busqueda) ||
+                        c.NombreCompleto.Contains(busqueda, StringComparison.OrdinalIgnoreCase) ||
+                        c.Email.Contains(busqueda, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+    private void LimpiarFiltros()
+    {
+        busqueda = string.Empty;
+        filtroAreaId = 0;
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -289,33 +376,43 @@
     private async Task Guardar()
     {
         guardando = true;
-        bool ok;
-        if (editandoId.HasValue)
+        try
         {
-            var dto = new UpdateColaboradorDto
+            bool ok;
+            if (editandoId.HasValue)
             {
-                Nombre = form.Nombre, Apellido = form.Apellido,
-                Email = form.Email, Telefono = form.Telefono,
-                AreaId = form.AreaId, CargoId = form.CargoId,
-                SupervisorId = form.SupervisorId
-            };
-            ok = await ApiService.UpdateAsync(editandoId.Value, dto) is not null;
-        }
-        else
-        {
-            ok = await ApiService.CreateAsync(form) is not null;
-        }
-        guardando = false;
+                var dto = new UpdateColaboradorDto
+                {
+                    Nombre = form.Nombre, Apellido = form.Apellido,
+                    Email = form.Email, Telefono = form.Telefono,
+                    AreaId = form.AreaId, CargoId = form.CargoId,
+                    SupervisorId = form.SupervisorId
+                };
+                ok = await ApiService.UpdateAsync(editandoId.Value, dto) is not null;
+            }
+            else
+            {
+                ok = await ApiService.CreateAsync(form) is not null;
+            }
 
-        if (ok)
-        {
-            CerrarModal();
-            await Cargar();
-            await toast.Show(editandoId.HasValue ? "Colaborador actualizado." : "Colaborador creado.");
+            if (ok)
+            {
+                CerrarModal();
+                await Cargar();
+                await toast.Show(editandoId.HasValue ? "Colaborador actualizado." : "Colaborador creado.");
+            }
+            else
+            {
+                await toast.Show("Error al guardar. Verifica los datos.", "error");
+            }
         }
-        else
+        catch (InvalidOperationException ex)
         {
-            await toast.Show("Error al guardar. Verifica los datos.", "error");
+            await toast.Show(ex.Message, "error");
+        }
+        finally
+        {
+            guardando = false;
         }
     }
 
@@ -358,4 +455,28 @@
 
     private static string Iniciales(string nombre, string apellido) =>
         $"{(nombre.Length > 0 ? nombre[0] : ' ')}{(apellido.Length > 0 ? apellido[0] : ' ')}".ToUpper();
+
+    private async Task CargarInactivos()
+    {
+        mostrarInactivos = true;
+        if (inactivos is not null) return;
+        cargandoInactivos = true;
+        inactivos = await ApiService.GetInactivosAsync() ?? [];
+        cargandoInactivos = false;
+    }
+
+    private async Task RestaurarColaborador(int id)
+    {
+        if (await ApiService.RestaurarAsync(id))
+        {
+            inactivos = null; // invalidar caché para forzar recarga la próxima vez
+            mostrarInactivos = false; // volver a la vista de activos
+            await Cargar();
+            await toast.Show("Colaborador restaurado.");
+        }
+        else
+        {
+            await toast.Show("No se pudo restaurar.", "error");
+        }
+    }
 }

@@ -24,6 +24,7 @@ public class NotificacionesService : IAsyncDisposable
     private readonly NavigationManager _nav;
     private int? _colaboradorId;
     private bool _esAdmin;
+    private bool _enGrupoAdmin = false;
 
     private readonly List<NotificacionItem> _historial = [];
     public IReadOnlyList<NotificacionItem> Historial => _historial;
@@ -60,6 +61,7 @@ public class NotificacionesService : IAsyncDisposable
 
         _colaboradorId = colaboradorId;
         _esAdmin = esAdmin;
+        _enGrupoAdmin = false;
 
         var baseUrl = _nav.BaseUri
             .Replace("5185", "5194")
@@ -75,16 +77,21 @@ public class NotificacionesService : IAsyncDisposable
 
         _hub.Closed += async ex =>
         {
+            _enGrupoAdmin = false;
             _hub = null;
             await Task.CompletedTask;
         };
 
         _hub.Reconnected += async id =>
         {
+            _enGrupoAdmin = false;
             if (_colaboradorId.HasValue && _hub is not null)
                 await _hub.InvokeAsync("RegistrarColaborador", _colaboradorId.Value);
             if (_esAdmin && _hub is not null)
+            {
                 await _hub.InvokeAsync("JoinAdminGroup");
+                _enGrupoAdmin = true;
+            }
         };
 
         RegistrarHandlers();
@@ -95,6 +102,14 @@ public class NotificacionesService : IAsyncDisposable
 
             if (_colaboradorId.HasValue)
                 await _hub.InvokeAsync("RegistrarColaborador", _colaboradorId.Value);
+
+            // Si es admin/jefe, unirse al grupo inmediatamente al conectar
+            if (esAdmin)
+            {
+                await _hub.InvokeAsync("JoinAdminGroup");
+                _enGrupoAdmin = true;
+                Console.WriteLine("[Hub] Unido al grupo admins automáticamente");
+            }
         }
         catch (Exception ex)
         {
@@ -216,8 +231,12 @@ public class NotificacionesService : IAsyncDisposable
 
     public async Task UnirseGrupoAdminAsync()
     {
+        if (_enGrupoAdmin) return; // ya está en el grupo
         if (_hub?.State == HubConnectionState.Connected)
+        {
             await _hub.InvokeAsync("JoinAdminGroup");
+            _enGrupoAdmin = true;
+        }
     }
 
     public async Task SalirGrupoAdminAsync()

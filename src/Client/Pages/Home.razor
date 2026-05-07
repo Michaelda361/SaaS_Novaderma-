@@ -4,310 +4,496 @@
 @inject CapacitacionApiService CapacitacionSvc
 @inject CertificadoApiService CertificadoSvc
 @inject AreaApiService AreaSvc
+@inject InscripcionApiService InscripcionSvc
+@inject AuthInfoService AuthInfo
 
 <!-- Welcome banner -->
 <div class="welcome-banner">
     <div class="welcome-text">
         <div class="welcome-title">Bienvenido a NovaHub 👋</div>
-        <div class="welcome-sub">Aquí tienes un resumen del estado actual de tu equipo.</div>
+        <div class="welcome-sub">
+            @if (AuthInfo.EsSoloColaborador)
+            { <span>Aquí tienes un resumen de tu actividad.</span> }
+            else if (AuthInfo.EsJefe)
+            { <span>Aquí tienes el resumen de tu área.</span> }
+            else
+            { <span>Aquí tienes un resumen del estado actual de tu equipo.</span> }
+        </div>
     </div>
     <div class="welcome-date">@DateTime.Today.ToString("dddd, d 'de' MMMM 'de' yyyy", new System.Globalization.CultureInfo("es-CO"))</div>
 </div>
 
-<!-- KPI cards -->
-@if (cargando)
+@if (AuthInfo.EsSoloColaborador)
 {
-    <div class="stats-grid">
-        @for (int i = 0; i < 5; i++) { <div class="stat-card skeleton-card"></div> }
-    </div>
-}
-else
-{
-    <div class="stats-grid">
-        <a class="stat-card stat-card-link" href="colaboradores">
-            <div class="stat-icon purple">👥</div>
-            <div class="stat-info">
-                <div class="stat-value">@(colaboradores?.Count ?? 0)</div>
-                <div class="stat-label">Colaboradores activos</div>
-            </div>
-            <span class="stat-arrow">→</span>
-        </a>
-        <a class="stat-card stat-card-link" href="capacitaciones">
-            <div class="stat-icon blue">📚</div>
-            <div class="stat-info">
-                <div class="stat-value">@(capacitaciones?.Count ?? 0)</div>
-                <div class="stat-label">Capacitaciones</div>
-            </div>
-            <span class="stat-arrow">→</span>
-        </a>
-        <a class="stat-card stat-card-link" href="certificados">
-            <div class="stat-icon green">🏆</div>
-            <div class="stat-info">
-                <div class="stat-value">@(totalCertificados)</div>
-                <div class="stat-label">Certificados totales</div>
-            </div>
-            <span class="stat-arrow">→</span>
-        </a>
-        <a class="stat-card stat-card-link" href="certificados">
-            <div class="stat-icon amber">⚠️</div>
-            <div class="stat-info">
-                <div class="stat-value">@(proximosVencer?.Count ?? 0)</div>
-                <div class="stat-label">Por vencer (30 días)</div>
-            </div>
-            <span class="stat-arrow">→</span>
-        </a>
-        <a class="stat-card stat-card-link" href="certificados">
-            <div class="stat-icon red">❌</div>
-            <div class="stat-info">
-                <div class="stat-value">@(vencidos?.Count ?? 0)</div>
-                <div class="stat-label">Certificados vencidos</div>
-            </div>
-            <span class="stat-arrow">→</span>
-        </a>
-    </div>
-}
-
-<!-- Main grid -->
-<div class="dashboard-grid">
-
-    <!-- Certificados próximos a vencer -->
-    <div class="card">
-        <div class="card-header">
-            <span class="card-title">⚠️ Próximos a vencer</span>
-            <a href="certificados" class="btn btn-ghost btn-sm">Ver todos</a>
+    <!-- ── VISTA COLABORADOR ─────────────────────────────────────────── -->
+    @if (cargando)
+    {
+        <div class="stats-grid">
+            @for (int i = 0; i < 3; i++) { <div class="stat-card skeleton-card"></div> }
         </div>
-        @if (cargando)
-        {
-            <div class="loading"><div class="spinner"></div> Cargando...</div>
-        }
-        else if (proximosVencer is null || proximosVencer.Count == 0)
-        {
-            <div class="empty-state" style="padding:2rem 1rem;">
-                <div class="empty-state-icon">✅</div>
-                <h3>Todo al día</h3>
-                <p>No hay certificados próximos a vencer.</p>
-            </div>
-        }
-        else
-        {
-            <div class="table-wrapper">
-                <table>
-                    <thead>
-                        <tr><th>Colaborador</th><th>Certificado</th><th>Vence</th></tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var cert in proximosVencer.Take(5))
-                        {
-                            <tr>
-                                <td>
-                                    <div class="user-cell">
-                                        <div class="avatar avatar-sm">@Iniciales(cert.ColaboradorNombre)</div>
-                                        <span class="font-medium">@cert.ColaboradorNombre</span>
-                                    </div>
-                                </td>
-                                <td class="text-sm text-muted">@cert.Nombre</td>
-                                <td><span class="badge badge-warning">@cert.FechaVencimiento?.ToString("dd/MM/yyyy")</span></td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-            </div>
-        }
-    </div>
-
-    <!-- Acciones rápidas -->
-    <div class="card">
-        <div class="card-header">
-            <span class="card-title">⚡ Acciones rápidas</span>
-        </div>
-        <div class="quick-actions">
-            <a href="colaboradores" class="quick-action-item">
-                <div class="quick-action-icon purple">👥</div>
-                <div class="quick-action-text">
-                    <div class="quick-action-title">Nuevo colaborador</div>
-                    <div class="quick-action-sub">Registrar un nuevo miembro del equipo</div>
+    }
+    else
+    {
+        <div class="stats-grid">
+            <a class="stat-card stat-card-link" href="capacitaciones">
+                <div class="stat-icon blue">📚</div>
+                <div class="stat-info">
+                    <div class="stat-value">@misInscripciones.Count</div>
+                    <div class="stat-label">Mis capacitaciones</div>
                 </div>
-                <span class="quick-action-arrow">→</span>
+                <span class="stat-arrow">→</span>
             </a>
-            <a href="capacitaciones" class="quick-action-item">
-                <div class="quick-action-icon blue">📚</div>
-                <div class="quick-action-text">
-                    <div class="quick-action-title">Nueva capacitación</div>
-                    <div class="quick-action-sub">Crear un curso o entrenamiento</div>
+            <a class="stat-card stat-card-link" href="certificados">
+                <div class="stat-icon green">🏆</div>
+                <div class="stat-info">
+                    <div class="stat-value">@misCertificados.Count</div>
+                    <div class="stat-label">Mis certificados</div>
                 </div>
-                <span class="quick-action-arrow">→</span>
+                <span class="stat-arrow">→</span>
             </a>
-            <a href="certificados" class="quick-action-item">
-                <div class="quick-action-icon green">🏆</div>
-                <div class="quick-action-text">
-                    <div class="quick-action-title">Nuevo certificado</div>
-                    <div class="quick-action-sub">Registrar una certificación obtenida</div>
+            <a class="stat-card stat-card-link" href="cartas">
+                <div class="stat-icon purple">📋</div>
+                <div class="stat-info">
+                    <div class="stat-value">Solicitar</div>
+                    <div class="stat-label">Cartas laborales</div>
                 </div>
-                <span class="quick-action-arrow">→</span>
-            </a>
-            <a href="areas" class="quick-action-item">
-                <div class="quick-action-icon amber">🏢</div>
-                <div class="quick-action-text">
-                    <div class="quick-action-title">Gestionar áreas</div>
-                    <div class="quick-action-sub">Administrar áreas y cargos</div>
-                </div>
-                <span class="quick-action-arrow">→</span>
+                <span class="stat-arrow">→</span>
             </a>
         </div>
-    </div>
+    }
 
-</div>
-
-<!-- Segunda fila: colaboradores recientes + vencidos -->
-<div class="dashboard-grid" style="margin-top:0;">
-
-    <!-- Colaboradores recientes -->
-    <div class="card">
-        <div class="card-header">
-            <span class="card-title">👥 Colaboradores recientes</span>
-            <a href="colaboradores" class="btn btn-ghost btn-sm">Ver todos</a>
-        </div>
-        @if (cargando)
-        {
-            <div class="loading"><div class="spinner"></div> Cargando...</div>
-        }
-        else if (colaboradores is null || colaboradores.Count == 0)
-        {
-            <div class="empty-state" style="padding:2rem 1rem;">
-                <div class="empty-state-icon">👥</div>
-                <h3>Sin colaboradores</h3>
-                <p>Agrega el primer colaborador.</p>
+    <div class="dashboard-grid">
+        <!-- Mis capacitaciones -->
+        <div class="card">
+            <div class="card-header">
+                <span class="card-title">📚 Mis capacitaciones</span>
+                <a href="capacitaciones" class="btn btn-ghost btn-sm">Ver todas</a>
             </div>
-        }
-        else
-        {
-            <div class="table-wrapper">
-                <table>
-                    <thead>
-                        <tr><th>Colaborador</th><th>Cargo</th><th>Área</th><th>Ingreso</th></tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var c in colaboradores.OrderByDescending(x => x.FechaIngreso).Take(5))
-                        {
-                            <tr>
-                                <td>
-                                    <div class="user-cell">
-                                        <div class="avatar avatar-sm">@Iniciales2(c.Nombre, c.Apellido)</div>
-                                        <div>
-                                            <div class="user-name">@c.NombreCompleto</div>
-                                            <div class="user-email">@c.Email</div>
-                                        </div>
-                                    </div>
-                                </td>
-                                <td class="text-sm">@c.CargoNombre</td>
-                                <td><span class="badge badge-info">@c.AreaNombre</span></td>
-                                <td class="text-muted text-sm">@c.FechaIngreso.ToString("dd/MM/yyyy")</td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-            </div>
-        }
-    </div>
-
-    <!-- Certificados vencidos -->
-    <div class="card">
-        <div class="card-header">
-            <span class="card-title">❌ Certificados vencidos</span>
-            <a href="certificados" class="btn btn-ghost btn-sm">Ver todos</a>
-        </div>
-        @if (cargando)
-        {
-            <div class="loading"><div class="spinner"></div> Cargando...</div>
-        }
-        else if (vencidos is null || vencidos.Count == 0)
-        {
-            <div class="empty-state" style="padding:2rem 1rem;">
-                <div class="empty-state-icon">✅</div>
-                <h3>Sin vencidos</h3>
-                <p>No hay certificados vencidos.</p>
-            </div>
-        }
-        else
-        {
-            <div class="table-wrapper">
-                <table>
-                    <thead>
-                        <tr><th>Colaborador</th><th>Certificado</th><th>Venció</th></tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var cert in vencidos.Take(5))
-                        {
-                            <tr>
-                                <td>
-                                    <div class="user-cell">
-                                        <div class="avatar avatar-sm">@Iniciales(cert.ColaboradorNombre)</div>
-                                        <span class="font-medium">@cert.ColaboradorNombre</span>
-                                    </div>
-                                </td>
-                                <td class="text-sm text-muted">@cert.Nombre</td>
-                                <td><span class="badge badge-danger">@cert.FechaVencimiento?.ToString("dd/MM/yyyy")</span></td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-            </div>
-        }
-    </div>
-
-</div>
-
-<!-- Distribución por área -->
-@if (!cargando && areas is not null && areas.Count > 0)
-{
-    <div class="card" style="margin-top:0;">
-        <div class="card-header">
-            <span class="card-title">🏢 Distribución por área</span>
-            <a href="areas" class="btn btn-ghost btn-sm">Gestionar</a>
-        </div>
-        <div class="areas-grid">
-            @foreach (var area in areas.OrderByDescending(a => a.TotalColaboradores))
+            @if (cargando) { <div class="loading"><div class="spinner"></div> Cargando...</div> }
+            else if (!misInscripciones.Any())
             {
-                <div class="area-stat-card">
-                    <div class="area-stat-name">@area.Nombre</div>
-                    <div class="area-stat-numbers">
-                        <span class="badge badge-info">@area.TotalColaboradores colaboradores</span>
-                        <span class="badge badge-gray">@area.TotalCargos cargos</span>
-                    </div>
-                    <div class="area-stat-bar">
-                        <div class="area-stat-fill"
-                             style="width: @(areas.Max(a => a.TotalColaboradores) > 0
-                                ? (area.TotalColaboradores * 100 / areas.Max(a => a.TotalColaboradores))
-                                : 0)%">
-                        </div>
-                    </div>
+                <div class="empty-state" style="padding:2rem 1rem;">
+                    <div class="empty-state-icon">📚</div>
+                    <h3>Sin inscripciones</h3>
+                    <p>Aún no estás inscrito en ninguna capacitación.</p>
+                    <a href="capacitaciones" class="btn btn-primary btn-sm" style="margin-top:.75rem;">Ver disponibles</a>
+                </div>
+            }
+            else
+            {
+                <div class="table-wrapper">
+                    <table>
+                        <thead><tr><th>Capacitación</th><th>Inscripción</th><th>Asistencia</th></tr></thead>
+                        <tbody>
+                            @foreach (var ins in misInscripciones.Take(5))
+                            {
+                                <tr>
+                                    <td class="font-medium text-sm">@ins.CapacitacionNombre</td>
+                                    <td class="text-sm text-muted">@ins.FechaInscripcion.ToString("dd/MM/yyyy")</td>
+                                    <td>
+                                        <span class="badge @(ins.Asistio ? "badge-success" : "badge-gray")">
+                                            @(ins.Asistio ? "Asistió" : "Pendiente")
+                                        </span>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+
+        <!-- Mis certificados -->
+        <div class="card">
+            <div class="card-header">
+                <span class="card-title">🏆 Mis certificados</span>
+                <a href="certificados" class="btn btn-ghost btn-sm">Ver todos</a>
+            </div>
+            @if (cargando) { <div class="loading"><div class="spinner"></div> Cargando...</div> }
+            else if (!misCertificados.Any())
+            {
+                <div class="empty-state" style="padding:2rem 1rem;">
+                    <div class="empty-state-icon">🏆</div>
+                    <h3>Sin certificados</h3>
+                    <p>Completa una capacitación para obtener tu primer certificado.</p>
+                </div>
+            }
+            else
+            {
+                <div class="table-wrapper">
+                    <table>
+                        <thead><tr><th>Certificado</th><th>Emisión</th><th>Estado</th></tr></thead>
+                        <tbody>
+                            @foreach (var c in misCertificados.Take(5))
+                            {
+                                <tr>
+                                    <td class="font-medium text-sm">@c.Nombre</td>
+                                    <td class="text-sm text-muted">@c.FechaEmision.ToString("dd/MM/yyyy")</td>
+                                    <td>
+                                        @if (c.EstaVencido) { <span class="badge badge-danger">Vencido</span> }
+                                        else if (c.VenceProximamente) { <span class="badge badge-warning">Por vencer</span> }
+                                        else { <span class="badge badge-success">Vigente</span> }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
                 </div>
             }
         </div>
     </div>
+
+    <!-- Acciones rápidas colaborador -->
+    <div class="card" style="margin-top:0;">
+        <div class="card-header"><span class="card-title">⚡ Acciones rápidas</span></div>
+        <div class="quick-actions">
+            <a href="capacitaciones" class="quick-action-item">
+                <div class="quick-action-icon blue">📚</div>
+                <div class="quick-action-text">
+                    <div class="quick-action-title">Ver capacitaciones</div>
+                    <div class="quick-action-sub">Capacitaciones disponibles para ti</div>
+                </div>
+                <span class="quick-action-arrow">→</span>
+            </a>
+            <a href="mi-historial" class="quick-action-item">
+                <div class="quick-action-icon purple">📋</div>
+                <div class="quick-action-text">
+                    <div class="quick-action-title">Mi historial</div>
+                    <div class="quick-action-sub">Resultados y calificaciones</div>
+                </div>
+                <span class="quick-action-arrow">→</span>
+            </a>
+            <a href="cartas" class="quick-action-item">
+                <div class="quick-action-icon amber">📄</div>
+                <div class="quick-action-text">
+                    <div class="quick-action-title">Solicitar carta laboral</div>
+                    <div class="quick-action-sub">Genera documentos laborales</div>
+                </div>
+                <span class="quick-action-arrow">→</span>
+            </a>
+        </div>
+    </div>
 }
+else
+{
+    <!-- ── VISTA ADMIN / JEFE ────────────────────────────────────────── -->
+
+    <!-- KPI cards -->
+    @if (cargando)
+    {
+        <div class="stats-grid">
+            @for (int i = 0; i < 5; i++) { <div class="stat-card skeleton-card"></div> }
+        </div>
+    }
+    else
+    {
+        <div class="stats-grid">
+            <a class="stat-card stat-card-link" href="colaboradores">
+                <div class="stat-icon purple">👥</div>
+                <div class="stat-info">
+                    <div class="stat-value">@(colaboradores?.Count ?? 0)</div>
+                    <div class="stat-label">Colaboradores activos</div>
+                </div>
+                <span class="stat-arrow">→</span>
+            </a>
+            <a class="stat-card stat-card-link" href="capacitaciones">
+                <div class="stat-icon blue">📚</div>
+                <div class="stat-info">
+                    <div class="stat-value">@(capacitaciones?.Count ?? 0)</div>
+                    <div class="stat-label">Capacitaciones</div>
+                </div>
+                <span class="stat-arrow">→</span>
+            </a>
+            <a class="stat-card stat-card-link" href="certificados">
+                <div class="stat-icon green">🏆</div>
+                <div class="stat-info">
+                    <div class="stat-value">@totalCertificados</div>
+                    <div class="stat-label">Certificados totales</div>
+                </div>
+                <span class="stat-arrow">→</span>
+            </a>
+            <a class="stat-card stat-card-link" href="certificados">
+                <div class="stat-icon amber">⚠️</div>
+                <div class="stat-info">
+                    <div class="stat-value">@(proximosVencer?.Count ?? 0)</div>
+                    <div class="stat-label">Por vencer (30 días)</div>
+                </div>
+                <span class="stat-arrow">→</span>
+            </a>
+            <a class="stat-card stat-card-link" href="certificados">
+                <div class="stat-icon red">❌</div>
+                <div class="stat-info">
+                    <div class="stat-value">@(vencidos?.Count ?? 0)</div>
+                    <div class="stat-label">Certificados vencidos</div>
+                </div>
+                <span class="stat-arrow">→</span>
+            </a>
+        </div>
+    }
+
+    <!-- Main grid -->
+    <div class="dashboard-grid">
+
+        <!-- Certificados próximos a vencer -->
+        <div class="card">
+            <div class="card-header">
+                <span class="card-title">⚠️ Próximos a vencer</span>
+                <a href="certificados" class="btn btn-ghost btn-sm">Ver todos</a>
+            </div>
+            @if (cargando)
+            {
+                <div class="loading"><div class="spinner"></div> Cargando...</div>
+            }
+            else if (proximosVencer is null || proximosVencer.Count == 0)
+            {
+                <div class="empty-state" style="padding:2rem 1rem;">
+                    <div class="empty-state-icon">✅</div>
+                    <h3>Todo al día</h3>
+                    <p>No hay certificados próximos a vencer.</p>
+                </div>
+            }
+            else
+            {
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr><th>Colaborador</th><th>Certificado</th><th>Vence</th></tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var cert in proximosVencer.Take(5))
+                            {
+                                <tr>
+                                    <td>
+                                        <div class="user-cell">
+                                            <div class="avatar avatar-sm">@Iniciales(cert.ColaboradorNombre)</div>
+                                            <span class="font-medium">@cert.ColaboradorNombre</span>
+                                        </div>
+                                    </td>
+                                    <td class="text-sm text-muted">@cert.Nombre</td>
+                                    <td><span class="badge badge-warning">@cert.FechaVencimiento?.ToString("dd/MM/yyyy")</span></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+
+        <!-- Acciones rápidas admin -->
+        <div class="card">
+            <div class="card-header">
+                <span class="card-title">⚡ Acciones rápidas</span>
+            </div>
+            <div class="quick-actions">
+                <a href="colaboradores" class="quick-action-item">
+                    <div class="quick-action-icon purple">👥</div>
+                    <div class="quick-action-text">
+                        <div class="quick-action-title">Nuevo colaborador</div>
+                        <div class="quick-action-sub">Registrar un nuevo miembro del equipo</div>
+                    </div>
+                    <span class="quick-action-arrow">→</span>
+                </a>
+                <a href="capacitaciones" class="quick-action-item">
+                    <div class="quick-action-icon blue">📚</div>
+                    <div class="quick-action-text">
+                        <div class="quick-action-title">Nueva capacitación</div>
+                        <div class="quick-action-sub">Crear un curso o entrenamiento</div>
+                    </div>
+                    <span class="quick-action-arrow">→</span>
+                </a>
+                <a href="certificados" class="quick-action-item">
+                    <div class="quick-action-icon green">🏆</div>
+                    <div class="quick-action-text">
+                        <div class="quick-action-title">Nuevo certificado</div>
+                        <div class="quick-action-sub">Registrar una certificación obtenida</div>
+                    </div>
+                    <span class="quick-action-arrow">→</span>
+                </a>
+                <a href="areas" class="quick-action-item">
+                    <div class="quick-action-icon amber">🏢</div>
+                    <div class="quick-action-text">
+                        <div class="quick-action-title">Gestionar áreas</div>
+                        <div class="quick-action-sub">Administrar áreas y cargos</div>
+                    </div>
+                    <span class="quick-action-arrow">→</span>
+                </a>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Segunda fila: colaboradores recientes + vencidos -->
+    <div class="dashboard-grid" style="margin-top:0;">
+
+        <!-- Colaboradores recientes -->
+        <div class="card">
+            <div class="card-header">
+                <span class="card-title">👥 Colaboradores recientes</span>
+                <a href="colaboradores" class="btn btn-ghost btn-sm">Ver todos</a>
+            </div>
+            @if (cargando)
+            {
+                <div class="loading"><div class="spinner"></div> Cargando...</div>
+            }
+            else if (colaboradores is null || colaboradores.Count == 0)
+            {
+                <div class="empty-state" style="padding:2rem 1rem;">
+                    <div class="empty-state-icon">👥</div>
+                    <h3>Sin colaboradores</h3>
+                    <p>Agrega el primer colaborador.</p>
+                </div>
+            }
+            else
+            {
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr><th>Colaborador</th><th>Cargo</th><th>Área</th><th>Ingreso</th></tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var c in colaboradores.OrderByDescending(x => x.FechaIngreso).Take(5))
+                            {
+                                <tr>
+                                    <td>
+                                        <div class="user-cell">
+                                            <div class="avatar avatar-sm">@Iniciales2(c.Nombre, c.Apellido)</div>
+                                            <div>
+                                                <div class="user-name">@c.NombreCompleto</div>
+                                                <div class="user-email">@c.Email</div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td class="text-sm">@c.CargoNombre</td>
+                                    <td><span class="badge badge-info">@c.AreaNombre</span></td>
+                                    <td class="text-muted text-sm">@c.FechaIngreso.ToString("dd/MM/yyyy")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+
+        <!-- Certificados vencidos -->
+        <div class="card">
+            <div class="card-header">
+                <span class="card-title">❌ Certificados vencidos</span>
+                <a href="certificados" class="btn btn-ghost btn-sm">Ver todos</a>
+            </div>
+            @if (cargando)
+            {
+                <div class="loading"><div class="spinner"></div> Cargando...</div>
+            }
+            else if (vencidos is null || vencidos.Count == 0)
+            {
+                <div class="empty-state" style="padding:2rem 1rem;">
+                    <div class="empty-state-icon">✅</div>
+                    <h3>Sin vencidos</h3>
+                    <p>No hay certificados vencidos.</p>
+                </div>
+            }
+            else
+            {
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr><th>Colaborador</th><th>Certificado</th><th>Venció</th></tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var cert in vencidos.Take(5))
+                            {
+                                <tr>
+                                    <td>
+                                        <div class="user-cell">
+                                            <div class="avatar avatar-sm">@Iniciales(cert.ColaboradorNombre)</div>
+                                            <span class="font-medium">@cert.ColaboradorNombre</span>
+                                        </div>
+                                    </td>
+                                    <td class="text-sm text-muted">@cert.Nombre</td>
+                                    <td><span class="badge badge-danger">@cert.FechaVencimiento?.ToString("dd/MM/yyyy")</span></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+
+    </div>
+
+    <!-- Distribución por área -->
+    @if (!cargando && areas is not null && areas.Count > 0)
+    {
+        <div class="card" style="margin-top:0;">
+            <div class="card-header">
+                <span class="card-title">🏢 Distribución por área</span>
+                <a href="areas" class="btn btn-ghost btn-sm">Gestionar</a>
+            </div>
+            <div class="areas-grid">
+                @foreach (var area in areas.OrderByDescending(a => a.TotalColaboradores))
+                {
+                    <div class="area-stat-card">
+                        <div class="area-stat-name">@area.Nombre</div>
+                        <div class="area-stat-numbers">
+                            <span class="badge badge-info">@area.TotalColaboradores colaboradores</span>
+                            <span class="badge badge-gray">@area.TotalCargos cargos</span>
+                        </div>
+                        <div class="area-stat-bar">
+                            <div class="area-stat-fill"
+                                 style="width: @(areas.Max(a => a.TotalColaboradores) > 0
+                                    ? (area.TotalColaboradores * 100 / areas.Max(a => a.TotalColaboradores))
+                                    : 0)%">
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+} @* fin else admin/jefe *@
 
 @code {
+    // ── Estado compartido ────────────────────────────────────────────────────
+    private bool cargando = true;
+
+    // ── Admin / Jefe ─────────────────────────────────────────────────────────
     private List<TalentManagement.Shared.DTOs.Colaboradores.ColaboradorDto>? colaboradores;
     private List<TalentManagement.Shared.DTOs.Capacitaciones.CapacitacionDto>? capacitaciones;
     private List<TalentManagement.Shared.DTOs.Certificados.CertificadoDto>? proximosVencer;
     private List<TalentManagement.Shared.DTOs.Certificados.CertificadoDto>? vencidos;
     private List<TalentManagement.Shared.DTOs.Certificados.CertificadoDto>? todosCertificados;
     private List<TalentManagement.Shared.DTOs.Areas.AreaDto>? areas;
-    private bool cargando = true;
-
     private int totalCertificados => todosCertificados?.Count ?? 0;
+
+    // ── Colaborador ──────────────────────────────────────────────────────────
+    private List<TalentManagement.Shared.DTOs.Inscripciones.InscripcionDto> misInscripciones = [];
+    private List<TalentManagement.Shared.DTOs.Certificados.CertificadoDto> misCertificados = [];
 
     protected override async Task OnInitializedAsync()
     {
-        await Task.WhenAll(
-            ColaboradorSvc.GetAllAsync().ContinueWith(t => colaboradores = t.Result),
-            CapacitacionSvc.GetAllAsync().ContinueWith(t => capacitaciones = t.Result),
-            CertificadoSvc.GetAllAsync().ContinueWith(t => todosCertificados = t.Result),
-            CertificadoSvc.GetProximosAVencerAsync().ContinueWith(t => proximosVencer = t.Result),
-            CertificadoSvc.GetVencidosAsync().ContinueWith(t => vencidos = t.Result),
-            AreaSvc.GetAllAsync().ContinueWith(t => areas = t.Result)
-        );
+        await AuthInfo.LoadAsync();
+
+        if (AuthInfo.EsSoloColaborador && AuthInfo.ColaboradorId.HasValue)
+        {
+            var id = AuthInfo.ColaboradorId.Value;
+            await Task.WhenAll(
+                InscripcionSvc.GetByColaboradorAsync(id)
+                    .ContinueWith(t => misInscripciones = t.IsCompletedSuccessfully ? t.Result ?? [] : []),
+                CertificadoSvc.GetMisAsync()
+                    .ContinueWith(t => misCertificados = t.IsCompletedSuccessfully ? t.Result ?? [] : [])
+            );
+        }
+        else
+        {
+            await Task.WhenAll(
+                ColaboradorSvc.GetAllAsync().ContinueWith(t => colaboradores = t.IsCompletedSuccessfully ? t.Result : null),
+                CapacitacionSvc.GetAllAsync().ContinueWith(t => capacitaciones = t.IsCompletedSuccessfully ? t.Result : null),
+                CertificadoSvc.GetAllAsync().ContinueWith(t => todosCertificados = t.IsCompletedSuccessfully ? t.Result : null),
+                CertificadoSvc.GetProximosAVencerAsync().ContinueWith(t => proximosVencer = t.IsCompletedSuccessfully ? t.Result : null),
+                CertificadoSvc.GetVencidosAsync().ContinueWith(t => vencidos = t.IsCompletedSuccessfully ? t.Result : null),
+                AreaSvc.GetAllAsync().ContinueWith(t => areas = t.IsCompletedSuccessfully ? t.Result : null)
+            );
+        }
         cargando = false;
     }
 

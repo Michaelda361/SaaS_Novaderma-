@@ -61,6 +61,13 @@ public class CapacitacionesController(
         return deleted ? NoContent() : NotFound();
     }
 
+    [HttpPatch("{id:int}/restaurar")]
+    public async Task<IActionResult> Restaurar(int id)
+    {
+        if (!await currentUser.PuedeGestionarPlantillasAsync()) return Forbid();
+        return await service.RestaurarAsync(id) ? NoContent() : NotFound();
+    }
+
     [HttpPatch("{id:int}/publicar")]
     public async Task<IActionResult> Publicar(int id)
     {

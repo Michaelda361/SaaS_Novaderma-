@@ -110,6 +110,12 @@ public class CapacitacionService(
         return true;
     }
 
+    public async Task<bool> RestaurarAsync(int id)
+    {
+        await repository.RestaurarAsync(id);
+        return true;
+    }
+
     public async Task<CapacitacionDto?> PublicarAsync(int id)
     {
         var cap = await repository.GetByIdAsync(id);

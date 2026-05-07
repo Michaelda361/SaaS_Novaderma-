@@ -38,7 +38,8 @@ public class AreaService(IAreaRepository repository)
         area.Descripcion = dto.Descripcion;
         area.JefeId = dto.JefeId;
         await repository.UpdateAsync(area);
-        return MapToDto(await repository.GetByIdAsync(id)!);
+        var updated = await repository.GetByIdAsync(id);
+        return updated is null ? null : MapToDto(updated);
     }
 
     public async Task<bool> DeleteAsync(int id)
@@ -46,6 +47,12 @@ public class AreaService(IAreaRepository repository)
         var area = await repository.GetByIdAsync(id);
         if (area is null) return false;
         await repository.DeleteAsync(id);
+        return true;
+    }
+
+    public async Task<bool> RestaurarAsync(int id)
+    {
+        await repository.RestaurarAsync(id);
         return true;
     }
 

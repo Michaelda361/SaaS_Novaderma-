@@ -52,4 +52,22 @@ public class AreaRepository(AppDbContext context, IMemoryCache cache) : IAreaRep
         await context.SaveChangesAsync();
         cache.Remove("areas_all");
     }
+
+    public async Task<IEnumerable<Area>> GetInactivasAsync() =>
+        await context.Areas
+            .IgnoreQueryFilters()
+            .Where(a => !a.Activo)
+            .AsNoTracking()
+            .ToListAsync();
+
+    public async Task RestaurarAsync(int id)
+    {
+        var area = await context.Areas
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(a => a.Id == id);
+        if (area is null) return;
+        area.Activo = true;
+        await context.SaveChangesAsync();
+        cache.Remove("areas_all");
+    }
 }

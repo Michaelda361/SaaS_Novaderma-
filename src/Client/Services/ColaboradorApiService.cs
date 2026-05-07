@@ -16,21 +16,39 @@ public class ColaboradorApiService(HttpClient http)
     public async Task<ColaboradorDto?> CreateAsync(CreateColaboradorDto dto)
     {
         var response = await http.PostAsJsonAsync(Base, dto);
-        return response.IsSuccessStatusCode
-            ? await response.Content.ReadFromJsonAsync<ColaboradorDto>()
-            : null;
+        if (response.IsSuccessStatusCode)
+            return await response.Content.ReadFromJsonAsync<ColaboradorDto>();
+        if (response.StatusCode == System.Net.HttpStatusCode.UnprocessableEntity)
+        {
+            var err = await response.Content.ReadFromJsonAsync<ErrorResponse>();
+            throw new InvalidOperationException(err?.Error ?? "Error al crear el colaborador.");
+        }
+        return null;
     }
 
     public async Task<ColaboradorDto?> UpdateAsync(int id, UpdateColaboradorDto dto)
     {
         var response = await http.PutAsJsonAsync($"{Base}/{id}", dto);
-        return response.IsSuccessStatusCode
-            ? await response.Content.ReadFromJsonAsync<ColaboradorDto>()
-            : null;
+        if (response.IsSuccessStatusCode)
+            return await response.Content.ReadFromJsonAsync<ColaboradorDto>();
+        if (response.StatusCode == System.Net.HttpStatusCode.UnprocessableEntity)
+        {
+            var err = await response.Content.ReadFromJsonAsync<ErrorResponse>();
+            throw new InvalidOperationException(err?.Error ?? "Error al actualizar el colaborador.");
+        }
+        return null;
     }
+
+    private record ErrorResponse(string? Error);
 
     public Task<bool> DeleteAsync(int id) =>
         http.DeleteAsync($"{Base}/{id}").ContinueWith(t => t.Result.IsSuccessStatusCode);
+
+    public Task<bool> RestaurarAsync(int id) =>
+        http.PatchAsync($"{Base}/{id}/restaurar", null).ContinueWith(t => t.Result.IsSuccessStatusCode);
+
+    public Task<List<ColaboradorDto>?> GetInactivosAsync() =>
+        http.GetFromJsonAsync<List<ColaboradorDto>>($"{Base}/inactivos");
 
     public async Task<ColaboradorDto?> CambiarRolAsync(int id, string rol)
     {

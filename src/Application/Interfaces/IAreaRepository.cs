@@ -9,4 +9,6 @@ public interface IAreaRepository
     Task<Area> CreateAsync(Area area);
     Task<Area> UpdateAsync(Area area);
     Task DeleteAsync(int id);
+    Task<IEnumerable<Area>> GetInactivasAsync();
+    Task RestaurarAsync(int id);
 }

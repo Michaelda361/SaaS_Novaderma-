@@ -11,4 +11,6 @@ public interface ICapacitacionRepository
     Task<Capacitacion> CreateAsync(Capacitacion capacitacion);
     Task<Capacitacion> UpdateAsync(Capacitacion capacitacion);
     Task DeleteAsync(int id);
+    Task<IEnumerable<Capacitacion>> GetInactivasAsync();
+    Task RestaurarAsync(int id);
 }

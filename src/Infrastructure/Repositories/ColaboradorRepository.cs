@@ -54,4 +54,23 @@ public class ColaboradorRepository(AppDbContext context) : IColaboradorRepositor
 
     public async Task<bool> EsJefeDeAreaAsync(int colaboradorId) =>
         await context.Areas.AnyAsync(a => a.JefeId == colaboradorId);
+
+    public async Task<IEnumerable<Colaborador>> GetInactivosAsync() =>
+        await context.Colaboradores
+            .IgnoreQueryFilters()
+            .Where(c => !c.Activo)
+            .Include(c => c.Area)
+            .Include(c => c.Cargo)
+            .AsNoTracking()
+            .ToListAsync();
+
+    public async Task RestaurarAsync(int id)
+    {
+        var colaborador = await context.Colaboradores
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(c => c.Id == id);
+        if (colaborador is null) return;
+        colaborador.Activo = true;
+        await context.SaveChangesAsync();
+    }
 }

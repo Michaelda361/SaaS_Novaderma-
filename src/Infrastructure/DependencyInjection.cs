@@ -7,8 +7,6 @@ using TalentManagement.Infrastructure.Persistence;
 using TalentManagement.Infrastructure.Repositories;
 using TalentManagement.Infrastructure.Services;
 
-using TalentManagement.Infrastructure.Services;
-
 namespace TalentManagement.Infrastructure;
 
 public static class DependencyInjection
@@ -47,6 +45,7 @@ public static class DependencyInjection
         services.AddScoped<PlantillaDocumentoService>();
         services.AddScoped<CuestionarioService>();
         services.AddScoped<LibreOfficeConverterService>();
+        services.AddScoped<AuditoriaService>();
         services.AddScoped<PdfGeneratorService>();
         services.AddScoped<ICertificadoPdfService, CertificadoPdfService>();
         services.AddScoped<DocxToHtmlConverterService>();

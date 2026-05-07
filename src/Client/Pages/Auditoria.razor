@@ -1,0 +1,248 @@
+@page "/auditoria"
+@attribute [Authorize]
+@inject AuditoriaApiService ApiService
+@inject AuthInfoService AuthInfo
+@inject NavigationManager Nav
+
+@if (!AuthInfo.EsAdmin)
+{
+    <div class="empty-state">
+        <div class="empty-state-icon">🔒</div>
+        <h3>Acceso restringido</h3>
+        <p>Solo los administradores pueden ver el registro de auditoría.</p>
+    </div>
+    return;
+}
+
+<div class="page-header">
+    <div>
+        <h2 class="page-title">Auditoría</h2>
+        <p class="page-subtitle">Registro de todas las acciones realizadas en el sistema</p>
+    </div>
+    <a href="@ApiService.GetExportarUrl(filtroEntidad, filtroDesde, filtroHasta)"
+       class="btn btn-ghost btn-sm" target="_blank">
+        ⬇ Exportar CSV
+    </a>
+</div>
+
+<!-- Filtros -->
+<div class="card" style="margin-bottom:1rem;">
+    <div class="filter-bar" style="flex-wrap:wrap;gap:.75rem;">
+        <select @bind="filtroEntidad" style="min-width:140px;">
+            <option value="">Todas las entidades</option>
+            <option value="Documento">Documento</option>
+            <option value="Colaborador">Colaborador</option>
+            <option value="Capacitacion">Capacitación</option>
+            <option value="Certificado">Certificado</option>
+            <option value="PlantillaDocumento">Carta Laboral</option>
+        </select>
+        <select @bind="filtroAccion" style="min-width:140px;">
+            <option value="">Todas las acciones</option>
+            <option value="Creado">Creado</option>
+            <option value="Actualizado">Actualizado</option>
+            <option value="Eliminado">Eliminado</option>
+            <option value="EstadoCambiado">Estado cambiado</option>
+            <option value="PropuestaEnviada">Propuesta enviada</option>
+            <option value="PropuestaAprobada">Propuesta aprobada</option>
+            <option value="PropuestaRechazada">Propuesta rechazada</option>
+            <option value="NuevaVersion">Nueva versión</option>
+        </select>
+        <div style="display:flex;align-items:center;gap:.4rem;">
+            <label class="text-sm text-muted">Desde</label>
+            <input type="date" @bind="filtroDesde" style="padding:.35rem .6rem;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg);color:var(--text);font-size:.875rem;" />
+        </div>
+        <div style="display:flex;align-items:center;gap:.4rem;">
+            <label class="text-sm text-muted">Hasta</label>
+            <input type="date" @bind="filtroHasta" style="padding:.35rem .6rem;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg);color:var(--text);font-size:.875rem;" />
+        </div>
+        <button class="btn btn-primary btn-sm" @onclick="Buscar">Filtrar</button>
+        <button class="btn btn-ghost btn-sm" @onclick="LimpiarFiltros">Limpiar</button>
+    </div>
+</div>
+
+<!-- Tabla -->
+<div class="card">
+    @if (cargando)
+    {
+        <div class="loading"><div class="spinner"></div> Cargando registros...</div>
+    }
+    else if (resultado is null || !resultado.Items.Any())
+    {
+        <div class="empty-state">
+            <div class="empty-state-icon">📋</div>
+            <h3>Sin registros</h3>
+            <p>No hay entradas de auditoría con los filtros seleccionados.</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Entidad</th>
+                        <th>Nombre</th>
+                        <th>Acción</th>
+                        <th>Usuario</th>
+                        <th>Observaciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var log in resultado.Items)
+                    {
+                        <tr>
+                            <td class="text-sm text-muted" style="white-space:nowrap;">
+                                @log.FechaHora.ToLocalTime().ToString("dd/MM/yyyy HH:mm")
+                            </td>
+                            <td>
+                                <span class="badge @BadgeEntidad(log.EntidadTipo)">
+                                    @log.EntidadTipo
+                                </span>
+                            </td>
+                            <td class="text-sm font-medium">@log.EntidadNombre</td>
+                            <td>
+                                <span class="badge @BadgeAccion(log.Accion)">
+                                    @log.Accion
+                                </span>
+                            </td>
+                            <td class="text-sm">
+                                @if (!string.IsNullOrWhiteSpace(log.ColaboradorNombre))
+                                {
+                                    <div class="user-cell">
+                                        <div class="avatar avatar-sm" style="font-size:.65rem;">
+                                            @Iniciales(log.ColaboradorNombre)
+                                        </div>
+                                        <span>@log.ColaboradorNombre</span>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">Sistema</span>
+                                }
+                            </td>
+                            <td class="text-sm text-muted" style="max-width:260px;">
+                                @if (!string.IsNullOrWhiteSpace(log.Observaciones))
+                                {
+                                    <span title="@log.Observaciones" class="truncate" style="display:block;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+                                        @log.Observaciones
+                                    </span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Paginación -->
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:.75rem 1rem;border-top:1px solid var(--border);flex-wrap:wrap;gap:.5rem;">
+            <span class="text-sm text-muted">
+                @resultado.Total registro(s) · Página @resultado.Pagina de @resultado.TotalPaginas
+            </span>
+            <div class="flex gap-2">
+                <button class="btn btn-ghost btn-sm"
+                        disabled="@(paginaActual <= 1)"
+                        @onclick="() => CambiarPagina(paginaActual - 1)">
+                    ← Anterior
+                </button>
+                @for (int p = Math.Max(1, paginaActual - 2); p <= Math.Min(resultado.TotalPaginas, paginaActual + 2); p++)
+                {
+                    var pg = p;
+                    <button class="btn btn-sm @(pg == paginaActual ? "btn-primary" : "btn-ghost")"
+                            @onclick="() => CambiarPagina(pg)">
+                        @pg
+                    </button>
+                }
+                <button class="btn btn-ghost btn-sm"
+                        disabled="@(paginaActual >= resultado.TotalPaginas)"
+                        @onclick="() => CambiarPagina(paginaActual + 1)">
+                    Siguiente →
+                </button>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private TalentManagement.Shared.DTOs.Documentos.AuditLogPagedDto? resultado;
+    private bool cargando = true;
+    private int paginaActual = 1;
+    private const int Tamano = 25;
+
+    // Filtros
+    private string filtroEntidad = string.Empty;
+    private string filtroAccion  = string.Empty;
+    private DateTime? filtroDesde;
+    private DateTime? filtroHasta;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await AuthInfo.LoadAsync();
+        if (AuthInfo.EsAdmin)
+            await Cargar();
+        else
+            cargando = false;
+    }
+
+    private async Task Cargar()
+    {
+        cargando = true;
+        resultado = await ApiService.GetPagedAsync(
+            string.IsNullOrWhiteSpace(filtroEntidad) ? null : filtroEntidad,
+            string.IsNullOrWhiteSpace(filtroAccion)  ? null : filtroAccion,
+            null, filtroDesde, filtroHasta,
+            paginaActual, Tamano);
+        cargando = false;
+    }
+
+    private async Task Buscar()
+    {
+        paginaActual = 1;
+        await Cargar();
+    }
+
+    private async Task LimpiarFiltros()
+    {
+        filtroEntidad = string.Empty;
+        filtroAccion  = string.Empty;
+        filtroDesde   = null;
+        filtroHasta   = null;
+        paginaActual  = 1;
+        await Cargar();
+    }
+
+    private async Task CambiarPagina(int pagina)
+    {
+        paginaActual = pagina;
+        await Cargar();
+    }
+
+    private static string BadgeEntidad(string tipo) => tipo switch
+    {
+        "Documento"          => "badge-info",
+        "Colaborador"        => "badge-warning",
+        "Capacitacion"       => "badge-success",
+        "Certificado"        => "badge-gray",
+        "PlantillaDocumento" => "badge-info",
+        _                    => "badge-gray"
+    };
+
+    private static string BadgeAccion(string accion) => accion switch
+    {
+        "Creado"             => "badge-success",
+        "Eliminado"          => "badge-danger",
+        "EstadoCambiado"     => "badge-warning",
+        "PropuestaAprobada"  => "badge-success",
+        "PropuestaRechazada" => "badge-danger",
+        _                    => "badge-gray"
+    };
+
+    private static string Iniciales(string nombre)
+    {
+        var parts = nombre.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length >= 2
+            ? $"{parts[0][0]}{parts[1][0]}".ToUpper()
+            : nombre.Length > 0 ? nombre[0..1].ToUpper() : "?";
+    }
+}

@@ -20,6 +20,12 @@ public class ColaboradorService(IColaboradorRepository repository)
 
     public async Task<ColaboradorDto> CreateAsync(CreateColaboradorDto dto)
     {
+        // Verificar email único entre colaboradores activos
+        var existente = await repository.GetByEmailAsync(dto.Email);
+        if (existente is not null)
+            throw new InvalidOperationException(
+                $"Ya existe un colaborador registrado con el email '{dto.Email}'.");
+
         var colaborador = new Colaborador
         {
             Nombre = dto.Nombre,
@@ -45,6 +51,15 @@ public class ColaboradorService(IColaboradorRepository repository)
         var colaborador = await repository.GetByIdAsync(id);
         if (colaborador is null) return null;
 
+        // Verificar email único solo si cambió
+        if (!string.Equals(colaborador.Email, dto.Email, StringComparison.OrdinalIgnoreCase))
+        {
+            var existente = await repository.GetByEmailAsync(dto.Email);
+            if (existente is not null && existente.Id != id)
+                throw new InvalidOperationException(
+                    $"Ya existe un colaborador registrado con el email '{dto.Email}'.");
+        }
+
         colaborador.Nombre = dto.Nombre;
         colaborador.Apellido = dto.Apellido;
         colaborador.Email = dto.Email;
@@ -66,6 +81,18 @@ public class ColaboradorService(IColaboradorRepository repository)
         var colaborador = await repository.GetByIdAsync(id);
         if (colaborador is null) return false;
         await repository.DeleteAsync(id);
+        return true;
+    }
+
+    public async Task<List<ColaboradorDto>> GetInactivosAsync()
+    {
+        var inactivos = await repository.GetInactivosAsync();
+        return inactivos.Select(MapToDto).ToList();
+    }
+
+    public async Task<bool> RestaurarAsync(int id)
+    {
+        await repository.RestaurarAsync(id);
         return true;
     }
 

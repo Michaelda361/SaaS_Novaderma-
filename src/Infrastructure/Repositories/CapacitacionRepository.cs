@@ -55,4 +55,23 @@ public class CapacitacionRepository(AppDbContext context) : ICapacitacionReposit
         cap.Activo = false;
         await context.SaveChangesAsync();
     }
+
+    public async Task<IEnumerable<Capacitacion>> GetInactivasAsync() =>
+        await context.Capacitaciones
+            .IgnoreQueryFilters()
+            .Where(c => !c.Activo)
+            .Include(c => c.Area)
+            .Include(c => c.Colaborador)
+            .AsNoTracking()
+            .ToListAsync();
+
+    public async Task RestaurarAsync(int id)
+    {
+        var cap = await context.Capacitaciones
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(c => c.Id == id);
+        if (cap is null) return;
+        cap.Activo = true;
+        await context.SaveChangesAsync();
+    }
 }

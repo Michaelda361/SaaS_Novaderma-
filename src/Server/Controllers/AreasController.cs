@@ -40,4 +40,8 @@ public class AreasController(AreaService service) : ControllerBase
         var deleted = await service.DeleteAsync(id);
         return deleted ? NoContent() : NotFound();
     }
+
+    [HttpPatch("{id:int}/restaurar")]
+    public async Task<IActionResult> Restaurar(int id) =>
+        await service.RestaurarAsync(id) ? NoContent() : NotFound();
 }

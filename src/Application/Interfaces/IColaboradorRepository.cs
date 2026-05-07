@@ -12,4 +12,6 @@ public interface IColaboradorRepository
     Task DeleteAsync(int id);
     Task<bool> ExistsAsync(int id);
     Task<bool> EsJefeDeAreaAsync(int colaboradorId);
+    Task<IEnumerable<Colaborador>> GetInactivosAsync();
+    Task RestaurarAsync(int id);
 }

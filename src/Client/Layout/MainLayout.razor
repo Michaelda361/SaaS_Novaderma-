@@ -94,6 +94,12 @@
                     <span class="nav-icon">⚙️</span> Plantillas de Cartas
                 </NavLink>
             }
+            @if (AuthInfo.EsAdmin)
+            {
+                <NavLink class="nav-link" href="auditoria">
+                    <span class="nav-icon">🔍</span> Auditoría
+                </NavLink>
+            }
         </nav>
 
         <div class="sidebar-footer">
@@ -162,28 +168,21 @@
         // Reconectar el hub si se desconectó (server reiniciado, etc.)
         if (!Notificaciones.Conectado && !string.IsNullOrWhiteSpace(AuthInfo.Email))
         {
-            if (AuthInfo.EsJefe || AuthInfo.EsAdmin)
+            var esAdminOJefe = AuthInfo.EsJefe || AuthInfo.EsAdmin;
+
+            // IniciarAsync ya maneja el join al grupo admin internamente cuando esAdmin=true
+            await Notificaciones.IniciarAsync(AuthInfo.Email, AuthInfo.ColaboradorId, esAdmin: esAdminOJefe);
+
+            // Esperar conexión (máx 2s)
+            for (int i = 0; i < 10; i++)
             {
-                await Notificaciones.IniciarAsync(AuthInfo.Email, AuthInfo.ColaboradorId, esAdmin: true);
-                for (int i = 0; i < 10; i++)
-                {
-                    if (Notificaciones.Conectado) break;
-                    await Task.Delay(200);
-                }
-                if (Notificaciones.Conectado)
-                    await Notificaciones.UnirseGrupoAdminAsync();
-                if (firstRender)
-                    Notificaciones.OnCuestionarioRespondido += OnCuestionarioRespondido;
+                if (Notificaciones.Conectado) break;
+                await Task.Delay(200);
             }
-            else
-            {
-                await Notificaciones.IniciarAsync(AuthInfo.Email, AuthInfo.ColaboradorId);
-                for (int i = 0; i < 10; i++)
-                {
-                    if (Notificaciones.Conectado) break;
-                    await Task.Delay(200);
-                }
-            }
+
+            if (firstRender && esAdminOJefe)
+                Notificaciones.OnCuestionarioRespondido += OnCuestionarioRespondido;
+
             StateHasChanged();
         }
     }
@@ -227,6 +226,7 @@
         "CartasLaborales"      => "Mis Cartas Laborales",
         "CartasLaboralesAdmin" => "Administracion de Cartas",
         "MiHistorial"          => "Mi Historial de Capacitaciones",
+        "Auditoria"            => "Auditoría del Sistema",
         "Landing"              => "Bienvenido",
         _                      => "NovaHub"
     };
