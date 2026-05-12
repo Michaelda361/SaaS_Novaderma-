@@ -3,33 +3,39 @@
 @implements IDisposable
 
 <div class="campana-wrapper" @onclick:stopPropagation>
-    <button class="campana-btn @(abierto ? "campana-btn--active" : "")"
+    <button type="button"
+            id="campana-notif-toggle"
+            class="campana-btn @(abierto ? "campana-btn--active" : "")"
             @onclick="TogglePanel"
-            title="Notificaciones">
-        🔔
+            title="Notificaciones"
+            aria-label="Notificaciones"
+            aria-expanded="@abierto"
+            aria-controls="campana-notif-panel">
+        <span aria-hidden="true">🔔</span>
         @if (Notificaciones.NoLeidas > 0)
         {
-            <span class="campana-badge">@(Notificaciones.NoLeidas > 9 ? "9+" : Notificaciones.NoLeidas.ToString())</span>
+            <span class="campana-badge" aria-hidden="true">@(Notificaciones.NoLeidas > 9 ? "9+" : Notificaciones.NoLeidas.ToString())</span>
+            <span class="sr-only">@Notificaciones.NoLeidas no leídas</span>
         }
     </button>
 
     @if (abierto)
     {
-        <div class="campana-panel">
+        <div id="campana-notif-panel" class="campana-panel" role="region" aria-labelledby="campana-notif-heading">
             <div class="campana-panel-header">
-                <span class="font-medium text-sm">Notificaciones</span>
-                <div style="display:flex;gap:.5rem;align-items:center;">
+                <span class="font-medium text-sm" id="campana-notif-heading">Notificaciones</span>
+                <div class="campana-header-actions">
                     @if (Notificaciones.Historial.Any(n => !n.Leida))
                     {
-                        <button class="btn btn-ghost btn-sm" style="font-size:.75rem;padding:.2rem .5rem;"
+                        <button type="button" class="btn btn-ghost btn-sm btn-campana-compact"
                                 @onclick="MarcarTodasLeidas">
                             Marcar leidas
                         </button>
                     }
                     @if (Notificaciones.Historial.Any())
                     {
-                        <button class="btn btn-ghost btn-sm btn-icon" style="font-size:.75rem;"
-                                @onclick="Limpiar" title="Limpiar">x</button>
+                        <button type="button" class="btn btn-ghost btn-sm btn-icon btn-campana-compact"
+                                @onclick="Limpiar" title="Limpiar notificaciones" aria-label="Limpiar notificaciones"><span aria-hidden="true">×</span></button>
                     }
                 </div>
             </div>
@@ -37,8 +43,8 @@
             @if (!Notificaciones.Historial.Any())
             {
                 <div class="campana-empty">
-                    <span style="font-size:1.75rem;">🔔</span>
-                    <p class="text-sm text-muted" style="margin-top:.5rem;">Sin notificaciones</p>
+                    <span class="campana-empty-emoji" aria-hidden="true">🔔</span>
+                    <p class="text-sm text-muted campana-empty-text">Sin notificaciones</p>
                 </div>
             }
             else
@@ -49,15 +55,15 @@
                         var notif = n;
                         <div class="campana-item @(!n.Leida ? "campana-item--nueva" : "")"
                              @onclick="() => AbrirNotificacion(notif)">
-                            <div class="campana-item-icono">@IconoPorTipo(n.Tipo)</div>
-                            <div style="flex:1;min-width:0;">
+                            <div class="campana-item-icono" aria-hidden="true">@IconoPorTipo(n.Tipo)</div>
+                            <div class="campana-item-body">
                                 <div class="campana-item-titulo">@n.Titulo</div>
                                 <div class="campana-item-cuerpo">@n.Cuerpo</div>
                                 <div class="campana-item-fecha">@FormatFecha(n.Fecha)</div>
                             </div>
                             @if (!n.Leida)
                             {
-                                <div class="campana-punto-nuevo"></div>
+                                <div class="campana-punto-nuevo" aria-hidden="true"></div>
                             }
                         </div>
                     }
@@ -65,7 +71,7 @@
             }
         </div>
 
-        <div class="campana-overlay" @onclick="CerrarPanel"></div>
+        <div class="campana-overlay" @onclick="CerrarPanel" aria-hidden="true"></div>
     }
 </div>
 

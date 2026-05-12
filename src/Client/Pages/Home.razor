@@ -1,4 +1,5 @@
 ﻿@page "/"
+@attribute [PageTitle("Dashboard")]
 @attribute [Authorize]
 @inject ColaboradorApiService ColaboradorSvc
 @inject CapacitacionApiService CapacitacionSvc
@@ -25,36 +26,35 @@
 
 @if (AuthInfo.EsSoloColaborador)
 {
-    <!-- ── VISTA COLABORADOR ─────────────────────────────────────────── -->
     @if (!cargando && miFicha is not null)
     {
-        <div class="card" style="margin-bottom:1rem;">
+        <div class="card home-card-mb">
             <div class="card-header">
                 <span class="card-title">👤 Mi ficha</span>
             </div>
-            <div style="padding:1rem 1.25rem;display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:.85rem 1.5rem;">
+            <div class="home-ficha-grid">
                 <div>
-                    <div class="text-muted text-xs" style="margin-bottom:.15rem;">Nombre</div>
+                    <div class="text-muted text-xs home-ficha-label">Nombre</div>
                     <div class="font-medium">@miFicha.NombreCompleto</div>
                 </div>
                 <div>
-                    <div class="text-muted text-xs" style="margin-bottom:.15rem;">Email</div>
+                    <div class="text-muted text-xs home-ficha-label">Email</div>
                     <div class="text-sm">@miFicha.Email</div>
                 </div>
                 <div>
-                    <div class="text-muted text-xs" style="margin-bottom:.15rem;">Área</div>
+                    <div class="text-muted text-xs home-ficha-label">Área</div>
                     <div class="text-sm">@miFicha.AreaNombre</div>
                 </div>
                 <div>
-                    <div class="text-muted text-xs" style="margin-bottom:.15rem;">Cargo</div>
+                    <div class="text-muted text-xs home-ficha-label">Cargo</div>
                     <div class="text-sm">@miFicha.CargoNombre</div>
                 </div>
                 <div>
-                    <div class="text-muted text-xs" style="margin-bottom:.15rem;">Ingreso</div>
+                    <div class="text-muted text-xs home-ficha-label">Ingreso</div>
                     <div class="text-sm">@miFicha.FechaIngreso.ToString("dd/MM/yyyy")</div>
                 </div>
                 <div>
-                    <div class="text-muted text-xs" style="margin-bottom:.15rem;">Género</div>
+                    <div class="text-muted text-xs home-ficha-label">Género</div>
                     <div class="text-sm">@ColaboradorGeneroUi.Etiqueta(miFicha.Genero)</div>
                 </div>
             </div>
@@ -97,7 +97,6 @@
     }
 
     <div class="dashboard-grid">
-        <!-- Mis capacitaciones -->
         <div class="card">
             <div class="card-header">
                 <span class="card-title">📚 Mis capacitaciones</span>
@@ -106,11 +105,11 @@
             @if (cargando) { <div class="loading"><div class="spinner"></div> Cargando...</div> }
             else if (!misInscripciones.Any())
             {
-                <div class="empty-state" style="padding:2rem 1rem;">
+                <div class="empty-state home-empty-state">
                     <div class="empty-state-icon">📚</div>
                     <h3>Sin inscripciones</h3>
                     <p>Aún no estás inscrito en ninguna capacitación.</p>
-                    <a href="capacitaciones" class="btn btn-primary btn-sm" style="margin-top:.75rem;">Ver disponibles</a>
+                    <a href="capacitaciones" class="btn btn-primary btn-sm home-btn-mt">Ver disponibles</a>
                 </div>
             }
             else
@@ -137,7 +136,6 @@
             }
         </div>
 
-        <!-- Mis certificados -->
         <div class="card">
             <div class="card-header">
                 <span class="card-title">🏆 Mis certificados</span>
@@ -146,7 +144,7 @@
             @if (cargando) { <div class="loading"><div class="spinner"></div> Cargando...</div> }
             else if (!misCertificados.Any())
             {
-                <div class="empty-state" style="padding:2rem 1rem;">
+                <div class="empty-state home-empty-state">
                     <div class="empty-state-icon">🏆</div>
                     <h3>Sin certificados</h3>
                     <p>Completa una capacitación para obtener tu primer certificado.</p>
@@ -177,8 +175,7 @@
         </div>
     </div>
 
-    <!-- Acciones rápidas colaborador -->
-    <div class="card" style="margin-top:0;">
+    <div class="card home-card-mt0">
         <div class="card-header"><span class="card-title">⚡ Acciones rápidas</span></div>
         <div class="quick-actions">
             <a href="capacitaciones" class="quick-action-item">
@@ -210,9 +207,6 @@
 }
 else
 {
-    <!-- ── VISTA ADMIN / JEFE ────────────────────────────────────────── -->
-
-    <!-- KPI cards -->
     @if (cargando)
     {
         <div class="stats-grid">
@@ -265,10 +259,8 @@ else
         </div>
     }
 
-    <!-- Main grid -->
     <div class="dashboard-grid">
 
-        <!-- Certificados próximos a vencer -->
         <div class="card">
             <div class="card-header">
                 <span class="card-title">⚠️ Próximos a vencer</span>
@@ -280,7 +272,7 @@ else
             }
             else if (proximosVencer is null || proximosVencer.Count == 0)
             {
-                <div class="empty-state" style="padding:2rem 1rem;">
+                <div class="empty-state home-empty-state">
                     <div class="empty-state-icon">✅</div>
                     <h3>Todo al día</h3>
                     <p>No hay certificados próximos a vencer.</p>
@@ -313,7 +305,6 @@ else
             }
         </div>
 
-        <!-- Acciones rápidas admin -->
         <div class="card">
             <div class="card-header">
                 <span class="card-title">⚡ Acciones rápidas</span>
@@ -356,10 +347,8 @@ else
 
     </div>
 
-    <!-- Segunda fila: colaboradores recientes + vencidos -->
-    <div class="dashboard-grid" style="margin-top:0;">
+    <div class="dashboard-grid home-grid-mt0">
 
-        <!-- Colaboradores recientes -->
         <div class="card">
             <div class="card-header">
                 <span class="card-title">👥 Colaboradores recientes</span>
@@ -371,7 +360,7 @@ else
             }
             else if (colaboradores is null || colaboradores.Count == 0)
             {
-                <div class="empty-state" style="padding:2rem 1rem;">
+                <div class="empty-state home-empty-state">
                     <div class="empty-state-icon">👥</div>
                     <h3>Sin colaboradores</h3>
                     <p>Agrega el primer colaborador.</p>
@@ -409,7 +398,6 @@ else
             }
         </div>
 
-        <!-- Certificados vencidos -->
         <div class="card">
             <div class="card-header">
                 <span class="card-title">❌ Certificados vencidos</span>
@@ -421,7 +409,7 @@ else
             }
             else if (vencidos is null || vencidos.Count == 0)
             {
-                <div class="empty-state" style="padding:2rem 1rem;">
+                <div class="empty-state home-empty-state">
                     <div class="empty-state-icon">✅</div>
                     <h3>Sin vencidos</h3>
                     <p>No hay certificados vencidos.</p>
@@ -456,10 +444,9 @@ else
 
     </div>
 
-    <!-- Distribución por área -->
     @if (!cargando && areas is not null && areas.Count > 0)
     {
-        <div class="card" style="margin-top:0;">
+        <div class="card home-card-mt0">
             <div class="card-header">
                 <span class="card-title">🏢 Distribución por área</span>
                 <a href="areas" class="btn btn-ghost btn-sm">Gestionar</a>
@@ -488,10 +475,8 @@ else
 } @* fin else admin/jefe *@
 
 @code {
-    // ── Estado compartido ────────────────────────────────────────────────────
     private bool cargando = true;
 
-    // ── Admin / Jefe ─────────────────────────────────────────────────────────
     private List<TalentManagement.Shared.DTOs.Colaboradores.ColaboradorDto>? colaboradores;
     private List<TalentManagement.Shared.DTOs.Capacitaciones.CapacitacionDto>? capacitaciones;
     private List<TalentManagement.Shared.DTOs.Certificados.CertificadoDto>? proximosVencer;
@@ -500,7 +485,6 @@ else
     private List<TalentManagement.Shared.DTOs.Areas.AreaDto>? areas;
     private int totalCertificados => todosCertificados?.Count ?? 0;
 
-    // ── Colaborador ──────────────────────────────────────────────────────────
     private List<TalentManagement.Shared.DTOs.Inscripciones.InscripcionDto> misInscripciones = [];
     private List<TalentManagement.Shared.DTOs.Certificados.CertificadoDto> misCertificados = [];
     private ColaboradorDto? miFicha;

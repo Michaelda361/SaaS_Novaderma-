@@ -1,10 +1,11 @@
 ﻿@page "/not-found"
+@attribute [PageTitle("Página no encontrada")]
 
-<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;text-align:center;gap:1rem;">
-    <div style="font-size:4rem;">🔍</div>
-    <div style="font-size:1.125rem;font-weight:700;color:var(--text);">Página no encontrada</div>
-    <div style="font-size:.875rem;color:var(--text-muted);max-width:320px;">
+<div class="not-found-page">
+    <div class="not-found-icon" aria-hidden="true">🔍</div>
+    <div class="not-found-title">Página no encontrada</div>
+    <div class="not-found-desc">
         La página que buscas no existe o fue movida.
     </div>
-    <a href="/" class="btn btn-primary" style="margin-top:.5rem;">Volver al Dashboard</a>
+    <a href="/" class="btn btn-primary not-found-actions">Volver al Dashboard</a>
 </div>
