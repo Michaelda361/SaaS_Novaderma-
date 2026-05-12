@@ -26,6 +26,40 @@
 @if (AuthInfo.EsSoloColaborador)
 {
     <!-- ── VISTA COLABORADOR ─────────────────────────────────────────── -->
+    @if (!cargando && miFicha is not null)
+    {
+        <div class="card" style="margin-bottom:1rem;">
+            <div class="card-header">
+                <span class="card-title">👤 Mi ficha</span>
+            </div>
+            <div style="padding:1rem 1.25rem;display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:.85rem 1.5rem;">
+                <div>
+                    <div class="text-muted text-xs" style="margin-bottom:.15rem;">Nombre</div>
+                    <div class="font-medium">@miFicha.NombreCompleto</div>
+                </div>
+                <div>
+                    <div class="text-muted text-xs" style="margin-bottom:.15rem;">Email</div>
+                    <div class="text-sm">@miFicha.Email</div>
+                </div>
+                <div>
+                    <div class="text-muted text-xs" style="margin-bottom:.15rem;">Área</div>
+                    <div class="text-sm">@miFicha.AreaNombre</div>
+                </div>
+                <div>
+                    <div class="text-muted text-xs" style="margin-bottom:.15rem;">Cargo</div>
+                    <div class="text-sm">@miFicha.CargoNombre</div>
+                </div>
+                <div>
+                    <div class="text-muted text-xs" style="margin-bottom:.15rem;">Ingreso</div>
+                    <div class="text-sm">@miFicha.FechaIngreso.ToString("dd/MM/yyyy")</div>
+                </div>
+                <div>
+                    <div class="text-muted text-xs" style="margin-bottom:.15rem;">Género</div>
+                    <div class="text-sm">@ColaboradorGeneroUi.Etiqueta(miFicha.Genero)</div>
+                </div>
+            </div>
+        </div>
+    }
     @if (cargando)
     {
         <div class="stats-grid">
@@ -348,7 +382,7 @@ else
                 <div class="table-wrapper">
                     <table>
                         <thead>
-                            <tr><th>Colaborador</th><th>Cargo</th><th>Área</th><th>Ingreso</th></tr>
+                            <tr><th>Colaborador</th><th>Cargo</th><th>Área</th><th>Género</th><th>Ingreso</th></tr>
                         </thead>
                         <tbody>
                             @foreach (var c in colaboradores.OrderByDescending(x => x.FechaIngreso).Take(5))
@@ -365,6 +399,7 @@ else
                                     </td>
                                     <td class="text-sm">@c.CargoNombre</td>
                                     <td><span class="badge badge-info">@c.AreaNombre</span></td>
+                                    <td class="text-sm text-muted">@ColaboradorGeneroUi.Etiqueta(c.Genero)</td>
                                     <td class="text-muted text-sm">@c.FechaIngreso.ToString("dd/MM/yyyy")</td>
                                 </tr>
                             }
@@ -468,6 +503,7 @@ else
     // ── Colaborador ──────────────────────────────────────────────────────────
     private List<TalentManagement.Shared.DTOs.Inscripciones.InscripcionDto> misInscripciones = [];
     private List<TalentManagement.Shared.DTOs.Certificados.CertificadoDto> misCertificados = [];
+    private ColaboradorDto? miFicha;
 
     protected override async Task OnInitializedAsync()
     {
@@ -476,12 +512,13 @@ else
         if (AuthInfo.EsSoloColaborador && AuthInfo.ColaboradorId.HasValue)
         {
             var id = AuthInfo.ColaboradorId.Value;
-            await Task.WhenAll(
-                InscripcionSvc.GetByColaboradorAsync(id)
-                    .ContinueWith(t => misInscripciones = t.IsCompletedSuccessfully ? t.Result ?? [] : []),
-                CertificadoSvc.GetMisAsync()
-                    .ContinueWith(t => misCertificados = t.IsCompletedSuccessfully ? t.Result ?? [] : [])
-            );
+            var tIns = InscripcionSvc.GetByColaboradorAsync(id);
+            var tCert = CertificadoSvc.GetMisAsync();
+            var tFicha = ColaboradorSvc.GetByIdAsync(id);
+            await Task.WhenAll(tIns, tCert, tFicha);
+            misInscripciones = await tIns ?? [];
+            misCertificados = await tCert ?? [];
+            miFicha = await tFicha;
         }
         else
         {

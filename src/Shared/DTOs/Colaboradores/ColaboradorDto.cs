@@ -19,6 +19,9 @@ public class ColaboradorDto
     public int CargoId { get; set; }
     public string? SupervisorNombre { get; set; }
     public string Rol { get; set; } = "Colaborador";
+
+    /// <summary>GeneroColaborador como string (API / JSON).</summary>
+    public string Genero { get; set; } = "NoInformado";
 }
 
 public class CambiarRolDto

@@ -20,6 +20,9 @@ public class UpdateColaboradorDto
     public decimal? SueldoBasico { get; set; }
     public string? Ciudad { get; set; }
 
+    /// <summary>NoInformado, Masculino, Femenino, OtroOPrefieroNoDecir</summary>
+    public string Genero { get; set; } = "NoInformado";
+
     [Required]
     public int AreaId { get; set; }
 

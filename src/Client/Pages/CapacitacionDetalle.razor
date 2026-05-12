@@ -134,6 +134,7 @@
                         <th>Fecha inscripción</th>
                         <th>Asistió</th>
                         <th>Calificación</th>
+                        <th>Cuestionario</th>
                         <th>Observaciones</th>
                         <th></th>
                     </tr>
@@ -141,11 +142,13 @@
                 <tbody>
                     @foreach (var i in inscripciones)
                     {
-                        <tr>
+                        var aprobado = resultadosInscritos.TryGetValue(i.Id, out var res) && res.Aprobado;
+                        var respondio = resultadosInscritos.ContainsKey(i.Id);
+                        <tr style="@(aprobado ? "background:var(--success-bg, rgba(34,197,94,.06));" : "")">
                             <td class="font-medium">@i.ColaboradorNombre</td>
                             <td class="text-sm text-muted">@i.ColaboradorArea</td>
                             <td class="text-sm text-muted">@i.ColaboradorCargo</td>
-                            <td class="text-sm">@i.FechaInscripcion.ToString("dd/MM/yyyy")</td>
+                            <td class="text-sm">@i.FechaInscripcion.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
                             <td>
                                 @if (editandoId == i.Id)
                                 {
@@ -172,6 +175,21 @@
                                 }
                             </td>
                             <td>
+                                @if (respondio && res is not null)
+                                {
+                                    <div style="display:flex;align-items:center;gap:.4rem;flex-wrap:wrap;">
+                                        <span class="badge @(res.Aprobado ? "badge-success" : "badge-danger")">
+                                            @(res.Aprobado ? "✅ Aprobó" : "❌ No aprobó")
+                                        </span>
+                                        <span class="text-xs text-muted">@res.Puntaje.ToString("0.#")%</span>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <span class="text-muted text-sm">Sin responder</span>
+                                }
+                            </td>
+                            <td>
                                 @if (editandoId == i.Id)
                                 {
                                     <input type="text" @bind="editForm.Observaciones"
@@ -184,7 +202,7 @@
                             </td>
                             <td>
                                 <div class="flex gap-2">
-                                    @if (PuedeGestionar)
+                                    @if (PuedeGestionar && !aprobado)
                                     {
                                         @if (editandoId == i.Id)
                                         {
@@ -200,6 +218,10 @@
                                             <button class="btn btn-danger btn-sm btn-icon"
                                                     @onclick="() => Desinscribir(i.Id)" title="Eliminar">🗑️</button>
                                         }
+                                    }
+                                    @if (aprobado)
+                                    {
+                                        <span class="text-xs text-muted" style="font-style:italic;">Completado</span>
                                     }
                                 </div>
                             </td>
@@ -528,7 +550,7 @@
                         <option value="0">-- Seleccionar --</option>
                         @foreach (var col in colaboradoresDisponibles)
                         {
-                            <option value="@col.Id">@col.Nombre @col.Apellido — @col.AreaNombre</option>
+                            <option value="@col.Id">@col.Nombre @col.Apellido — @ColaboradorGeneroUi.Etiqueta(col.Genero) · @col.AreaNombre</option>
                         }
                     </select>
                 </div>
@@ -739,6 +761,8 @@
     private Dictionary<int, int> respuestasColaborador = new(); // preguntaId -> opcionId
     private ResultadoCuestionarioDto? resultadoPropio;
     private InscripcionDto? inscripcionPropia;
+    // Resultados de todos los inscritos (para la vista admin) — inscripcionId -> resultado
+    private Dictionary<int, ResultadoCuestionarioDto> resultadosInscritos = [];
 
     protected override async Task OnInitializedAsync()
     {
@@ -747,8 +771,9 @@
 
         if (PuedeGestionar)
         {
-            // Jefe: carga inscripciones + recursos + cuestionario en paralelo
-            await Task.WhenAll(Cargar(), CargarRecursos(), CargarCuestionario());
+            // Cargar cuestionario primero — Cargar() lo necesita para obtener resultados
+            await CargarCuestionario();
+            await Task.WhenAll(Cargar(), CargarRecursos());
         }
         else
         {
@@ -762,6 +787,25 @@
     {
         cargando = true;
         inscripciones = await InscripcionService.GetByCapacitacionAsync(Id);
+
+        // Si hay cuestionario, cargar resultados de todos los inscritos en paralelo
+        if (cuestionario is not null && inscripciones.Count > 0)
+        {
+            var tareas = inscripciones.Select(async insc =>
+            {
+                try
+                {
+                    var resultado = await CuestionarioService.GetResultadoAsync(cuestionario.Id, insc.Id);
+                    return (InscripcionId: insc.Id, Resultado: resultado);
+                }
+                catch { return (InscripcionId: insc.Id, Resultado: (ResultadoCuestionarioDto?)null); }
+            });
+            var resultados = await Task.WhenAll(tareas);
+            resultadosInscritos = resultados
+                .Where(x => x.Resultado is not null)
+                .ToDictionary(x => x.InscripcionId, x => x.Resultado!);
+        }
+
         cargando = false;
     }
 

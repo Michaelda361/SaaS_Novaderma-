@@ -1,5 +1,6 @@
 using TalentManagement.Application.Interfaces;
 using TalentManagement.Domain.Entities;
+using TalentManagement.Domain.Enums;
 using TalentManagement.Shared.DTOs.Colaboradores;
 
 namespace TalentManagement.Application.Services;
@@ -37,6 +38,7 @@ public class ColaboradorService(IColaboradorRepository repository)
             TipoContrato = dto.TipoContrato,
             SueldoBasico = dto.SueldoBasico,
             Ciudad = dto.Ciudad,
+            Genero = ParseGenero(dto.Genero),
             AreaId = dto.AreaId,
             CargoId = dto.CargoId,
             SupervisorId = dto.SupervisorId
@@ -68,6 +70,7 @@ public class ColaboradorService(IColaboradorRepository repository)
         colaborador.TipoContrato = dto.TipoContrato;
         colaborador.SueldoBasico = dto.SueldoBasico;
         colaborador.Ciudad = dto.Ciudad;
+        colaborador.Genero = ParseGenero(dto.Genero);
         colaborador.AreaId = dto.AreaId;
         colaborador.CargoId = dto.CargoId;
         colaborador.SupervisorId = dto.SupervisorId;
@@ -127,5 +130,14 @@ public class ColaboradorService(IColaboradorRepository repository)
         CargoId = c.CargoId,
         SupervisorNombre = c.Supervisor is null ? null : $"{c.Supervisor.Nombre} {c.Supervisor.Apellido}",
         Rol = c.Rol.ToString(),
+        Genero = c.Genero.ToString(),
     };
+
+    private static GeneroColaborador ParseGenero(string? s)
+    {
+        if (string.IsNullOrWhiteSpace(s)) return GeneroColaborador.NoInformado;
+        return Enum.TryParse<GeneroColaborador>(s, ignoreCase: true, out var g)
+            ? g
+            : GeneroColaborador.NoInformado;
+    }
 }

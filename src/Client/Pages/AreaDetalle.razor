@@ -61,6 +61,10 @@ else
                     <div class="jefe-nombre">@area.JefeNombre</div>
                     <div class="jefe-cargo">@(jefe?.CargoNombre ?? "—")</div>
                     <div class="jefe-email text-muted text-sm">@(jefe?.Email ?? "")</div>
+                    @if (jefe is not null)
+                    {
+                        <div class="text-muted text-sm" style="margin-top:.15rem;">Género: @ColaboradorGeneroUi.Etiqueta(jefe.Genero)</div>
+                    }
                 </div>
                 <span class="badge badge-purple">Jefe de área</span>
             </div>
@@ -104,6 +108,7 @@ else
                         <tr>
                             <th>Colaborador</th>
                             <th>Cargo</th>
+                            <th>Género</th>
                             <th>Rol</th>
                             <th>Ingreso</th>
                             <th></th>
@@ -123,6 +128,7 @@ else
                                     </div>
                                 </td>
                                 <td class="text-sm">@c.CargoNombre</td>
+                                <td class="text-sm text-muted">@ColaboradorGeneroUi.Etiqueta(c.Genero)</td>
                                 <td>
                                     @if (c.Id == area.JefeId)
                                     {
@@ -253,6 +259,15 @@ else
                         <div class="form-group">
                             <label>Fecha de ingreso</label>
                             <InputDate @bind-Value="formColaborador.FechaIngreso" />
+                        </div>
+                        <div class="form-group">
+                            <label>Género (cartas laborales)</label>
+                            <InputSelect @bind-Value="formColaborador.Genero">
+                                <option value="NoInformado">Sin especificar</option>
+                                <option value="Masculino">Masculino</option>
+                                <option value="Femenino">Femenino</option>
+                                <option value="OtroOPrefieroNoDecir">Otro / Prefiero no decir</option>
+                            </InputSelect>
                         </div>
                         <div class="form-group">
                             <label>Cargo</label>
@@ -407,7 +422,8 @@ else
                 {
                     Nombre = formColaborador.Nombre, Apellido = formColaborador.Apellido,
                     Email = formColaborador.Email, Telefono = formColaborador.Telefono,
-                    AreaId = Id, CargoId = formColaborador.CargoId
+                    AreaId = Id, CargoId = formColaborador.CargoId,
+                    Genero = formColaborador.Genero,
                 })
             : await ColaboradorService.CreateAsync(formColaborador);
 

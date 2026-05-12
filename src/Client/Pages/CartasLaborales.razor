@@ -178,125 +178,73 @@ else
 @if (plantillaSeleccionada is not null)
 {
     <div class="modal-backdrop" @onclick="CerrarModal">
-        <div class="modal @(modoEdicion && editorDocx is not null ? "carta-modal carta-modal--edicion" : "carta-modal")"
+        <div class="modal carta-modal"
              @onclick:stopPropagation>
 
             <div class="modal-header">
                 <div style="display:flex;align-items:center;gap:.625rem;">
-                    <span style="font-size:1.25rem;">@(modoEdicion ? "✏️" : "📄")</span>
+                    <span style="font-size:1.25rem;">📄</span>
                     <div>
                         <span class="modal-title">@plantillaSeleccionada.Nombre</span>
-                        @if (modoEdicion)
-                        {
-                            <span class="text-muted text-sm" style="margin-left:.5rem;">— modo edición</span>
-                        }
                     </div>
                 </div>
                 <div style="display:flex;gap:.5rem;align-items:center;">
-                    @if (modoEdicion)
-                    {
-                        <button class="btn btn-ghost btn-sm" @onclick="VolverAPreview">← Vista previa</button>
-                    }
                     <button class="btn btn-ghost btn-sm btn-icon" @onclick="CerrarModal">✕</button>
                 </div>
             </div>
 
-            @if (modoEdicion && editorDocx is not null)
-            {
-                <div class="docx-editor-hint">
-                    <span>💡</span>
-                    <span>Haz clic en cualquier párrafo para editarlo. El formato original se preserva al generar el documento.</span>
-                </div>
-                <div class="docx-editor-pagina" @ref="editorDocxRef">
-                    @foreach (var p in editorDocx.Parrafos)
-                    {
-                        <div @key="p.Indice"
-                             class="docx-editor-parrafo @(string.IsNullOrEmpty(p.TextoResuelto) ? "docx-editor-parrafo--vacio" : "")"
-                             contenteditable="true"
-                             data-idx="@p.Indice"
-                             spellcheck="true">
-                        </div>
-                    }
-                </div>
-            }
-            else if (modoEdicion && preview?.TipoPlantilla == "html")
-            {
-                <div class="carta-modal-body">
+            <div class="carta-modal-body @(!plantillaSeleccionada.VariablesEditables.Any() ? "carta-modal-body--full" : "")">
+                @if (plantillaSeleccionada.VariablesEditables.Any())
+                {
                     <div class="carta-modal-sidebar">
-                        <div class="carta-modal-sidebar-title">✏️ Editando</div>
-                        <p class="carta-modal-sidebar-hint">Edita el contenido libremente.</p>
+                        <div class="carta-modal-sidebar-title">✏️ Personalizar</div>
+                        <p class="carta-modal-sidebar-hint">
+                            Solo puedes completar los datos indicados; el cuerpo de la carta lo define RRHH.
+                        </p>
+                        @foreach (var key in plantillaSeleccionada.VariablesEditables)
+                        {
+                            var k = key;
+                            <div class="form-group" style="margin-bottom:.75rem;">
+                                <label style="font-size:.8rem;">@EtiquetaVariable(k)</label>
+                                <input @key="k" type="text"
+                                       style="font-size:.875rem;"
+                                       value="@extrasActuales.GetValueOrDefault(k, "")"
+                                       placeholder="@PlaceholderVariable(k)"
+                                       @oninput="e => OnCampoInput(k, e.Value?.ToString() ?? string.Empty)" />
+                            </div>
+                        }
                     </div>
-                    <div class="carta-modal-preview carta-modal-preview--editor">
-                        <EditorPlantilla @bind-HtmlContent="htmlEditado" />
-                    </div>
-                </div>
-            }
-            else
-            {
-                <div class="carta-modal-body @(!plantillaSeleccionada.VariablesEditables.Any() ? "carta-modal-body--full" : "")">
-                    @if (plantillaSeleccionada.VariablesEditables.Any())
+                }
+                <div class="carta-modal-preview">
+                    @if (cargandoPreview)
                     {
-                        <div class="carta-modal-sidebar">
-                            <div class="carta-modal-sidebar-title">✏️ Personalizar</div>
-                            <p class="carta-modal-sidebar-hint">
-                                Completa los campos — la vista previa se actualiza automáticamente.
-                            </p>
-                            @foreach (var key in plantillaSeleccionada.VariablesEditables)
-                            {
-                                var k = key;
-                                <div class="form-group" style="margin-bottom:.75rem;">
-                                    <label style="font-size:.8rem;">@EtiquetaVariable(k)</label>
-                                    <input @key="k" type="text"
-                                           style="font-size:.875rem;"
-                                           value="@extrasActuales.GetValueOrDefault(k, "")"
-                                           placeholder="@PlaceholderVariable(k)"
-                                           @oninput="e => OnCampoInput(k, e.Value?.ToString() ?? string.Empty)" />
-                                </div>
-                            }
+                        <div class="loading carta-preview-loading">
+                            <div class="spinner"></div>
+                            <span>Generando vista previa...</span>
                         </div>
                     }
-                    <div class="carta-modal-preview">
-                        @if (cargandoPreview)
-                        {
-                            <div class="loading carta-preview-loading">
-                                <div class="spinner"></div>
-                                <span>Generando vista previa...</span>
-                            </div>
-                        }
-                        else if (preview is null)
-                        {
-                            <div class="carta-preview-error">
-                                <span>⚠️</span>
-                                <p>No se pudo cargar la vista previa.</p>
-                                <button class="btn btn-ghost btn-sm" style="margin-top:.5rem;"
-                                        @onclick="CargarPreviewAsync">🔄 Reintentar</button>
-                            </div>
-                        }
-                        else
-                        {
-                            <iframe @ref="iframeRef"
-                                    class="carta-preview-iframe"
-                                    title="Vista previa del documento"></iframe>
-                        }
-                    </div>
+                    else if (preview is null)
+                    {
+                        <div class="carta-preview-error">
+                            <span>⚠️</span>
+                            <p>No se pudo cargar la vista previa.</p>
+                            <button class="btn btn-ghost btn-sm" style="margin-top:.5rem;"
+                                    @onclick="CargarPreviewAsync">🔄 Reintentar</button>
+                        </div>
+                    }
+                    else
+                    {
+                        <iframe @ref="iframeRef"
+                                class="carta-preview-iframe"
+                                title="Vista previa del documento"></iframe>
+                    }
                 </div>
-            }
+            </div>
 
             <div class="modal-footer">
                 <button class="btn btn-ghost" @onclick="CerrarModal">Cerrar</button>
-                @if (!modoEdicion && !cargandoPreview && preview is not null)
-                {
-                    <button class="btn btn-ghost" @onclick="EntrarModoEdicion">✏️ Editar</button>
-                }
-                @if (modoEdicion && cargandoPreview)
-                {
-                    <span class="text-muted text-sm" style="display:flex;align-items:center;gap:.4rem;">
-                        <span class="spinner" style="width:.8rem;height:.8rem;border-width:2px;"></span>
-                        Cargando editor...
-                    </span>
-                }
                 <button class="btn btn-primary"
-                        disabled="@(enviando || (cargandoPreview && !modoEdicion) || (!modoEdicion && preview is null))"
+                        disabled="@(enviando || cargandoPreview || preview is null)"
                         @onclick="EnviarSolicitud">
                     @if (enviando)
                     {
@@ -318,19 +266,12 @@ else
     private bool enviando = false;
     private bool cargandoPreview = false;
     private bool primeraVez = true;
-    private bool modoEdicion = false;
-    private string htmlEditado = string.Empty;
-    private PrevisualizarDto? datosEdicion;
-    private EditorDocxDto? editorDocx;
-    private Dictionary<int, string> parrafosEditados = [];
 
     private PlantillaDocumentoDto? plantillaSeleccionada;
     private Dictionary<string, string> extrasActuales = [];
     private PrevisualizarDto? preview;
     private ElementReference iframeRef;
-    private ElementReference editorDocxRef;
     private string? iframePendiente;
-    private bool editorDocxPendienteInit = false;
     private CancellationTokenSource? _debounce;
 
     protected override async Task OnInitializedAsync()
@@ -373,18 +314,14 @@ else
         enviando = true;
         StateHasChanged();
 
-        Dictionary<int, string> parrafos = [];
-        if (modoEdicion && editorDocx is not null)
-        {
-            var contenido = await JS.InvokeAsync<System.Text.Json.JsonElement>("getDocxEditorContent", editorDocxRef);
-            foreach (var prop in contenido.EnumerateObject())
-                parrafos[int.Parse(prop.Name)] = prop.Value.GetString() ?? string.Empty;
-        }
-
         try
         {
+            var extrasEnvio = plantillaSeleccionada.VariablesEditables
+                .Where(k => extrasActuales.ContainsKey(k))
+                .ToDictionary(k => k, k => extrasActuales[k]);
+
             var resultado = await ApiService.EnviarSolicitudAsync(plantillaSeleccionada.Id,
-                new EnviarSolicitudDto { ParrafosEditados = parrafos });
+                new EnviarSolicitudDto { Extras = extrasEnvio });
             enviando = false;
 
             if (resultado is null)
@@ -443,46 +380,7 @@ else
         extrasActuales = [];
         iframePendiente = null;
         primeraVez = true;
-        modoEdicion = false;
-        htmlEditado = string.Empty;
-        datosEdicion = null;
-        editorDocx = null;
-        parrafosEditados = [];
         _debounce?.Cancel();
-    }
-
-    private async Task EntrarModoEdicion()
-    {
-        if (plantillaSeleccionada is null) return;
-        cargandoPreview = true;
-        modoEdicion = true;
-        StateHasChanged();
-
-        if (preview?.TipoPlantilla == "docx")
-        {
-            editorDocx = await ApiService.GetCamposEditablesAsync(plantillaSeleccionada.Id);
-            if (editorDocx is not null)
-            {
-                parrafosEditados = editorDocx.Parrafos.ToDictionary(p => p.Indice, p => p.TextoResuelto);
-                editorDocxPendienteInit = true;
-            }
-        }
-        else
-        {
-            var datos = await ApiService.ObtenerHtmlEditableAsync(plantillaSeleccionada.Id);
-            if (datos is not null) { htmlEditado = datos.Html; datosEdicion = datos; }
-        }
-
-        cargandoPreview = false;
-        StateHasChanged();
-    }
-
-    private void VolverAPreview()
-    {
-        modoEdicion = false;
-        htmlEditado = string.Empty;
-        editorDocx = null;
-        parrafosEditados = [];
     }
 
     private async Task CargarPreviewAsync()
@@ -547,15 +445,6 @@ else
                 await JS.InvokeVoidAsync("setPdfIframeSrc", iframeRef, content);
             else
                 await JS.InvokeVoidAsync("setIframeContent", iframeRef, content);
-        }
-
-        if (editorDocxPendienteInit && editorDocx is not null)
-        {
-            editorDocxPendienteInit = false;
-            var parrafos = editorDocx.Parrafos
-                .Select(p => new { indice = p.Indice, texto = parrafosEditados.GetValueOrDefault(p.Indice, "") })
-                .ToArray();
-            await JS.InvokeVoidAsync("initDocxEditor", editorDocxRef, parrafos);
         }
     }
 

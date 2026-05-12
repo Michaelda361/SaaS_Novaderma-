@@ -68,7 +68,7 @@
             <div class="table-wrapper">
                 <table>
                     <thead>
-                        <tr><th>Colaborador</th><th>Cargo</th><th>Área</th><th></th></tr>
+                        <tr><th>Colaborador</th><th>Cargo</th><th>Área</th><th>Género</th><th></th></tr>
                     </thead>
                     <tbody>
                         @foreach (var c in inactivos!)
@@ -86,6 +86,7 @@
                                 </td>
                                 <td class="text-sm">@c.CargoNombre</td>
                                 <td><span class="badge badge-gray">@c.AreaNombre</span></td>
+                                <td class="text-sm text-muted">@ColaboradorGeneroUi.Etiqueta(c.Genero)</td>
                                 <td>
                                     <button class="btn btn-ghost btn-sm"
                                             @onclick="() => RestaurarColaborador(cid)">
@@ -131,6 +132,7 @@
                         <th>Colaborador</th>
                         <th>Cargo</th>
                         <th>Área</th>
+                        <th>Género</th>
                         <th>Ingreso</th>
                         <th>Supervisor</th>
                         <th>Rol</th>
@@ -153,6 +155,7 @@
                             </td>
                             <td class="text-sm">@c.CargoNombre</td>
                             <td><span class="badge badge-info">@c.AreaNombre</span></td>
+                            <td class="text-sm text-muted">@ColaboradorGeneroUi.Etiqueta(c.Genero)</td>
                             <td class="text-muted text-sm">@c.FechaIngreso.ToString("dd/MM/yyyy")</td>
                             <td class="text-muted text-sm">@(c.SupervisorNombre ?? "—")</td>
                             <td>
@@ -237,6 +240,15 @@
                         <div class="form-group">
                             <label>Ciudad</label>
                             <InputText @bind-Value="form.Ciudad" placeholder="Ej: Bogotá" />
+                        </div>
+                        <div class="form-group">
+                            <label>Género (cartas laborales / tratamiento)</label>
+                            <InputSelect @bind-Value="form.Genero">
+                                <option value="NoInformado">Sin especificar</option>
+                                <option value="Masculino">Masculino</option>
+                                <option value="Femenino">Femenino</option>
+                                <option value="OtroOPrefieroNoDecir">Otro / Prefiero no decir</option>
+                            </InputSelect>
                         </div>
                         <div class="form-group">
                             <label>Área</label>
@@ -364,7 +376,9 @@
         {
             Nombre = c.Nombre, Apellido = c.Apellido,
             Email = c.Email, Telefono = c.Telefono,
-            FechaIngreso = c.FechaIngreso, AreaId = c.AreaId, CargoId = c.CargoId
+            FechaIngreso = c.FechaIngreso, AreaId = c.AreaId, CargoId = c.CargoId,
+            Cedula = c.Cedula, TipoContrato = c.TipoContrato, SueldoBasico = c.SueldoBasico, Ciudad = c.Ciudad,
+            Genero = c.Genero,
         };
         cargosFiltrados = todosLosCargos?.Where(x => x.AreaId == c.AreaId).ToList() ?? todosLosCargos;
         editandoId = c.Id;
@@ -386,7 +400,9 @@
                     Nombre = form.Nombre, Apellido = form.Apellido,
                     Email = form.Email, Telefono = form.Telefono,
                     AreaId = form.AreaId, CargoId = form.CargoId,
-                    SupervisorId = form.SupervisorId
+                    SupervisorId = form.SupervisorId,
+                    Cedula = form.Cedula, TipoContrato = form.TipoContrato, SueldoBasico = form.SueldoBasico, Ciudad = form.Ciudad,
+                    Genero = form.Genero,
                 };
                 ok = await ApiService.UpdateAsync(editandoId.Value, dto) is not null;
             }

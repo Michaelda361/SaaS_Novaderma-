@@ -17,6 +17,9 @@ public class Colaborador : BaseEntity
     public decimal? SueldoBasico { get; set; }
     public string? Ciudad { get; set; }
 
+    /// <summary>Género para tratamiento en documentos (cartas laborales). Cargado por RRHH.</summary>
+    public GeneroColaborador Genero { get; set; } = GeneroColaborador.NoInformado;
+
     /// <summary>Rol del usuario en la aplicación.</summary>
     public RolUsuario Rol { get; set; } = RolUsuario.Colaborador;
 

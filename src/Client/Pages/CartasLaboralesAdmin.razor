@@ -2,6 +2,7 @@
 @attribute [Authorize]
 @inject PlantillaDocumentoApiService ApiService
 @inject AreaApiService AreaApi
+@inject ColaboradorApiService ColaboradorApi
 @inject AuthInfoService AuthInfo
 @inject NotificacionesService Notificaciones
 @inject IJSRuntime JS
@@ -162,6 +163,11 @@ else
                                                     @onclick="() => MostrarVariables(p)">
                                                 Variables
                                             </button>
+                                            <button class="btn btn-primary btn-sm"
+                                                    @onclick="() => AbrirGenerarPara(p)"
+                                                    title="Generar carta para un colaborador">
+                                                ⬇ Generar
+                                            </button>
                                             <button class="btn btn-ghost btn-sm btn-icon"
                                                     @onclick="() => AbrirEditar(p)" title="Editar">✏️</button>
                                             <button class="btn btn-danger btn-sm btn-icon"
@@ -300,6 +306,67 @@ else
     }
 }
 
+<!-- Modal generar para colaborador (admin) -->
+@if (showGenerarPara && plantillaGenerarPara is not null)
+{
+    <div class="modal-backdrop" @onclick="() => showGenerarPara = false">
+        <div class="modal" style="max-width:480px;" @onclick:stopPropagation>
+            <div class="modal-header">
+                <span class="modal-title">Generar carta — @plantillaGenerarPara.Nombre</span>
+                <button class="btn btn-ghost btn-sm btn-icon" @onclick="() => showGenerarPara = false">✕</button>
+            </div>
+            <div class="modal-body">
+                <p class="text-sm text-muted" style="margin-bottom:1rem;">
+                    Selecciona el colaborador para quien deseas generar la carta. El PDF se descargará directamente con sus datos.
+                </p>
+                <div class="form-group">
+                    <label>Colaborador</label>
+                    <div class="search-input-wrap" style="margin-bottom:.5rem;">
+                        <span class="search-icon">🔍</span>
+                        <input type="search" placeholder="Buscar colaborador..."
+                               @bind="busquedaColaboradorGenerar" @bind:event="oninput" />
+                    </div>
+                    <div style="max-height:240px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius);">
+                        @foreach (var c in ColaboradoresFiltradosGenerar)
+                        {
+                            var col = c;
+                            <div class="@(colaboradorGenerarId == col.Id ? "colaborador-item colaborador-item--selected" : "colaborador-item")"
+                                 @onclick="() => colaboradorGenerarId = col.Id"
+                                 style="padding:.6rem .875rem;cursor:pointer;display:flex;align-items:center;gap:.75rem;border-bottom:1px solid var(--border);background:@(colaboradorGenerarId == col.Id ? "var(--primary-light, rgba(99,102,241,.08))" : "transparent")">
+                                <div class="avatar avatar-sm">@Iniciales($"{col.Nombre} {col.Apellido}")</div>
+                                <div>
+                                    <div class="text-sm font-medium">@col.NombreCompleto</div>
+                                    <div class="text-xs text-muted">@col.AreaNombre · @col.CargoNombre · @ColaboradorGeneroUi.Etiqueta(col.Genero)</div>
+                                </div>
+                                @if (colaboradorGenerarId == col.Id)
+                                {
+                                    <span style="margin-left:auto;color:var(--primary);">✓</span>
+                                }
+                            </div>
+                        }
+                        @if (!ColaboradoresFiltradosGenerar.Any())
+                        {
+                            <div class="text-sm text-muted" style="padding:.75rem;text-align:center;">Sin resultados</div>
+                        }
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-ghost" @onclick="() => showGenerarPara = false">Cancelar</button>
+                <button class="btn btn-primary"
+                        disabled="@(colaboradorGenerarId == 0 || generandoPdf)"
+                        @onclick="DescargarParaColaborador">
+                    @if (generandoPdf)
+                    {
+                        <span class="spinner" style="width:.9rem;height:.9rem;border-width:2px;border-color:rgba(255,255,255,.3);border-top-color:#fff;"></span>
+                    }
+                    @(generandoPdf ? "Generando..." : "⬇ Descargar PDF")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
 <!-- Modal variables -->
 @if (showVariables && plantillaVariables is not null)
 {
@@ -312,6 +379,7 @@ else
             <div class="modal-body">
                 <p class="text-muted text-sm" style="margin-bottom:.75rem;">
                     Estas variables se reemplazan automáticamente con los datos del colaborador al generar el documento.
+                    <strong>{{genero}}</strong> usa el género cargado en RRHH (tratamiento «el señor» / «la señora» / neutro); no debe incluirse en «campos editables».
                 </p>
                 <div class="variables-grid">
                     @foreach (var v in Variables)
@@ -331,6 +399,9 @@ else
                     <div style="margin-top:1.25rem;padding-top:1rem;border-top:1px solid var(--border);">
                         <p class="text-sm" style="margin-bottom:.5rem;font-weight:500;">
                             ✏️ Campos que el colaborador completa
+                        </p>
+                        <p class="text-muted text-xs" style="margin-bottom:.5rem;">
+                            Recomendado: solo <code>{{destinatario}}</code> para cartas a terceros. Use <code>{{destinatario}}</code> en el cuerpo y marque «destinatario» abajo al crear la plantilla.
                         </p>
                         <div class="variables-grid">
                             @foreach (var key in plantillaVariables.VariablesEditables)
@@ -566,7 +637,7 @@ else
                             <small class="text-danger">@errorVariableCustom</small>
                         }
                         <small class="text-muted" style="display:block;margin-top:.35rem;">
-                            Las variables del perfil se rellenan automáticamente. Las personalizadas las completa el colaborador.
+                            Por defecto solo se ofrece <code>destinatario</code>. Puede agregar otras claves personalizadas si un caso lo requiere (no use <code>genero</code> aquí: es siempre del perfil).
                         </small>
                     </div>
                 </div>
@@ -722,17 +793,13 @@ else
         ["{{fecha_expedicion}}"] = "Fecha de hoy",
         ["{{nombre_firmante}}"]  = "Nombre del firmante",
         ["{{cargo_firmante}}"]   = "Cargo del firmante",
+        ["{{destinatario}}"]     = "Destinatario (solo si está en «campos editables» — lo escribe el colaborador)",
+        ["{{genero}}"]           = "Tratamiento según género RRHH (el señor / la señora / neutro) — automático, no editable",
     };
 
     private static readonly Dictionary<string, string> VariablesEditablesOpciones = new()
     {
-        ["destinatario"]     = "A quién va dirigida la carta",
-        ["motivo"]           = "Motivo o propósito",
-        ["entidad"]          = "Entidad o empresa destinataria",
-        ["nombre_completo"]  = "Nombre completo (si el colaborador quiere ajustarlo)",
-        ["cargo"]            = "Cargo (si difiere del perfil)",
-        ["ciudad"]           = "Ciudad de expedición",
-        ["fecha_expedicion"] = "Fecha de expedición",
+        ["destinatario"] = "Destinatario de la carta (recomendado como único editable)",
     };
 
     protected override async Task OnInitializedAsync()
@@ -1067,5 +1134,54 @@ else
         return partes.Length >= 2
             ? $"{partes[0][0]}{partes[1][0]}".ToUpper()
             : nombre.Length > 0 ? nombre[0].ToString().ToUpper() : "?";
+    }
+
+    // ── Generar para colaborador (admin directo) ──────────────────────────────
+    private bool showGenerarPara = false;
+    private PlantillaDocumentoDto? plantillaGenerarPara;
+    private List<ColaboradorDto> todosColaboradores = [];
+    private int colaboradorGenerarId = 0;
+    private string busquedaColaboradorGenerar = string.Empty;
+    private bool generandoPdf = false;
+
+    private IEnumerable<ColaboradorDto> ColaboradoresFiltradosGenerar =>
+        string.IsNullOrWhiteSpace(busquedaColaboradorGenerar)
+            ? todosColaboradores
+            : todosColaboradores.Where(c =>
+                c.NombreCompleto.Contains(busquedaColaboradorGenerar, StringComparison.OrdinalIgnoreCase) ||
+                c.AreaNombre.Contains(busquedaColaboradorGenerar, StringComparison.OrdinalIgnoreCase));
+
+    private async Task AbrirGenerarPara(PlantillaDocumentoDto p)
+    {
+        plantillaGenerarPara = p;
+        colaboradorGenerarId = 0;
+        busquedaColaboradorGenerar = string.Empty;
+        if (!todosColaboradores.Any())
+            todosColaboradores = await ColaboradorApi.GetAllAsync() ?? [];
+        showGenerarPara = true;
+    }
+
+    private async Task DescargarParaColaborador()
+    {
+        if (plantillaGenerarPara is null || colaboradorGenerarId == 0) return;
+        generandoPdf = true;
+        StateHasChanged();
+
+        var (bytes, fileName) = await ApiService.GenerarParaColaboradorAsync(
+            plantillaGenerarPara.Id, colaboradorGenerarId);
+
+        generandoPdf = false;
+
+        if (bytes is null || bytes.Length == 0)
+        {
+            await toast.Show("Error al generar el PDF.", "error");
+            StateHasChanged();
+            return;
+        }
+
+        await JS.InvokeVoidAsync("descargarArchivo",
+            Convert.ToBase64String(bytes), fileName, "application/pdf");
+        showGenerarPara = false;
+        await toast.Show("PDF generado y descargado.");
     }
 }

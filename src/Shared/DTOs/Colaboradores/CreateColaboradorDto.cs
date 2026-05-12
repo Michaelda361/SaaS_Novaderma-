@@ -23,6 +23,9 @@ public class CreateColaboradorDto
     public decimal? SueldoBasico { get; set; }
     public string? Ciudad { get; set; }
 
+    /// <summary>NoInformado, Masculino, Femenino, OtroOPrefieroNoDecir</summary>
+    public string Genero { get; set; } = "NoInformado";
+
     [Required(ErrorMessage = "El área es requerida")]
     public int AreaId { get; set; }
 

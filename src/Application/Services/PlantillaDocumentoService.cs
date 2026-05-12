@@ -112,7 +112,7 @@ public class PlantillaDocumentoService(
     /// Devuelve el DOCX original y el diccionario de variables resueltas para el colaborador.
     /// </summary>
     public async Task<(byte[] docxBytes, PlantillaDocumento plantilla, Dictionary<string, string> variables)>
-        ObtenerDocxConVariablesAsync(int plantillaId, string email)
+        ObtenerDocxConVariablesAsync(int plantillaId, string email, Dictionary<string, string>? extras = null)
     {
         var plantilla = await repository.GetByIdAsync(plantillaId)
             ?? throw new KeyNotFoundException("Plantilla no encontrada");
@@ -123,25 +123,8 @@ public class PlantillaDocumentoService(
             !plantilla.Areas.Any(a => a.AreaId == colaborador.AreaId))
             throw new UnauthorizedAccessException("No tienes acceso a esta plantilla");
 
-        var cultura = new CultureInfo("es-CO");
-        var hoy = DateTime.Today;
-        var variables = new Dictionary<string, string>
-        {
-            ["{{nombre_completo}}"] = $"{colaborador.Nombre} {colaborador.Apellido}",
-            ["{{nombre}}"]          = colaborador.Nombre,
-            ["{{apellido}}"]        = colaborador.Apellido,
-            ["{{cedula}}"]          = colaborador.Cedula ?? string.Empty,
-            ["{{cargo}}"]           = colaborador.Cargo?.Nombre ?? string.Empty,
-            ["{{area}}"]            = colaborador.Area?.Nombre ?? string.Empty,
-            ["{{fecha_ingreso}}"]   = colaborador.FechaIngreso.ToString("d 'de' MMMM 'de' yyyy", cultura),
-            ["{{tipo_contrato}}"]   = colaborador.TipoContrato ?? string.Empty,
-            ["{{sueldo_basico}}"]   = colaborador.SueldoBasico.HasValue
-                ? colaborador.SueldoBasico.Value.ToString("C0", cultura) : string.Empty,
-            ["{{ciudad}}"]          = colaborador.Ciudad ?? string.Empty,
-            ["{{fecha_expedicion}}"]= hoy.ToString("d 'de' MMMM 'de' yyyy", cultura),
-            ["{{nombre_firmante}}"] = plantilla.NombreFirmante ?? string.Empty,
-            ["{{cargo_firmante}}"]  = plantilla.CargoFirmante ?? string.Empty,
-        };
+        var extrasFiltrados = FiltrarExtrasParaPlantilla(plantilla, extras, validarEditables: true);
+        var variables = ConstruirVariablesDocumento(colaborador, plantilla, extrasFiltrados);
 
         return (plantilla.ArchivoDocx!, plantilla, variables);
     }
@@ -150,9 +133,9 @@ public class PlantillaDocumentoService(
 
     /// <summary>Resuelve variables sin registrar solicitud — para previsualización.</summary>
     public async Task<(string htmlResuelto, PlantillaDocumento plantilla, Dictionary<string, string> valoresPerfil)>
-        PrevisualizarAsync(int plantillaId, string email, Dictionary<string, string>? extras = null)
+        PrevisualizarAsync(int plantillaId, string email, Dictionary<string, string>? extras = null, bool validarEditables = false)
     {
-        var (html, plantilla, colaborador) = await ResolverInternoAsync(plantillaId, email, extras, validarEditables: false);
+        var (html, plantilla, colaborador) = await ResolverInternoAsync(plantillaId, email, extras, validarEditables);
 
         // Valores del perfil para pre-rellenar campos editables en el cliente
         var cultura = new System.Globalization.CultureInfo("es-CO");
@@ -179,6 +162,26 @@ public class PlantillaDocumentoService(
         return (html, plantilla, colaborador);
     }
 
+    /// <summary>
+    /// Resuelve la plantilla para un colaborador específico por Id.
+    /// Solo para uso del admin — no valida restricción de área.
+    /// </summary>
+    public async Task<(string htmlResuelto, PlantillaDocumento plantilla, Colaborador colaborador)>
+        ResolverParaColaboradorAsync(int plantillaId, int colaboradorId)
+    {
+        var plantilla = await repository.GetByIdAsync(plantillaId)
+            ?? throw new KeyNotFoundException("Plantilla no encontrada");
+
+        var colaborador = await colaboradorRepository.GetByIdAsync(colaboradorId)
+            ?? throw new KeyNotFoundException("Colaborador no encontrado");
+
+        var contenidoResuelto = plantilla.TipoPlantilla == TipoPlantilla.Docx
+            ? ReemplazarVariablesEnDocx(plantilla.ArchivoDocx!, colaborador, plantilla, null)
+            : ReemplazarVariables(plantilla.ContenidoHtml ?? string.Empty, colaborador, plantilla, null);
+
+        return (contenidoResuelto, plantilla, colaborador);
+    }
+
     private async Task<(string htmlResuelto, PlantillaDocumento plantilla, Colaborador colaborador)>
         ResolverInternoAsync(int plantillaId, string email, Dictionary<string, string>? extras, bool validarEditables)
     {
@@ -192,19 +195,8 @@ public class PlantillaDocumentoService(
             !plantilla.Areas.Any(a => a.AreaId == colaborador.AreaId))
             throw new UnauthorizedAccessException("No tienes acceso a esta plantilla");
 
-        // Filtrar extras: solo se aplican las variables marcadas como editables
-        Dictionary<string, string>? extrasFiltrados = null;
-        if (extras is { Count: > 0 })
-        {
-            var editablesPermitidas = string.IsNullOrWhiteSpace(plantilla.VariablesEditables)
-                ? []
-                : System.Text.Json.JsonSerializer.Deserialize<List<string>>(plantilla.VariablesEditables) ?? [];
-
-            extrasFiltrados = validarEditables
-                ? extras.Where(kv => editablesPermitidas.Contains(kv.Key))
-                        .ToDictionary(kv => kv.Key, kv => kv.Value)
-                : extras; // en preview se permite todo para que el admin pueda probar
-        }
+        // Filtrar extras: solo se aplican las variables marcadas como editables (salvo reservadas del sistema)
+        Dictionary<string, string>? extrasFiltrados = FiltrarExtrasParaPlantilla(plantilla, extras, validarEditables);
 
         var contenidoResuelto = plantilla.TipoPlantilla == TipoPlantilla.Docx
             ? ReemplazarVariablesEnDocx(plantilla.ArchivoDocx!, colaborador, plantilla, extrasFiltrados)
@@ -347,42 +339,43 @@ public class PlantillaDocumentoService(
 
     // ── Helpers ──────────────────────────────────────────────────────────────
 
-    private static string ReemplazarVariables(
-        string html, Colaborador c, PlantillaDocumento p, Dictionary<string, string>? extras = null)
+    /// <summary>Texto para {{genero}} según dato RRHH; no editable por el colaborador.</summary>
+    private static string TextoGeneroParaDocumento(GeneroColaborador g) => g switch
     {
-        var cultura = new CultureInfo("es-CO");
-        var hoy = DateTime.Today;
+        GeneroColaborador.Masculino => "el señor",
+        GeneroColaborador.Femenino => "la señora",
+        _ => "el(la) señor(a)",
+    };
 
-        var resultado = html
-            .Replace("{{nombre_completo}}", $"{c.Nombre} {c.Apellido}")
-            .Replace("{{nombre}}", c.Nombre)
-            .Replace("{{apellido}}", c.Apellido)
-            .Replace("{{cedula}}", c.Cedula ?? string.Empty)
-            .Replace("{{cargo}}", c.Cargo?.Nombre ?? string.Empty)
-            .Replace("{{area}}", c.Area?.Nombre ?? string.Empty)
-            .Replace("{{fecha_ingreso}}", c.FechaIngreso.ToString("d 'de' MMMM 'de' yyyy", cultura))
-            .Replace("{{tipo_contrato}}", c.TipoContrato ?? string.Empty)
-            .Replace("{{sueldo_basico}}", c.SueldoBasico.HasValue
-                ? c.SueldoBasico.Value.ToString("C0", cultura)
-                : string.Empty)
-            .Replace("{{ciudad}}", c.Ciudad ?? string.Empty)
-            .Replace("{{fecha_expedicion}}", hoy.ToString("d 'de' MMMM 'de' yyyy", cultura))
-            .Replace("{{nombre_firmante}}", p.NombreFirmante ?? string.Empty)
-            .Replace("{{cargo_firmante}}", p.CargoFirmante ?? string.Empty);
+    private static Dictionary<string, string>? FiltrarExtrasParaPlantilla(
+        PlantillaDocumento plantilla,
+        Dictionary<string, string>? extras,
+        bool validarEditables)
+    {
+        if (extras is null || extras.Count == 0) return null;
 
-        if (extras is { Count: > 0 })
-            foreach (var (key, value) in extras)
-                resultado = resultado.Replace($"{{{{{key}}}}}", value);
+        var sinReservados = extras
+            .Where(kv => !string.Equals(kv.Key, "genero", StringComparison.OrdinalIgnoreCase))
+            .ToDictionary(kv => kv.Key, kv => kv.Value);
 
-        return resultado;
+        if (!validarEditables) return sinReservados;
+
+        var permitidas = string.IsNullOrWhiteSpace(plantilla.VariablesEditables)
+            ? []
+            : System.Text.Json.JsonSerializer.Deserialize<List<string>>(plantilla.VariablesEditables) ?? [];
+
+        var filtrados = sinReservados
+            .Where(kv => permitidas.Contains(kv.Key))
+            .ToDictionary(kv => kv.Key, kv => kv.Value);
+
+        return filtrados.Count == 0 ? null : filtrados;
     }
 
-    private static string ReemplazarVariablesEnDocx(
-        byte[] docxBytes, Colaborador c, PlantillaDocumento p, Dictionary<string, string>? extras = null)
+    private static Dictionary<string, string> ConstruirVariablesDocumento(
+        Colaborador c, PlantillaDocumento p, Dictionary<string, string>? extrasFiltrados)
     {
         var cultura = new CultureInfo("es-CO");
         var hoy = DateTime.Today;
-
         var variables = new Dictionary<string, string>
         {
             ["{{nombre_completo}}"] = $"{c.Nombre} {c.Apellido}",
@@ -399,12 +392,32 @@ public class PlantillaDocumentoService(
             ["{{fecha_expedicion}}"]= hoy.ToString("d 'de' MMMM 'de' yyyy", cultura),
             ["{{nombre_firmante}}"] = p.NombreFirmante ?? string.Empty,
             ["{{cargo_firmante}}"]  = p.CargoFirmante ?? string.Empty,
+            ["{{genero}}"]          = TextoGeneroParaDocumento(c.Genero),
         };
 
-        if (extras is { Count: > 0 })
-            foreach (var (key, value) in extras)
+        if (extrasFiltrados is { Count: > 0 })
+        {
+            foreach (var (key, value) in extrasFiltrados)
                 variables[$"{{{{{key}}}}}"] = value;
+        }
 
+        return variables;
+    }
+
+    private static string ReemplazarVariables(
+        string html, Colaborador c, PlantillaDocumento p, Dictionary<string, string>? extrasFiltrados = null)
+    {
+        var variables = ConstruirVariablesDocumento(c, p, extrasFiltrados);
+        var resultado = html;
+        foreach (var (key, value) in variables)
+            resultado = resultado.Replace(key, value);
+        return resultado;
+    }
+
+    private static string ReemplazarVariablesEnDocx(
+        byte[] docxBytes, Colaborador c, PlantillaDocumento p, Dictionary<string, string>? extrasFiltrados = null)
+    {
+        var variables = ConstruirVariablesDocumento(c, p, extrasFiltrados);
         return System.Text.Json.JsonSerializer.Serialize(new DocxReemplazoPayload
         {
             DocxBase64 = Convert.ToBase64String(docxBytes),

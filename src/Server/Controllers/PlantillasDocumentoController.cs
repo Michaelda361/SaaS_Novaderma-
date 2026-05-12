@@ -82,7 +82,9 @@ public class PlantillasDocumentoController(
         try
         {
             var email = currentUser.GetEmail();
-            var (htmlResuelto, plantilla, valoresPerfil) = await service.PrevisualizarAsync(id, email, dto?.Extras);
+            var validarExtras = !await currentUser.PuedeGestionarPlantillasAsync();
+            var (htmlResuelto, plantilla, valoresPerfil) =
+                await service.PrevisualizarAsync(id, email, dto?.Extras, validarEditables: validarExtras);
             return Ok(new
             {
                 html = htmlResuelto,
@@ -106,7 +108,9 @@ public class PlantillasDocumentoController(
         try
         {
             var email = currentUser.GetEmail();
-            var (htmlResuelto, plantilla, _) = await service.PrevisualizarAsync(id, email, dto?.Extras);
+            var validarExtras = !await currentUser.PuedeGestionarPlantillasAsync();
+            var (htmlResuelto, plantilla, _) =
+                await service.PrevisualizarAsync(id, email, dto?.Extras, validarEditables: validarExtras);
 
             string htmlEditable;
             if (plantilla.TipoPlantilla == TalentManagement.Domain.Enums.TipoPlantilla.Docx)
@@ -243,7 +247,9 @@ public class PlantillasDocumentoController(
         try
         {
             var email = currentUser.GetEmail();
-            var (htmlResuelto, plantilla, _) = await service.PrevisualizarAsync(id, email, dto?.Extras);
+            var validarExtras = !await currentUser.PuedeGestionarPlantillasAsync();
+            var (htmlResuelto, plantilla, _) =
+                await service.PrevisualizarAsync(id, email, dto?.Extras, validarEditables: validarExtras);
             if (plantilla.TipoPlantilla != TalentManagement.Domain.Enums.TipoPlantilla.Docx)
                 return BadRequest("Esta plantilla no es de tipo DOCX.");
             var pdfBytes = pdfGenerator.GenerarPdfDesdeDocx(htmlResuelto);
@@ -284,6 +290,40 @@ public class PlantillasDocumentoController(
         catch (UnauthorizedAccessException ex) { return Forbid(ex.Message); }
     }
 
+    // ── Admin: generar PDF directamente para cualquier colaborador ───────────
+
+    [HttpPost("{plantillaId:int}/generar-para/{colaboradorId:int}")]
+    public async Task<IActionResult> GenerarParaColaborador(int plantillaId, int colaboradorId)
+    {
+        try
+        {
+            if (!await currentUser.PuedeGestionarPlantillasAsync()) return Forbid();
+
+            var plantillaDto = await service.GetByIdAsync(plantillaId);
+            if (plantillaDto is null) return NotFound();
+
+            var (contenidoResuelto, plantilla, colaborador) =
+                await service.ResolverParaColaboradorAsync(plantillaId, colaboradorId);
+
+            byte[] archivoBytes;
+            var nombreBase = $"{plantillaDto.Nombre.Replace(" ", "_")}_{colaborador.Nombre}_{colaborador.Apellido}_{DateTime.Today:yyyyMMdd}";
+
+            if (plantilla.TipoPlantilla == TalentManagement.Domain.Enums.TipoPlantilla.Docx)
+            {
+                // contenidoResuelto ya es el JSON payload serializado por ReemplazarVariablesEnDocx
+                archivoBytes = pdfGenerator.GenerarPdfDesdeDocx(contenidoResuelto);
+            }
+            else
+            {
+                archivoBytes = pdfGenerator.GenerarPdfDesdeHtml(contenidoResuelto, plantilla);
+            }
+
+            return File(archivoBytes, "application/pdf", $"{nombreBase}.pdf");
+        }
+        catch (KeyNotFoundException ex) { return NotFound(ex.Message); }
+        catch (Exception ex) { return StatusCode(500, ex.Message); }
+    }
+
     // ── Flujo de solicitud y aprobación ──────────────────────────────────────
 
     [HttpPost("{id:int}/solicitar")]
@@ -299,27 +339,24 @@ public class PlantillasDocumentoController(
 
             if (plantillaDto.TipoPlantilla == "docx")
             {
-                var (docxBytes, plantilla, variables) = await service.ObtenerDocxConVariablesAsync(id, email);
+                var (docxBytes, plantilla, variables) = await service.ObtenerDocxConVariablesAsync(id, email, dto?.Extras);
                 var payload = System.Text.Json.JsonSerializer.Serialize(new DocxReemplazoPayload
                 {
                     DocxBase64 = Convert.ToBase64String(docxBytes),
                     Variables = variables,
                 });
                 var docxConVariables = pdfGenerator.GenerarDocx(payload);
-                var docxFinal = dto.ParrafosEditados.Count > 0
-                    ? pdfGenerator.AplicarEdicionEnDocx(docxConVariables, dto.ParrafosEditados)
-                    : docxConVariables;
                 var payloadFinal = System.Text.Json.JsonSerializer.Serialize(new DocxReemplazoPayload
                 {
-                    DocxBase64 = Convert.ToBase64String(docxFinal),
+                    DocxBase64 = Convert.ToBase64String(docxConVariables),
                     Variables = [],
                 });
                 pdfBytes = pdfGenerator.GenerarPdfDesdeDocx(payloadFinal);
             }
             else
             {
-                // HTML: resolver variables → QuestPDF → PDF
-                var (htmlResuelto, plantilla, _) = await service.PrevisualizarAsync(id, email);
+                // HTML: plantilla + variables de sistema + extras filtrados por VariablesEditables
+                var (htmlResuelto, plantilla, _) = await service.ResolverPlantillaAsync(id, email, dto?.Extras);
                 pdfBytes = pdfGenerator.GenerarPdfDesdeHtml(htmlResuelto, plantilla);
             }
 

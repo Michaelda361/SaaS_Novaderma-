@@ -125,7 +125,7 @@ else
                                 <option value="0">-- Selecciona un colaborador --</option>
                                 @foreach (var col in colaboradores ?? [])
                                 {
-                                    <option value="@col.Id">@col.NombreCompleto</option>
+                                    <option value="@col.Id">@col.NombreCompleto — @ColaboradorGeneroUi.Etiqueta(col.Genero)</option>
                                 }
                             </InputSelect>
                             <ValidationMessage For="() => form.ColaboradorId" class="validation-message" />

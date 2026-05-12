@@ -47,6 +47,7 @@ public static class DbSeeder
                     Cedula = "1018456789", Ciudad = "Bogotá",
                     TipoContrato = "Indefinido", SueldoBasico = 4_800_000m,
                     FechaIngreso = new DateTime(2022, 3, 1),
+                    Genero = Domain.Enums.GeneroColaborador.Masculino,
                     Rol = Domain.Enums.RolUsuario.Colaborador },
 
             // Jefe de área Tecnología
@@ -55,6 +56,7 @@ public static class DbSeeder
                     Cedula = "79654321",  Ciudad = "Medellín",
                     TipoContrato = "Indefinido", SueldoBasico = 9_200_000m,
                     FechaIngreso = new DateTime(2018, 7, 15),
+                    Genero = Domain.Enums.GeneroColaborador.Masculino,
                     Rol = Domain.Enums.RolUsuario.Jefe },
 
             // Jefe de área RRHH — Admin en dev para gestionar plantillas
@@ -63,6 +65,7 @@ public static class DbSeeder
                     Cedula = "52789012",  Ciudad = "Bogotá",
                     TipoContrato = "Indefinido", SueldoBasico = 7_500_000m,
                     FechaIngreso = new DateTime(2016, 2, 1),
+                    Genero = Domain.Enums.GeneroColaborador.Femenino,
                     Rol = Domain.Enums.RolUsuario.Admin },
         };
 

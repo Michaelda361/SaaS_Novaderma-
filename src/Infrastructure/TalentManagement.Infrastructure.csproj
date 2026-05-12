@@ -14,7 +14,8 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="Microsoft.Graph" Version="5.103.0" />
+    <PackageReference Include="Microsoft.Graph" Version="5.105.0" />
+    <PackageReference Include="Microsoft.Kiota.Abstractions" Version="1.22.1" />
     <PackageReference Include="QuestPDF" Version="2026.2.4" />
     <PackageReference Include="Syncfusion.DocIORenderer.Net.Core" Version="33.1.47" />
   </ItemGroup>

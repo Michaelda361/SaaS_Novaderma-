@@ -24,5 +24,9 @@ public class ResolverSolicitudDto
 
 public class EnviarSolicitudDto
 {
+    /// <summary>Variables editables permitidas por la plantilla (p. ej. destinatario). Ignoradas si la clave no está en VariablesEditables.</summary>
+    public Dictionary<string, string> Extras { get; set; } = [];
+
+    /// <summary>Reservado; el endpoint de solicitud del colaborador no aplica edición por párrafos.</summary>
     public Dictionary<int, string> ParrafosEditados { get; set; } = [];
 }

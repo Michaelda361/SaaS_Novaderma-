@@ -344,7 +344,7 @@
                                     <option value="">-- Seleccionar colaborador --</option>
                                     @foreach (var col in colaboradores)
                                     {
-                                        <option value="@col.Id">@col.Nombre @col.Apellido — @col.AreaNombre</option>
+                                        <option value="@col.Id">@col.Nombre @col.Apellido — @ColaboradorGeneroUi.Etiqueta(col.Genero) · @col.AreaNombre</option>
                                     }
                                 </select>
                             </div>

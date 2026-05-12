@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using TalentManagement.Domain.Entities;
 using TalentManagement.Domain.Enums;
 
@@ -178,6 +179,14 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         modelBuilder.Entity<Colaborador>()
             .Property(c => c.Rol).HasConversion<string>();
 
+        var generoAValorAlmacenado = new ValueConverter<GeneroColaborador, string>(
+            v => v.ToString(),
+            v => ColaboradorGeneroFromStore(v));
+
+        modelBuilder.Entity<Colaborador>()
+            .Property(c => c.Genero)
+            .HasConversion(generoAValorAlmacenado);
+
         // ── Índices ───────────────────────────────────────────────────────────
         modelBuilder.Entity<Colaborador>().HasIndex(c => c.Email).HasFilter("[Activo] = 1");
         modelBuilder.Entity<Inscripcion>().HasIndex(i => i.CapacitacionId);
@@ -236,5 +245,13 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .HasOne(r => r.OpcionElegida).WithMany()
             .HasForeignKey(r => r.OpcionElegidaId)
             .OnDelete(DeleteBehavior.Restrict);
+    }
+
+    private static GeneroColaborador ColaboradorGeneroFromStore(string v)
+    {
+        if (string.IsNullOrWhiteSpace(v)) return GeneroColaborador.NoInformado;
+        return Enum.TryParse<GeneroColaborador>(v, ignoreCase: true, out var parsed)
+            ? parsed
+            : GeneroColaborador.NoInformado;
     }
 }

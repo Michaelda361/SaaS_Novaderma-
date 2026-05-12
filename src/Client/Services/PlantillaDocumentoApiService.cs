@@ -177,4 +177,17 @@ public class PlantillaDocumentoApiService(HttpClient http)
         var obj = await r.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
         return obj.GetProperty("count").GetInt32();
     }
+
+    /// <summary>Admin genera PDF directamente para un colaborador sin flujo de solicitud.</summary>
+    public async Task<(byte[]? bytes, string fileName)> GenerarParaColaboradorAsync(
+        int plantillaId, int colaboradorId)
+    {
+        var r = await http.PostAsync($"{Base}/{plantillaId}/generar-para/{colaboradorId}", null);
+        if (!r.IsSuccessStatusCode) return (null, string.Empty);
+        var bytes = await r.Content.ReadAsByteArrayAsync();
+        var fileName = r.Content.Headers.ContentDisposition?.FileNameStar
+            ?? r.Content.Headers.ContentDisposition?.FileName?.Trim('"')
+            ?? $"carta_{plantillaId}_{colaboradorId}.pdf";
+        return (bytes, fileName);
+    }
 }

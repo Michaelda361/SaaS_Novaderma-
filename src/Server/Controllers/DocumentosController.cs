@@ -21,16 +21,16 @@ public class DocumentosController(DocumentoService service, CurrentUserService c
         [FromQuery] int? areaId,
         [FromQuery] string? busqueda)
     {
-        // TODO: restaurar control de roles — temporalmente todos ven todos los estados
-        var result = await service.GetAllAsync(tipo, estado, areaId, busqueda, esAdmin: true);
+        var esAdmin = await currentUser.PuedeGestionarPlantillasAsync();
+        var result = await service.GetAllAsync(tipo, estado, areaId, busqueda, esAdmin);
         return Ok(result);
     }
 
     [HttpGet("{id:int}")]
     public async Task<IActionResult> GetById(int id)
     {
-        // TODO: restaurar control de roles
-        var result = await service.GetByIdAsync(id, esAdmin: true);
+        var esAdmin = await currentUser.PuedeGestionarPlantillasAsync();
+        var result = await service.GetByIdAsync(id, esAdmin);
         return result is null ? NotFound() : Ok(result);
     }
 
@@ -92,7 +92,8 @@ public class DocumentosController(DocumentoService service, CurrentUserService c
     {
         try
         {
-            // TODO: restaurar control de roles — temporalmente usamos colaboradorId=0
+            if (!await currentUser.PuedeGestionarPlantillasAsync()) return Forbid();
+
             int colaboradorId = 0;
             string colaboradorNombre = "Sistema";
             try
