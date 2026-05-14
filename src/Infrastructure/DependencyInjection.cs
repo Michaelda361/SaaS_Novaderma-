@@ -50,18 +50,20 @@ public static class DependencyInjection
         services.AddScoped<ICertificadoPdfService, CertificadoPdfService>();
         services.AddScoped<DocxToHtmlConverterService>();
 
-        // SharePoint — mock en Development, real en producción
+        // SharePoint / FileStorage / AuditExcel — mock en Development, real en producción
         var env = configuration["ASPNETCORE_ENVIRONMENT"] ?? "Production";
         var esDevMode = env == "Development" || !string.IsNullOrWhiteSpace(configuration["DevSettings:DefaultDevUser"]);
         if (esDevMode)
         {
             services.AddScoped<ISharePointService, MockSharePointService>();
             services.AddScoped<IAuditExcelService, MockAuditExcelService>();
+            services.AddScoped<IFileStorageService, MockFileStorageService>();
         }
         else
         {
             services.AddScoped<ISharePointService, SharePointService>();
             services.AddScoped<IAuditExcelService, AuditExcelService>();
+            services.AddScoped<IFileStorageService, AzureBlobStorageService>();
         }
 
         return services;
