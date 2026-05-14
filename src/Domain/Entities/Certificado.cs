@@ -10,7 +10,17 @@ public class Certificado : BaseEntity
     public DateTime? FechaVencimiento { get; set; }
     public string? UrlDocumento { get; set; }
 
-    /// <summary>PDF generado automáticamente desde la plantilla DOCX de la capacitación.</summary>
+    /// <summary>
+    /// Clave en storage del PDF del certificado.
+    /// Formato: "certificados/{guid}_{nombre.pdf}"
+    /// </summary>
+    public string? PdfFileKey { get; set; }
+
+    // ── Compatibilidad temporal ──────────────────────────────────────────────
+    /// <summary>
+    /// OBSOLETO — binario heredado. Se mantiene solo para migración de datos viejos.
+    /// Nuevos certificados usan PdfFileKey. Se eliminará en una migración futura.
+    /// </summary>
     public byte[]? PdfBytes { get; set; }
 
     public int ColaboradorId { get; set; }

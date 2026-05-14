@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations.Schema;
 using TalentManagement.Domain.Common;
 using TalentManagement.Domain.Enums;
 
@@ -11,11 +12,22 @@ public class PlantillaDocumento : BaseEntity
     /// <summary>Html = plantilla HTML con {{variables}} | Docx = archivo Word subido</summary>
     public TipoPlantilla TipoPlantilla { get; set; } = TipoPlantilla.Html;
 
-    /// <summary>Contenido HTML con marcadores {{variable}} (cuando TipoPlantilla = html)</summary>
+    /// <summary>Contenido HTML con marcadores {{variable}} (cuando TipoPlantilla = Html)</summary>
     public string? ContenidoHtml { get; set; }
 
-    /// <summary>Bytes del .docx original (cuando TipoPlantilla = docx)</summary>
-    public byte[]? ArchivoDocx { get; set; }
+    /// <summary>
+    /// Clave en storage del .docx original (cuando TipoPlantilla = Docx).
+    /// Formato: "plantillas-docx/{guid}_{nombre.docx}"
+    /// </summary>
+    public string? DocxFileKey { get; set; }
+
+    // ── Compatibilidad temporal ──────────────────────────────────────────────
+    /// <summary>
+    /// OBSOLETO — binario heredado. Se mantiene solo para migración de datos viejos.
+    /// Nuevas plantillas usan DocxFileKey. Se eliminará en una migración futura.
+    /// </summary>
+    [Column("ArchivoDocx")]
+    public byte[]? ArchivoDocxLegacy { get; set; }
 
     /// <summary>Imagen de la firma en Base64</summary>
     public string? FirmaImagenBase64 { get; set; }

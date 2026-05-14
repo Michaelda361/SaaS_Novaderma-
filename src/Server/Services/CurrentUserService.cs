@@ -1,3 +1,4 @@
+﻿using Microsoft.Extensions.Logging;
 using System.Security.Claims;
 using TalentManagement.Application.Interfaces;
 
@@ -7,6 +8,7 @@ public class CurrentUserService(
     IHttpContextAccessor httpContextAccessor,
     IWebHostEnvironment env,
     IColaboradorRepository colaboradorRepo,
+    ILogger<CurrentUserService> logger,
     DevUserStore? devStore = null)
 {
     public string GetEmail()
@@ -66,7 +68,7 @@ public class CurrentUserService(
             return colaborador.Rol == Domain.Enums.RolUsuario.Jefe
                 || colaborador.Rol == Domain.Enums.RolUsuario.Admin;
         }
-        catch { return false; }
+        catch (Exception ex) { logger.LogWarning(ex, "Error al verificar permisos de resolucion para usuario"); return false; }
     }
 
     /// <summary>
@@ -82,7 +84,7 @@ public class CurrentUserService(
             return colaborador?.Rol == Domain.Enums.RolUsuario.Jefe
                 || colaborador?.Rol == Domain.Enums.RolUsuario.Admin;
         }
-        catch { return false; }
+        catch (Exception ex) { logger.LogWarning(ex, "Error al verificar permisos de gestion para usuario"); return false; }
     }
 
     /// <summary>True si el usuario tiene rol Admin en BD.</summary>
@@ -94,7 +96,7 @@ public class CurrentUserService(
             var colaborador = await colaboradorRepo.GetByEmailAsync(email);
             return colaborador?.Rol == Domain.Enums.RolUsuario.Admin;
         }
-        catch { return false; }
+        catch (Exception ex) { logger.LogWarning(ex, "Error al verificar rol Admin para usuario"); return false; }
     }
 
     /// <summary>
@@ -108,6 +110,6 @@ public class CurrentUserService(
             var colaborador = await colaboradorRepo.GetByEmailAsync(email);
             return colaborador?.Id;
         }
-        catch { return null; }
+        catch (Exception ex) { logger.LogWarning(ex, "Error al obtener ColaboradorId para usuario"); return null; }
     }
 }

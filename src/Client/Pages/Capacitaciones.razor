@@ -1,4 +1,4 @@
-@page "/capacitaciones"
+﻿@page "/capacitaciones"
 @attribute [PageTitle("Capacitaciones")]
 @attribute [Authorize]
 @inject CapacitacionApiService ApiService
@@ -506,23 +506,9 @@
         if (!AuthInfo.ColaboradorId.HasValue) return;
         try
         {
-            var inscripciones = await InscripcionService.GetByColaboradorAsync(AuthInfo.ColaboradorId.Value);
-            var tareas = inscripciones.Select(async insc =>
-            {
-                try
-                {
-                    var cuestionario = await CuestionarioService.GetByCapacitacionAsync(insc.CapacitacionId);
-                    if (cuestionario is null) return (int?)null;
-                    var resultado = await CuestionarioService.GetResultadoAsync(cuestionario.Id, insc.Id);
-                    return resultado?.Aprobado == true ? insc.CapacitacionId : (int?)null;
-                }
-                catch { return (int?)null; }
-            });
-            var resultados = await Task.WhenAll(tareas);
-            capacitacionesAprobadas = resultados
-                .Where(id => id.HasValue)
-                .Select(id => id!.Value)
-                .ToHashSet();
+            // Una sola llamada al servidor en lugar de N+1 requests
+            var ids = await CuestionarioService.GetCapacitacionesAprobadasAsync(AuthInfo.ColaboradorId.Value);
+            capacitacionesAprobadas = ids.ToHashSet();
         }
         catch { }
     }
@@ -591,38 +577,17 @@
         cargandoHistorial = true;
         StateHasChanged();
 
-        var caps = capacitaciones ?? await ApiService.GetAllAsync() ?? [];
-
-        var tareas = caps.Select(async cap =>
+        try
         {
-            var inscritos = new List<InscripcionDto>();
-            CuestionarioDto? cuestionario = null;
-            try
-            {
-                inscritos = await InscripcionService.GetByCapacitacionHistorialAsync(cap.Id);
-                cuestionario = await CuestionarioService.GetByCapacitacionAsync(cap.Id);
-            }
-            catch { }
-
-            return inscritos.Select(async insc =>
-            {
-                ResultadoCuestionarioDto? resultado = null;
-                if (cuestionario is not null)
-                {
-                    try { resultado = await CuestionarioService.GetResultadoAsync(cuestionario.Id, insc.Id); }
-                    catch { }
-                }
-                return new HistorialItem(insc, resultado);
-            });
-        });
-
-        var grupos = await Task.WhenAll(tareas);
-        var todos = await Task.WhenAll(grupos.SelectMany(g => g));
-
-        historialItems = todos
-            .OrderBy(h => h.Inscripcion.ColaboradorNombre)
-            .ThenBy(h => h.Inscripcion.CapacitacionNombre)
-            .ToList();
+            // Una sola llamada al servidor - 3 queries planas en lugar de N*M requests
+            var filas = await InscripcionService.GetHistorialCompletoAsync();
+            historialItems = filas
+                .Select(f => new HistorialItem(f.Inscripcion, f.Resultado))
+                .OrderBy(h => h.Inscripcion.ColaboradorNombre)
+                .ThenBy(h => h.Inscripcion.CapacitacionNombre)
+                .ToList();
+        }
+        catch { historialItems = []; }
 
         cargandoHistorial = false;
         historialCargado = true;

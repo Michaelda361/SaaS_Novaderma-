@@ -1,4 +1,4 @@
-using DocumentFormat.OpenXml.Packaging;
+﻿using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Wordprocessing;
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;
@@ -545,6 +545,57 @@ public class PdfGeneratorService(LibreOfficeConverterService libreOffice)
                 firma.Item().Text(plantilla.CargoFirmante)
                     .FontSize(10).FontColor(Colors.Grey.Darken2);
         });
+    }
+
+    // ── PPTX: generar PDF y aplicar variables ───────────────────────────────────
+
+    /// <summary>
+    /// Aplica variables a un .pptx y convierte a PDF usando LibreOffice.
+    /// </summary>
+    public byte[] GenerarPdfDesdePptx(byte[] pptxBytes, Dictionary<string, string> variables)
+    {
+        var pptxConVariables = AplicarVariablesEnPptx(pptxBytes, variables);
+
+        if (_libreOffice.EstaDisponible())
+        {
+            var pdf = _libreOffice.ConvertirAPdf(pptxConVariables,
+                "application/vnd.openxmlformats-officedocument.presentationml.presentation");
+            if (pdf is not null) return pdf;
+        }
+
+        throw new InvalidOperationException(
+            "LibreOffice no esta disponible. Instalalo para convertir plantillas PPTX a PDF.");
+    }
+
+    private static byte[] AplicarVariablesEnPptx(byte[] pptxBytes, Dictionary<string, string> variables)
+    {
+        using var ms = new MemoryStream();
+        ms.Write(pptxBytes, 0, pptxBytes.Length);
+        ms.Position = 0;
+
+        using (var pptx = DocumentFormat.OpenXml.Packaging.PresentationDocument.Open(ms, true))
+        {
+            var presentationPart = pptx.PresentationPart;
+            if (presentationPart is null) return pptxBytes;
+
+            foreach (var slidePart in presentationPart.SlideParts)
+            {
+                var slide = slidePart.Slide;
+                foreach (var text in slide.Descendants<DocumentFormat.OpenXml.Drawing.Text>())
+                {
+                    if (string.IsNullOrEmpty(text.Text)) continue;
+                    var original = text.Text;
+                    var reemplazado = original;
+                    foreach (var (key, value) in variables)
+                        reemplazado = reemplazado.Replace(key, value);
+                    if (reemplazado != original)
+                        text.Text = reemplazado;
+                }
+                slide.Save();
+            }
+        }
+
+        return ms.ToArray();
     }
 }
 

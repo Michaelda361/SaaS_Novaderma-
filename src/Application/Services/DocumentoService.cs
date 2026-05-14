@@ -1,4 +1,4 @@
-using TalentManagement.Application.Interfaces;
+﻿using TalentManagement.Application.Interfaces;
 using TalentManagement.Domain.Entities;
 using TalentManagement.Domain.Enums;
 using TalentManagement.Shared.DTOs.Documentos;
@@ -435,7 +435,7 @@ public class DocumentoService(
         AreaNombre = d.Area?.Nombre
     };
 
-    private static DocumentoDetalleDto MapToDetalleDto(Documento d, bool esAdmin) => new()
+    private static DocumentoDetalleDto MapToDetalleDto(Documento d, bool esAdmin, int? colaboradorId = null) => new()
     {
         Id = d.Id,
         Titulo = d.Titulo,

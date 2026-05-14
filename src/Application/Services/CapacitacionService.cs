@@ -1,4 +1,4 @@
-﻿using TalentManagement.Application.Interfaces;
+using TalentManagement.Application.Interfaces;
 using TalentManagement.Domain.Entities;
 using TalentManagement.Shared.DTOs.Capacitaciones;
 
@@ -85,7 +85,6 @@ public class CapacitacionService(
         return MapToDto(updated);
     }
 
-
     public async Task<CapacitacionDto?> ConfigurarCertificadoAsync(int id, ConfigurarCertificadoDto dto)
     {
         var cap = await repository.GetByIdAsync(id);
@@ -93,15 +92,22 @@ public class CapacitacionService(
         cap.EmiteCertificado = dto.EmiteCertificado;
         cap.PlantillaNombreCertificado = string.IsNullOrWhiteSpace(dto.PlantillaNombreCertificado) ? null : dto.PlantillaNombreCertificado;
 
-        // Gestionar el DOCX
+        // Gestionar el DOCX/PPTX
         if (!string.IsNullOrWhiteSpace(dto.ArchivoDocxBase64))
+        {
             cap.ArchivoDocxCertificado = Convert.FromBase64String(dto.ArchivoDocxBase64);
+            cap.TipoArchivoCertificado = dto.TipoArchivoCertificado;
+        }
         else if (dto.EliminarDocx)
+        {
             cap.ArchivoDocxCertificado = null;
+            cap.TipoArchivoCertificado = null;
+        }
 
         var updated = await repository.UpdateAsync(cap);
         return MapToDto(updated);
     }
+
     public async Task<bool> DeleteAsync(int id)
     {
         var cap = await repository.GetByIdAsync(id);
@@ -151,6 +157,7 @@ public class CapacitacionService(
         NombreCertificado = c.NombreCertificado,
         PlantillaNombreCertificado = c.PlantillaNombreCertificado,
         TienePlantillaDocx = c.ArchivoDocxCertificado is not null && c.ArchivoDocxCertificado.Length > 0,
+        TipoArchivoCertificado = c.ArchivoDocxCertificado is { Length: > 0 } ? c.TipoArchivoCertificado : null,
         Publicada = c.Publicada
     };
 }

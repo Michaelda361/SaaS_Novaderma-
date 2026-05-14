@@ -1,4 +1,4 @@
-﻿@page "/capacitaciones/{Id:int}"
+@page "/capacitaciones/{Id:int}"
 @attribute [PageTitle("Detalle de capacitación")]
 @attribute [Authorize]
 @inject InscripcionApiService InscripcionService
@@ -450,19 +450,19 @@
                 <div>
                     <label style="font-size:.85rem;font-weight:500;">Tipo de plantilla</label>
                     <div class="tipo-selector" style="margin-top:.35rem;">
-                        <label class="tipo-option @(tipoCertificado == "html" ? "tipo-option--active" : "")">
-                            <input type="radio" name="tipoCert" value="html"
-                                   checked="@(tipoCertificado == "html")"
-                                   @onchange='() => tipoCertificado = "html"' />
-                            <span class="tipo-icon">📄</span>
-                            <div><div class="tipo-label">Editor HTML</div><div class="tipo-desc">Escribe el contenido con formato</div></div>
-                        </label>
                         <label class="tipo-option @(tipoCertificado == "docx" ? "tipo-option--active" : "")">
                             <input type="radio" name="tipoCert" value="docx"
                                    checked="@(tipoCertificado == "docx")"
                                    @onchange='() => tipoCertificado = "docx"' />
-                            <span class="tipo-icon">📝</span>
+                            <span class="tipo-icon"></span>
                             <div><div class="tipo-label">Archivo Word</div><div class="tipo-desc">Sube un .docx con variables</div></div>
+                        </label>
+                        <label class="tipo-option @(tipoCertificado == "pptx" ? "tipo-option--active" : "")">
+                            <input type="radio" name="tipoCert" value="pptx"
+                                   checked="@(tipoCertificado == "pptx")"
+                                   @onchange='() => tipoCertificado = "pptx"' />
+                            <span class="tipo-icon"></span>
+                            <div><div class="tipo-label">Presentacion PowerPoint</div><div class="tipo-desc">Sube un .pptx con variables</div></div>
                         </label>
                     </div>
                 </div>
@@ -486,20 +486,8 @@
                     </div>
                 </div>
 
-                @if (tipoCertificado == "html")
-                {
                     <div>
-                        <label style="font-size:.85rem;font-weight:500;">Contenido del certificado</label>
-                        <p class="text-xs text-muted" style="margin:.25rem 0 .5rem;">
-                            Usa las mismas variables de arriba para personalizar el contenido.
-                        </p>
-                        <EditorPlantilla @bind-HtmlContent="certHtmlContent" />
-                    </div>
-                }
-                else
-                {
-                    <div>
-                        <label style="font-size:.85rem;font-weight:500;">Archivo Word (.docx)</label>
+                        <label style="font-size:.85rem;font-weight:500;">@(tipoCertificado == "pptx" ? "Presentacion PowerPoint (.pptx)" : "Archivo Word (.docx)")</label>
                         @if (capacitacion.TienePlantillaDocx && string.IsNullOrWhiteSpace(certForm.ArchivoDocxBase64))
                         {
                             <div style="margin-top:.35rem;display:flex;align-items:center;gap:.75rem;">
@@ -510,8 +498,7 @@
                         }
                         @if (!capacitacion.TienePlantillaDocx || certForm.EliminarDocx)
                         {
-                            <InputFile OnChange="OnDocxCertificadoSeleccionado" accept=".docx"
-                                       style="margin-top:.35rem;" />
+                            <InputFile OnChange="OnArchivoCertificadoSeleccionado" accept="@(tipoCertificado == "pptx" ? ".pptx" : ".docx")" style="margin-top:.35rem;" />
                             @if (!string.IsNullOrWhiteSpace(certForm.ArchivoDocxBase64))
                             {
                                 <div class="alert alert-success" style="margin-top:.35rem;padding:.4rem .75rem;font-size:.8rem;">
@@ -1123,7 +1110,7 @@
     private bool editandoCertificado = false;
     private bool guardandoCertificado = false;
     private ConfigurarCertificadoDto certForm = new();
-    private string tipoCertificado = "html";
+    private string tipoCertificado = "docx";
     private string certHtmlContent = string.Empty;
     private static readonly string[] variablesCertificado =
         ["{{nombre_completo}}", "{{cargo}}", "{{area}}", "{{capacitacion}}", "{{fecha_emision}}", "{{puntaje}}"];
@@ -1135,7 +1122,16 @@
             EmiteCertificado = capacitacion?.EmiteCertificado ?? false,
             PlantillaNombreCertificado = capacitacion?.PlantillaNombreCertificado
         };
-        tipoCertificado = capacitacion?.TienePlantillaDocx == true ? "docx" : "html";
+        if (capacitacion?.TienePlantillaDocx == true)
+        {
+            tipoCertificado = capacitacion.TipoArchivoCertificado ==
+                "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+                ? "pptx" : "docx";
+        }
+        else
+        {
+            tipoCertificado = "docx";
+        }
         editandoCertificado = true;
     }
 
@@ -1144,16 +1140,23 @@
         certForm.PlantillaNombreCertificado = (certForm.PlantillaNombreCertificado ?? "") + variable;
     }
 
-    private async Task OnDocxCertificadoSeleccionado(InputFileChangeEventArgs e)
+    private async Task OnArchivoCertificadoSeleccionado(InputFileChangeEventArgs e)
     {
         var file = e.File;
-        if (!file.Name.EndsWith(".docx", StringComparison.OrdinalIgnoreCase))
-        { await toast.Show("Solo se aceptan archivos .docx", "warning"); return; }
+        bool isPptx = tipoCertificado == "pptx";
+        var expectedExt = isPptx ? ".pptx" : ".docx";
+
+        if (!file.Name.EndsWith(expectedExt, StringComparison.OrdinalIgnoreCase))
+        { await toast.Show($"Solo se aceptan archivos {expectedExt}", "warning"); return; }
         if (file.Size > 5 * 1024 * 1024)
         { await toast.Show("El archivo no puede superar 5 MB.", "warning"); return; }
+        
         using var ms = new System.IO.MemoryStream();
         await file.OpenReadStream(5 * 1024 * 1024).CopyToAsync(ms);
         certForm.ArchivoDocxBase64 = Convert.ToBase64String(ms.ToArray());
+        certForm.TipoArchivoCertificado = isPptx 
+            ? "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+            : "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
         certForm.EliminarDocx = false;
     }
 

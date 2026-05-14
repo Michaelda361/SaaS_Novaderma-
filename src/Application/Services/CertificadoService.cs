@@ -1,11 +1,14 @@
-ï»¿using TalentManagement.Application.Interfaces;
+using TalentManagement.Application.Interfaces;
 using TalentManagement.Domain.Entities;
 using TalentManagement.Shared.DTOs.Certificados;
 
 namespace TalentManagement.Application.Services;
 
-public class CertificadoService(ICertificadoRepository repository)
+public class CertificadoService(
+    ICertificadoRepository repository,
+    IFileStorageService storage)
 {
+    private const string ContenedorCert = "certificados";
     public async Task<List<CertificadoDto>> GetAllAsync()
     {
         var certs = await repository.GetAllAsync();
@@ -68,7 +71,17 @@ public class CertificadoService(ICertificadoRepository repository)
     public async Task<byte[]?> GetPdfAsync(int id)
     {
         var cert = await repository.GetByIdAsync(id);
-        return cert?.PdfBytes;
+        if (cert is null) return null;
+
+        // 1. Storage (nuevo flujo)
+        if (!string.IsNullOrWhiteSpace(cert.PdfFileKey))
+        {
+            var bytes = await storage.DownloadAsync(cert.PdfFileKey);
+            if (bytes is { Length: > 0 }) return bytes;
+        }
+
+        // 2. Fallback: binario legacy en SQL
+        return cert.PdfBytes;
     }
 
     public async Task<Certificado?> GetCertificadoEntityAsync(int id) =>
@@ -78,7 +91,19 @@ public class CertificadoService(ICertificadoRepository repository)
     {
         var cert = await repository.GetByIdAsync(id);
         if (cert is null) return false;
-        cert.PdfBytes = pdf;
+
+        // Eliminar archivo anterior del storage si existe
+        if (!string.IsNullOrWhiteSpace(cert.PdfFileKey))
+            await storage.DeleteAsync(cert.PdfFileKey);
+
+        // Subir nuevo PDF al storage
+        var nombrePdf = $"certificado_{id}_{DateTime.UtcNow:yyyyMMddHHmmss}.pdf";
+        using var ms = new MemoryStream(pdf);
+        cert.PdfFileKey = await storage.UploadAsync(ms, nombrePdf, ContenedorCert, "application/pdf");
+
+        // Limpiar legacy si existía
+        cert.PdfBytes = null;
+
         await repository.UpdateAsync(cert);
         return true;
     }
@@ -105,6 +130,6 @@ public class CertificadoService(ICertificadoRepository repository)
             : $"{c.Colaborador.Nombre} {c.Colaborador.Apellido}",
         CapacitacionId = c.CapacitacionId,
         CapacitacionNombre = c.Capacitacion?.Nombre,
-        TienePdf = c.PdfBytes is { Length: > 0 }
+        TienePdf = c.PdfFileKey is not null || c.PdfBytes is { Length: > 0 }
     };
 }

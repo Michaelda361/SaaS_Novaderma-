@@ -214,7 +214,8 @@ public class CuestionarioService(
                                         ["{{fecha_emision}}"]   = DateTime.Today.ToString("dd/MM/yyyy"),
                                         ["{{puntaje}}"]         = $"{puntaje:0.#}%"
                                     };
-                                    pdfBytes = certificadoPdfService.GenerarPdf(capacitacion.ArchivoDocxCertificado, vars);
+                                    var mimeType = capacitacion.TipoArchivoCertificado ?? "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+                                    pdfBytes = certificadoPdfService.GenerarPdf(capacitacion.ArchivoDocxCertificado, vars, mimeType);
                                 }
                                 catch { /* No bloquear si falla la generacion del PDF */ }
                             }
@@ -270,6 +271,13 @@ public class CuestionarioService(
             Correctas = r.TotalCorrectas
         };
     }
+
+    /// <summary>
+    /// Devuelve los IDs de capacitaciones aprobadas por el colaborador en una sola query.
+    /// Reemplaza el N+1 de CargarAprobadas en Capacitaciones.razor.
+    /// </summary>
+    public Task<List<int>> GetCapacitacionesAprobadasAsync(int colaboradorId) =>
+        repository.GetCapacitacionesAprobadasPorColaboradorAsync(colaboradorId);
 
     private static CuestionarioDto MapToDto(Cuestionario c) => new()
     {

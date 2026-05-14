@@ -89,4 +89,15 @@ public class InscripcionesController(
         var deleted = await service.DeleteAsync(id);
         return deleted ? NoContent() : NotFound();
     }
+
+    /// <summary>
+    /// Devuelve el historial completo (inscripciones + resultados) en 3 queries planas.
+    /// Reemplaza el N+1 masivo de CargarHistorial en Capacitaciones.razor.
+    /// </summary>
+    [HttpGet("historial-completo")]
+    public async Task<IActionResult> GetHistorialCompleto()
+    {
+        if (!await currentUser.PuedeGestionarPlantillasAsync()) return Forbid();
+        return Ok(await service.GetHistorialCompletoAsync());
+    }
 }

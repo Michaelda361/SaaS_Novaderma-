@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using TalentManagement.Application.Services;
 using TalentManagement.Shared.DTOs.Certificados;
@@ -107,7 +107,9 @@ public class CertificadosController(CertificadoService service) : ControllerBase
                 ["{{puntaje}}"]         = ""
             };
 
-            var pdf = pdfService.GenerarPdf(cap.ArchivoDocxCertificado, vars);
+            var mimeType = cap.TipoArchivoCertificado
+                ?? "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+            var pdf = pdfService.GenerarPdf(cap.ArchivoDocxCertificado, vars, mimeType);
             await service.ActualizarPdfAsync(id, pdf);
             return Ok(new { message = "PDF regenerado correctamente." });
         }

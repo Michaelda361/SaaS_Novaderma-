@@ -1,4 +1,4 @@
-namespace TalentManagement.Shared.DTOs.Capacitaciones;
+﻿namespace TalentManagement.Shared.DTOs.Capacitaciones;
 
 public class CapacitacionDto
 {
@@ -21,6 +21,9 @@ public class CapacitacionDto
     public string? PlantillaNombreCertificado { get; set; }
     /// <summary>True si la capacitación tiene un DOCX de plantilla de certificado.</summary>
     public bool TienePlantillaDocx { get; set; }
+
+    /// <summary>MIME del archivo de plantilla del certificado. Null si no hay plantilla.</summary>
+    public string? TipoArchivoCertificado { get; set; }
     /// <summary>True si está publicada y visible para colaboradores. False = Borrador.</summary>
     public bool Publicada { get; set; }
 

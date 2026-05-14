@@ -69,17 +69,12 @@ public class CuestionarioRepository(AppDbContext context) : ICuestionarioReposit
     public async Task<RespuestaCuestionario> SaveRespuestaAsync(RespuestaCuestionario respuesta)
     {
         // Separar los hijos ANTES de agregar el padre al contexto.
-        // Si se dejan en respuesta.Respuestas, EF los inserta en cascada en el primer
-        // SaveChanges e intenta resolver OpcionElegidaId/PreguntaId con query filters
-        // activos (Activo=true), lo que falla si el cuestionario fue editado.
         var hijos = respuesta.Respuestas.ToList();
         respuesta.Respuestas = [];
 
         context.RespuestasCuestionario.Add(respuesta);
-        await context.SaveChangesAsync(); // solo inserta el padre
+        await context.SaveChangesAsync();
 
-        // Insertar hijos con SQL directo para evitar que EF navegue las FKs
-        // con query filters activos en OpcionRespuesta y Pregunta.
         foreach (var r in hijos)
         {
             await context.Database.ExecuteSqlRawAsync(
@@ -88,5 +83,15 @@ public class CuestionarioRepository(AppDbContext context) : ICuestionarioReposit
         }
 
         return respuesta;
+    }
+
+    public async Task<List<int>> GetCapacitacionesAprobadasPorColaboradorAsync(int colaboradorId)
+    {
+        // Una sola query: JOIN Inscripciones → RespuestasCuestionario filtrando aprobadas
+        return await context.RespuestasCuestionario
+            .Where(r => r.Aprobado && r.Inscripcion.ColaboradorId == colaboradorId)
+            .Select(r => r.Inscripcion.CapacitacionId)
+            .Distinct()
+            .ToListAsync();
     }
 }

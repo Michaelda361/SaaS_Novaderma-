@@ -21,6 +21,9 @@ public class ConfigurarCertificadoDto
     /// </summary>
     public string? ArchivoDocxBase64 { get; set; }
 
-    /// <summary>True si se quiere eliminar el DOCX existente sin subir uno nuevo.</summary>
+    /// <summary>Tipo MIME del archivo, e.g. DOCX o PPTX.</summary>
+    public string? TipoArchivoCertificado { get; set; }
+
+    /// <summary>True si se quiere eliminar el DOCX/PPTX existente sin subir uno nuevo.</summary>
     public bool EliminarDocx { get; set; } = false;
 }

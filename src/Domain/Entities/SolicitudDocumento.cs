@@ -15,7 +15,17 @@ public class SolicitudDocumento : BaseEntity
     public DateTime FechaSolicitud { get; set; } = DateTime.UtcNow;
     public EstadoSolicitud Estado { get; set; } = EstadoSolicitud.Pendiente;
 
-    /// <summary>PDF generado al enviar — lo que el admin revisa.</summary>
+    /// <summary>
+    /// Clave en storage del PDF generado al enviar — lo que el admin revisa.
+    /// Formato: "solicitudes-pdf/{guid}_{nombre.pdf}"
+    /// </summary>
+    public string? PdfFileKey { get; set; }
+
+    // ── Compatibilidad temporal ──────────────────────────────────────────────
+    /// <summary>
+    /// OBSOLETO — binario heredado. Se mantiene solo para migración de datos viejos.
+    /// Nuevas solicitudes usan PdfFileKey. Se eliminará en una migración futura.
+    /// </summary>
     public byte[]? PdfBytes { get; set; }
 
     public string? ComentarioAdmin { get; set; }

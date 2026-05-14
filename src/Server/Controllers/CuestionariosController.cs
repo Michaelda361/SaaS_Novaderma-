@@ -114,4 +114,22 @@ public class CuestionariosController(
         var resultado = await service.GetResultadoAsync(cuestionarioId, inscripcionId);
         return resultado is null ? NotFound() : Ok(resultado);
     }
+
+    /// <summary>
+    /// Devuelve los IDs de capacitaciones aprobadas por el colaborador en una sola query.
+    /// Reemplaza el N+1 de CargarAprobadas en Capacitaciones.razor.
+    /// </summary>
+    [HttpGet("capacitaciones-aprobadas/{colaboradorId:int}")]
+    public async Task<IActionResult> GetCapacitacionesAprobadas(int colaboradorId)
+    {
+        var miId = await currentUser.GetColaboradorIdAsync();
+        if (!await currentUser.PuedeGestionarPlantillasAsync() && miId != colaboradorId)
+            return Forbid();
+
+        var ids = await service.GetCapacitacionesAprobadasAsync(colaboradorId);
+        return Ok(new TalentManagement.Shared.DTOs.Cuestionarios.CapacitacionesAprobadasDto
+        {
+            CapacitacionIds = ids
+        });
+    }
 }

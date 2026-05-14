@@ -117,24 +117,12 @@ else
             return;
         }
 
-        var inscripciones = await InscripcionService.GetByColaboradorAsync(AuthInfo.ColaboradorId.Value);
-
-        // Para cada inscripción, obtener el resultado del cuestionario en paralelo
-        var tareas = inscripciones.Select(async insc =>
-        {
-            ResultadoCuestionarioDto? resultado = null;
-            try
-            {
-                var cuestionario = await CuestionarioService.GetByCapacitacionAsync(insc.CapacitacionId);
-                if (cuestionario is not null)
-                    resultado = await CuestionarioService.GetResultadoAsync(cuestionario.Id, insc.Id);
-            }
-            catch { }
-            return new HistorialItem(insc, resultado);
-        });
-
-        var resultados = await Task.WhenAll(tareas);
-        items = resultados.OrderByDescending(x => x.Inscripcion.FechaInscripcion).ToList();
+        // Una sola llamada al servidor � endpoint batch en lugar de N+1 requests
+        var filas = await InscripcionService.GetHistorialCompletoAsync();
+        items = filas
+            .Select(f => new HistorialItem(f.Inscripcion, f.Resultado))
+            .OrderByDescending(x => x.Inscripcion.FechaInscripcion)
+            .ToList();
         cargando = false;
     }
 }

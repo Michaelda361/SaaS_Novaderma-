@@ -12,6 +12,7 @@ Catálogo completo de entidades existentes. Antes de proponer una nueva entidad,
 Empleado de la organización.
 - `Nombre`, `Apellido`, `Email`, `Telefono`, `FechaIngreso`
 - `Cedula?`, `TipoContrato?`, `SueldoBasico?` (decimal), `Ciudad?`
+- `Genero` (enum `GeneroColaborador`: NoInformado / Masculino / Femenino / OtroOPrefieroNoDecir) — default `NoInformado`
 - `Rol` (enum `RolUsuario`: Colaborador / Jefe / Admin) — almacenado como string, default `Colaborador`
 - FK: `AreaId` → Area, `CargoId` → Cargo, `SupervisorId?` → Colaborador (auto-referencia)
 - Colecciones: `Certificados`, `Inscripciones`
@@ -35,9 +36,12 @@ Puesto de trabajo, siempre scoped a un área.
 ### Capacitacion
 Sesión de entrenamiento. Puede ser general, por área o por colaborador.
 - `Nombre`, `Descripcion`, `DuracionHoras` (int), `FechaInicio`, `FechaFin`
+- `Publicada` (bool, default false) — si false, solo visible para Jefe/Admin
+- `EmiteCertificado` (bool, default false), `NombreCertificado?`, `PlantillaNombreCertificado?`
+- `ArchivoDocxCertificado?` (bytes) — plantilla DOCX para generar PDF del certificado automaticamente
 - FK opcionales: `AreaId?` → Area, `ColaboradorId?` → Colaborador
 - Colecciones: `Inscripciones`, `Recursos`
-- Lógica: `TipoAsignacion` = "General" | "Área" | "Colaborador" (calculado en DTO)
+- Logica: `TipoAsignacion` = "General" | "Area" | "Colaborador" (calculado en DTO)
 
 ### Inscripcion
 Vincula un Colaborador a una Capacitacion.
@@ -57,12 +61,12 @@ Evaluación asociada a una capacitación.
 
 ### Pregunta
 Pregunta de un cuestionario.
-- `Texto`, `Orden` (int)
+- `Enunciado`, `Orden` (int)
 - FK: `CuestionarioId` → Cuestionario (OnDelete: Cascade)
 - Colecciones: `Opciones` (OpcionRespuesta)
 
 ### OpcionRespuesta
-Opción de respuesta para una pregunta.
+Opcion de respuesta para una pregunta.
 - `Texto`, `EsCorrecta` (bool), `Orden` (int)
 - FK: `PreguntaId` → Pregunta (OnDelete: Cascade)
 
@@ -83,16 +87,18 @@ Respuesta individual a una pregunta dentro de un intento.
 ## Certificados
 
 ### Certificado
-Certificación obtenida por un colaborador.
+Certificacion obtenida por un colaborador.
 - `Nombre`, `Institucion`, `FechaEmision`, `FechaVencimiento?`, `UrlDocumento?`
-- FK: `ColaboradorId` → Colaborador
+- `PdfFileKey?` — clave en storage del PDF del certificado (nuevo flujo)
+- `PdfBytes?` — OBSOLETO, binario legacy en SQL (compatibilidad temporal, pendiente de eliminar)
+- FK: `ColaboradorId` → Colaborador, `CapacitacionId?` → Capacitacion
 
 ---
 
 ## Control Documental
 
 ### Documento
-Documento oficial (política, procedimiento, etc.). Hereda `BaseEntity`.
+Documento oficial (politica, procedimiento, etc.). Hereda `BaseEntity`.
 - `Titulo`, `TipoDocumento` (enum → string), `Version` (string, ej: "1.0"), `Estado` (enum `EstadoDocumento` → string)
 - `SharePointItemId`, `SharePointUrl`
 - FK: `AreaId?` → Area
@@ -111,7 +117,7 @@ Cambio propuesto por un colaborador sobre un documento publicado. **No hereda Ba
 - FK: `DocumentoId`, `ColaboradorId` (Restrict), `AreaId`, `AprobadorId?` (Restrict)
 
 ### FlujoAprobacionDoc
-Registro inmutable de cada transición de estado. **No hereda BaseEntity.**
+Registro inmutable de cada transicion de estado. **No hereda BaseEntity.**
 - `EstadoAnterior` (enum → string), `EstadoNuevo` (enum → string), `FechaTransicion` (DateTime UTC)
 - FK: `DocumentoId`, `ColaboradorId` (Restrict)
 
@@ -122,26 +128,30 @@ Registro inmutable de cada transición de estado. **No hereda BaseEntity.**
 ### PlantillaDocumento
 Plantilla para generar cartas laborales en PDF. Hereda `BaseEntity`.
 - `Nombre`, `Descripcion?`, `TipoPlantilla` (enum: Html/Docx → string)
-- `ContenidoHtml?` (HTML con marcadores `{{variable}}`), `ArchivoDocx?` (bytes)
+- `ContenidoHtml?` (HTML con marcadores `{{variable}}`)
+- `DocxFileKey?` — clave en storage del .docx original (nuevo flujo)
+- `ArchivoDocxLegacy?` — OBSOLETO, binario legacy en SQL (compatibilidad temporal, pendiente de eliminar)
 - `FirmaImagenBase64?`, `NombreFirmante?`, `CargoFirmante?`
 - `AplicaTodasAreas` (bool, default true), `VariablesEditables?` (JSON array de strings)
 - Colecciones: `Areas` (PlantillaDocumentoArea), `Solicitudes` (SolicitudDocumento)
 
 ### PlantillaDocumentoArea
-Relación muchos-a-muchos: PlantillaDocumento <-> Area. Clave compuesta `(PlantillaDocumentoId, AreaId)`.
+Relacion muchos-a-muchos: PlantillaDocumento <-> Area. Clave compuesta `(PlantillaDocumentoId, AreaId)`.
 
 ### SolicitudDocumento
-Solicitud de carta laboral — requiere aprobación del admin. Hereda `BaseEntity`.
+Solicitud de carta laboral — requiere aprobacion del admin. Hereda `BaseEntity`.
 - `FechaSolicitud` (DateTime UTC), `Estado` (enum `EstadoSolicitud` → string, default Pendiente)
-- `PdfBytes?` (PDF generado al enviar), `ComentarioAdmin?`, `FechaResolucion?`
+- `PdfFileKey?` — clave en storage del PDF generado al enviar (nuevo flujo)
+- `PdfBytes?` — OBSOLETO, binario legacy en SQL (compatibilidad temporal, pendiente de eliminar)
+- `ComentarioAdmin?`, `FechaResolucion?`, `NotificadoColaborador` (bool, default true)
 - FK: `PlantillaDocumentoId` (Restrict), `ColaboradorId` (Restrict)
 
 ---
 
-## Auditoría
+## Auditoria
 
 ### AuditLog
-Log de acciones del sistema. **No hereda BaseEntity — nunca se elimina.**
+Log de acciones del sistema. Hereda `BaseEntity` (tiene columna Activo) pero **nunca se elimina** — sin soft delete intencional.
 - FK: `ColaboradorId?` → Colaborador (OnDelete: SetNull)
 
 ---
@@ -165,11 +175,20 @@ RespuestasCuestionario, RespuestasPregunta
 | DocumentoEnums.cs | EstadoPropuesta | PendienteRevision, Aprobada, Rechazada |
 | TipoPlantilla.cs | TipoPlantilla | Html, Docx |
 | EstadoSolicitud.cs | EstadoSolicitud | Pendiente, Aprobada, Rechazada |
+| GeneroColaborador.cs | GeneroColaborador | NoInformado, Masculino, Femenino, OtroOPrefieroNoDecir |
 
 ## Reglas de entidades inmutables
 
 Las siguientes entidades NO heredan BaseEntity y no tienen soft delete:
-- VersionDocumento, FlujoAprobacionDoc — registros históricos, nunca se modifican
+- VersionDocumento, FlujoAprobacionDoc — registros historicos, nunca se modifican
 - PropuestaModificacion — ciclo de vida propio (PendienteRevision → Aprobada/Rechazada)
-- AuditLog — log de sistema, nunca se elimina
-- RespuestaCuestionario, RespuestaPregunta — intentos de evaluación, inmutables
+- AuditLog — log de sistema, nunca se elimina (hereda BaseEntity pero sin query filter ni soft delete)
+- RespuestaCuestionario, RespuestaPregunta — intentos de evaluacion, inmutables
+
+## Servicios de infraestructura clave
+
+### IFileStorageService
+Abstraccion de almacenamiento de archivos binarios (src/Application/Interfaces/).
+- Dev: `MockFileStorageService` — guarda en `wwwroot/uploads/blobs/`
+- Prod: `AzureBlobStorageService` — Azure Blob Storage (requiere `AzureStorage:ConnectionString`)
+- Contenedores: `plantillas-docx`, `solicitudes-pdf`, `certificados`

@@ -51,5 +51,12 @@ public class InscripcionApiService(HttpClient http)
         return response.IsSuccessStatusCode;
     }
 
+    /// <summary>
+    /// Endpoint batch: devuelve historial completo (inscripciones + resultados) en una sola llamada.
+    /// Reemplaza el N+1 masivo de CargarHistorial.
+    /// </summary>
+    public async Task<List<HistorialInscripcionDto>> GetHistorialCompletoAsync() =>
+        await http.GetFromJsonAsync<List<HistorialInscripcionDto>>($"{Base}/historial-completo") ?? [];
+
     private record ErrorResponse(string Message);
 }

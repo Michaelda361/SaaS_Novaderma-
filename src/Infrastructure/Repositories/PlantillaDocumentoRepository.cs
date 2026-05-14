@@ -19,7 +19,8 @@ public class PlantillaDocumentoRepository(AppDbContext context) : IPlantillaDocu
                 Descripcion = p.Descripcion,
                 TipoPlantilla = p.TipoPlantilla,
                 ContenidoHtml = null,
-                ArchivoDocx = null,
+                ArchivoDocxLegacy = null,   // excluir binario pesado en listados
+                DocxFileKey = p.DocxFileKey,
                 FirmaImagenBase64 = p.FirmaImagenBase64,
                 NombreFirmante = p.NombreFirmante,
                 CargoFirmante = p.CargoFirmante,

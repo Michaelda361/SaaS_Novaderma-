@@ -1,5 +1,6 @@
 using TalentManagement.Application.Interfaces;
 using TalentManagement.Domain.Entities;
+using TalentManagement.Shared.DTOs.Cuestionarios;
 using TalentManagement.Shared.DTOs.Inscripciones;
 
 namespace TalentManagement.Application.Services;
@@ -33,8 +34,8 @@ public class InscripcionService(IInscripcionRepository repository)
 
     public async Task<(InscripcionDto? result, string? error)> CreateAsync(CreateInscripcionDto dto)
     {
-        var existing = await repository.GetByCapacitacionAsync(dto.CapacitacionId);
-        if (existing.Any(i => i.ColaboradorId == dto.ColaboradorId))
+        // AnyAsync puntual — sin cargar toda la lista
+        if (await repository.ExisteInscripcionAsync(dto.CapacitacionId, dto.ColaboradorId))
             return (null, "El colaborador ya está inscrito en esta capacitación.");
 
         var inscripcion = new Inscripcion
@@ -62,6 +63,37 @@ public class InscripcionService(IInscripcionRepository repository)
     }
 
     public async Task<bool> DeleteAsync(int id) => await repository.DeleteAsync(id);
+
+    /// <summary>
+    /// Devuelve el historial completo (inscripciones + resultados) en 3 queries planas.
+    /// Reemplaza el N+1 masivo de CargarHistorial en Capacitaciones.razor.
+    /// </summary>
+    public async Task<List<HistorialInscripcionDto>> GetHistorialCompletoAsync()
+    {
+        var filas = await repository.GetHistorialCompletoAsync();
+
+        return filas.Select(f =>
+        {
+            var (insc, respuesta, cuestionario) = f;
+            ResultadoCuestionarioDto? resultado = null;
+            if (respuesta is not null)
+            {
+                resultado = new ResultadoCuestionarioDto
+                {
+                    Puntaje           = respuesta.Puntaje,
+                    Aprobado          = respuesta.Aprobado,
+                    PuntajeAprobacion = cuestionario?.PuntajeAprobacion ?? 70,
+                    TotalPreguntas    = cuestionario?.Preguntas.Count ?? 0,
+                    Correctas         = respuesta.TotalCorrectas
+                };
+            }
+            return new HistorialInscripcionDto
+            {
+                Inscripcion = MapToDto(insc),
+                Resultado   = resultado
+            };
+        }).ToList();
+    }
 
     private static InscripcionDto MapToDto(Inscripcion i) => new()
     {
