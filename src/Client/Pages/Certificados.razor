@@ -56,7 +56,14 @@
                             @if (c.EstaVencido) { <span class="badge badge-danger">Vencido</span> }
                             else if (c.VenceProximamente) { <span class="badge badge-warning">Próximo a vencer</span> }
                             else { <span class="badge badge-success">Vigente</span> }
-                            @if (c.TienePdf) { <button class="btn btn-primary btn-sm" @onclick="@(() => DescargarPdf(cert.Id))">⬇ Descargar</button> }
+                            @if (c.TipoArchivoCertificado == "application/vnd.openxmlformats-officedocument.presentationml.presentation")
+                            {
+                                <button class="btn btn-primary btn-sm" @onclick="@(() => DescargarPptx(cert.Id))">⬇ PPTX</button>
+                            }
+                            else if (c.TienePdf)
+                            {
+                                <button class="btn btn-primary btn-sm" @onclick="@(() => DescargarPdf(cert.Id))">⬇ PDF</button>
+                            }
                             @if (!c.TienePdf && c.CapacitacionId.HasValue) { <button class="btn btn-ghost btn-sm" @onclick="@(() => RegenerarPdf(cert.Id))" title="Generar PDF desde plantilla">🔄 Generar PDF</button> }
                             @if (!string.IsNullOrEmpty(c.UrlDocumento)) { <a href="@c.UrlDocumento" target="_blank" class="btn btn-ghost btn-sm">📄 Ver</a> }
                         </div>
@@ -268,6 +275,14 @@ else
         if (bytes is null) { await toast.Show("No se pudo descargar el PDF.", "error"); return; }
         await JS.InvokeVoidAsync("descargarArchivo", Convert.ToBase64String(bytes), fileName, "application/pdf");
         await toast.Show("Certificado descargado.");
+    }
+
+    private async Task DescargarPptx(int id)
+    {
+        var (bytes, fileName) = await ApiService.DescargarPptxAsync(id);
+        if (bytes is null) { await toast.Show("No se pudo descargar el PPTX.", "error"); return; }
+        await JS.InvokeVoidAsync("descargarArchivo", Convert.ToBase64String(bytes), fileName, "application/vnd.openxmlformats-officedocument.presentationml.presentation");
+        await toast.Show("PPTX descargado. Ábrelo en PowerPoint y exporta a PDF desde allí.");
     }
 
     private async Task RegenerarPdf(int id)

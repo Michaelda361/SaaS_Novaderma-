@@ -21,4 +21,12 @@ public class CertificadoPdfService(PdfGeneratorService pdfGenerator) : ICertific
         var json = System.Text.Json.JsonSerializer.Serialize(payload);
         return pdfGenerator.GenerarPdfDesdeDocx(json);
     }
+
+    /// <summary>
+    /// Devuelve el PPTX con las variables aplicadas (sin convertir).
+    /// </summary>
+    public byte[] GenerarPptxAplicado(byte[] archivoBytes, Dictionary<string, string> variables)
+    {
+        return pdfGenerator.GenerarPptxAplicado(archivoBytes, variables);
+    }
 }

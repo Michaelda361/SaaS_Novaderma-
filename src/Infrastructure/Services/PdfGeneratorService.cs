@@ -567,6 +567,15 @@ public class PdfGeneratorService(LibreOfficeConverterService libreOffice)
             "LibreOffice no esta disponible. Instalalo para convertir plantillas PPTX a PDF.");
     }
 
+    /// <summary>
+    /// Aplica las variables a un PPTX y devuelve el PPTX resultante (sin convertir a PDF).
+    /// Útil para entregar al usuario y dejar que PowerPoint exporte a PDF.
+    /// </summary>
+    public byte[] GenerarPptxAplicado(byte[] pptxBytes, Dictionary<string, string> variables)
+    {
+        return AplicarVariablesEnPptx(pptxBytes, variables);
+    }
+
     private static byte[] AplicarVariablesEnPptx(byte[] pptxBytes, Dictionary<string, string> variables)
     {
         using var ms = new MemoryStream();
@@ -581,21 +590,109 @@ public class PdfGeneratorService(LibreOfficeConverterService libreOffice)
             foreach (var slidePart in presentationPart.SlideParts)
             {
                 var slide = slidePart.Slide;
-                foreach (var text in slide.Descendants<DocumentFormat.OpenXml.Drawing.Text>())
+                if (slide is null) continue;
+
+                foreach (var paragraph in slide.Descendants<DocumentFormat.OpenXml.Drawing.Paragraph>())
                 {
-                    if (string.IsNullOrEmpty(text.Text)) continue;
-                    var original = text.Text;
-                    var reemplazado = original;
-                    foreach (var (key, value) in variables)
-                        reemplazado = reemplazado.Replace(key, value);
-                    if (reemplazado != original)
-                        text.Text = reemplazado;
+                    var textElements = paragraph.Descendants<DocumentFormat.OpenXml.Drawing.Text>().ToList();
+                    if (!textElements.Any()) continue;
+
+                    var paragraphText = string.Concat(textElements.Select(t => t.Text ?? string.Empty));
+                    if (string.IsNullOrEmpty(paragraphText)) continue;
+
+                    var replacements = ObtenerReemplazos(paragraphText, variables);
+                    if (replacements.Count == 0) continue;
+
+                    AplicarReemplazosEnTexto(textElements, replacements);
                 }
+
                 slide.Save();
             }
         }
 
         return ms.ToArray();
+    }
+
+    private static List<(int Start, int Length, string Replacement)> ObtenerReemplazos(
+        string text,
+        Dictionary<string, string> variables)
+    {
+        var replacements = new List<(int Start, int Length, string Replacement)>();
+
+        foreach (var (key, value) in variables)
+        {
+            if (string.IsNullOrEmpty(key)) continue;
+            var index = 0;
+            while (true)
+            {
+                index = text.IndexOf(key, index, StringComparison.Ordinal);
+                if (index < 0) break;
+                replacements.Add((index, key.Length, value));
+                index += key.Length;
+            }
+        }
+
+        replacements.Sort((a, b) => a.Start != b.Start ? b.Start - a.Start : b.Length - a.Length);
+        return replacements;
+    }
+
+    private static void AplicarReemplazosEnTexto(
+        List<DocumentFormat.OpenXml.Drawing.Text> textElements,
+        List<(int Start, int Length, string Replacement)> replacements)
+    {
+        var spans = new List<(DocumentFormat.OpenXml.Drawing.Text Text, int Start, int End)>();
+        var position = 0;
+
+        foreach (var textElement in textElements)
+        {
+            var textValue = textElement.Text ?? string.Empty;
+            spans.Add((textElement, position, position + textValue.Length));
+            position += textValue.Length;
+        }
+
+        foreach (var (start, length, replacement) in replacements)
+        {
+            if (length <= 0) continue;
+            var end = start + length;
+
+            var firstIndex = spans.FindIndex(span => start < span.End && end > span.Start);
+            if (firstIndex < 0) continue;
+            var lastIndex = spans.FindLastIndex(span => start < span.End && end > span.Start);
+            if (lastIndex < 0) continue;
+
+            var firstSpan = spans[firstIndex];
+            var lastSpan = spans[lastIndex];
+
+            var firstText = firstSpan.Text.Text ?? string.Empty;
+            var firstOffset = Math.Max(0, start - firstSpan.Start);
+            var firstPrefix = firstText[..firstOffset];
+
+            if (firstIndex == lastIndex)
+            {
+                var suffix = firstText[(end - firstSpan.Start)..];
+                firstSpan.Text.Text = firstPrefix + replacement + suffix;
+            }
+            else
+            {
+                firstSpan.Text.Text = firstPrefix + replacement;
+
+                for (int i = firstIndex + 1; i < lastIndex; i++)
+                    spans[i].Text.Text = string.Empty;
+
+                var lastText = lastSpan.Text.Text ?? string.Empty;
+                var lastOffset = Math.Max(0, end - lastSpan.Start);
+                var suffix = lastOffset < lastText.Length ? lastText[lastOffset..] : string.Empty;
+                lastSpan.Text.Text = suffix;
+            }
+
+            // Actualizar posiciones de spans posteriores para el siguiente reemplazo.
+            var delta = replacement.Length - length;
+            if (delta != 0)
+            {
+                for (int i = lastIndex + 1; i < spans.Count; i++)
+                    spans[i] = (spans[i].Text, spans[i].Start + delta, spans[i].End + delta);
+            }
+        }
     }
 }
 

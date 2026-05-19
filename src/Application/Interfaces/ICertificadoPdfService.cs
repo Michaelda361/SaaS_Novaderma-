@@ -15,4 +15,9 @@ public interface ICertificadoPdfService
     /// <param name="mimeType">MIME del archivo. Default DOCX para compatibilidad.</param>
     byte[] GenerarPdf(byte[] archivoBytes, Dictionary<string, string> variables,
         string mimeType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+
+    /// <summary>
+    /// Aplica las variables a un archivo PPTX y devuelve el PPTX resultante (no convertido).
+    /// </summary>
+    byte[] GenerarPptxAplicado(byte[] archivoBytes, Dictionary<string, string> variables);
 }

@@ -78,6 +78,53 @@ public class CertificadosController(CertificadoService service) : ControllerBase
         return File(pdf, "application/pdf", $"certificado_{id}.pdf");
     }
 
+    /// <summary>
+    /// Devuelve el PPTX con las variables aplicadas para que el usuario lo abra en PowerPoint
+    /// y exporte a PDF con máxima fidelidad.
+    /// </summary>
+    [HttpGet("{id:int}/pptx")]
+    public async Task<IActionResult> DescargarPptxAplicado(int id,
+        [FromServices] TalentManagement.Application.Interfaces.ICertificadoPdfService pdfService,
+        [FromServices] TalentManagement.Application.Interfaces.ICapacitacionRepository capRepo,
+        [FromServices] TalentManagement.Application.Interfaces.IColaboradorRepository colRepo)
+    {
+        try
+        {
+            var cert = await service.GetCertificadoEntityAsync(id);
+            if (cert is null) return NotFound();
+            if (!cert.CapacitacionId.HasValue)
+                return BadRequest(new { message = "El certificado no tiene capacitacion asociada." });
+
+            var cap = await capRepo.GetByIdAsync(cert.CapacitacionId.Value);
+            if (cap?.ArchivoDocxCertificado is not { Length: > 0 })
+                return BadRequest(new { message = "La capacitacion no tiene plantilla DOCX/PPTX configurada." });
+
+            var col = await colRepo.GetByIdAsync(cert.ColaboradorId);
+            var vars = new Dictionary<string, string>
+            {
+                ["{{nombre_completo}}"] = col is not null ? $"{col.Nombre} {col.Apellido}" : "",
+                ["{{cargo}}"]           = col?.Cargo?.Nombre ?? "",
+                ["{{area}}"]            = col?.Area?.Nombre ?? "",
+                ["{{capacitacion}}"]    = cap.Nombre,
+                ["{{fecha_emision}}"]   = cert.FechaEmision.ToString("dd/MM/yyyy"),
+                ["{{puntaje}}"]         = ""
+            };
+
+            var mimeType = cap.TipoArchivoCertificado
+                ?? "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
+            if (mimeType != "application/vnd.openxmlformats-officedocument.presentationml.presentation")
+                return BadRequest(new { message = "La plantilla no es PPTX." });
+
+            var pptx = pdfService.GenerarPptxAplicado(cap.ArchivoDocxCertificado, vars);
+            return File(pptx, "application/vnd.openxmlformats-officedocument.presentationml.presentation", $"certificado_{id}.pptx");
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { message = "Error al generar el PPTX aplicado.", detail = ex.Message });
+        }
+    }
+
     [HttpPost("{id:int}/regenerar-pdf")]
     public async Task<IActionResult> RegenerarPdf(
         int id,

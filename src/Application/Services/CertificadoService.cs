@@ -101,7 +101,7 @@ public class CertificadoService(
         using var ms = new MemoryStream(pdf);
         cert.PdfFileKey = await storage.UploadAsync(ms, nombrePdf, ContenedorCert, "application/pdf");
 
-        // Limpiar legacy si existía
+        // Limpiar legacy si existï¿½a
         cert.PdfBytes = null;
 
         await repository.UpdateAsync(cert);
@@ -130,6 +130,7 @@ public class CertificadoService(
             : $"{c.Colaborador.Nombre} {c.Colaborador.Apellido}",
         CapacitacionId = c.CapacitacionId,
         CapacitacionNombre = c.Capacitacion?.Nombre,
+        TipoArchivoCertificado = c.Capacitacion?.TipoArchivoCertificado,
         TienePdf = c.PdfFileKey is not null || c.PdfBytes is { Length: > 0 }
     };
 }

@@ -11,6 +11,9 @@ public class CertificadoDto
     public int ColaboradorId { get; set; }
     public string ColaboradorNombre { get; set; } = string.Empty;
 
+    /// <summary>Tipo MIME de la plantilla usada para emitir el certificado.</summary>
+    public string? TipoArchivoCertificado { get; set; }
+
     /// <summary>Si fue emitido desde una capacitación, su Id.</summary>
     public int? CapacitacionId { get; set; }
 

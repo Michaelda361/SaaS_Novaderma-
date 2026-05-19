@@ -45,6 +45,15 @@ public class CertificadoApiService(HttpClient http)
         return (bytes, name);
     }
 
+    public async Task<(byte[]? bytes, string fileName)> DescargarPptxAsync(int id)
+    {
+        var r = await http.GetAsync($"{Base}/{id}/pptx");
+        if (!r.IsSuccessStatusCode) return (null, "");
+        var bytes = await r.Content.ReadAsByteArrayAsync();
+        var name = r.Content.Headers.ContentDisposition?.FileNameStar ?? $"certificado_{id}.pptx";
+        return (bytes, name);
+    }
+
     public async Task<bool> RegenerarPdfAsync(int id)
     {
         var r = await http.PostAsync($"{Base}/{id}/regenerar-pdf", null);

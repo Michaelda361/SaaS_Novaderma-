@@ -19,6 +19,13 @@ public class LibreOfficeConverterService(ILogger<LibreOfficeConverterService> lo
         ["application/vnd.openxmlformats-officedocument.wordprocessingml.document"]   = "docx",
         ["application/vnd.openxmlformats-officedocument.presentationml.presentation"] = "pptx",
     };
+
+    private static readonly Dictionary<string, string> ConvertFilterPorExtension = new()
+    {
+        ["docx"] = "pdf:writer_pdf_Export",
+        ["pptx"] = "pdf:impress_pdf_Export",
+    };
+
     public byte[]? ConvertirAPdf(byte[] archivoBytes, string mimeType)
     {
         if (!ExtensionPorMime.TryGetValue(mimeType, out var extension)) extension = "docx";
@@ -35,7 +42,18 @@ public class LibreOfficeConverterService(ILogger<LibreOfficeConverterService> lo
         {
             var inputPath = Path.Combine(tempDir, $"documento.{extension}");
             File.WriteAllBytes(inputPath, archivoBytes);
-            var psi = new ProcessStartInfo { FileName = soffice, Arguments = $"--headless --norestore --convert-to pdf \"{inputPath}\" --outdir \"{tempDir}\"", UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true, CreateNoWindow = true };
+            var filter = ConvertFilterPorExtension.TryGetValue(extension, out var filterName)
+                ? filterName
+                : "pdf";
+            var psi = new ProcessStartInfo
+            {
+                FileName = soffice,
+                Arguments = $"--headless --norestore --convert-to {filter} \"{inputPath}\" --outdir \"{tempDir}\"",
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true
+            };
             using var process = Process.Start(psi) ?? throw new InvalidOperationException("No se pudo iniciar LibreOffice.");
             var completado = process.WaitForExit(30_000);
             if (!completado) { process.Kill(entireProcessTree: true); logger.LogError("LibreOffice timeout"); return null; }
