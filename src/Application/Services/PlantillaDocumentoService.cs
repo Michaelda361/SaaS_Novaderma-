@@ -181,12 +181,18 @@ public class PlantillaDocumentoService(
             ["nombre_completo"]  = $"{colaborador.Nombre} {colaborador.Apellido}",
             ["nombre"]           = colaborador.Nombre,
             ["apellido"]         = colaborador.Apellido,
+            ["email"]            = colaborador.Email ?? string.Empty,
+            ["telefono"]         = colaborador.Telefono ?? string.Empty,
             ["cedula"]           = colaborador.Cedula ?? string.Empty,
             ["cargo"]            = colaborador.Cargo?.Nombre ?? string.Empty,
             ["area"]             = colaborador.Area?.Nombre ?? string.Empty,
             ["ciudad"]           = colaborador.Ciudad ?? string.Empty,
             ["fecha_expedicion"] = DateTime.Today.ToString("d 'de' MMMM 'de' yyyy", cultura),
             ["tipo_contrato"]    = colaborador.TipoContrato ?? string.Empty,
+            ["fecha_ingreso"]    = colaborador.FechaIngreso.ToString("d 'de' MMMM 'de' yyyy", cultura),
+            ["sueldo_basico"]    = colaborador.SueldoBasico.HasValue ? colaborador.SueldoBasico.Value.ToString("C0", cultura) : string.Empty,
+            ["genero"]           = TextoGeneroParaDocumento(colaborador.Genero),
+            ["rol"]              = colaborador.Rol.ToString(),
         };
 
         return (html, plantilla, valoresPerfil);
@@ -452,6 +458,8 @@ public class PlantillaDocumentoService(
             ["{{nombre_completo}}"]  = $"{c.Nombre} {c.Apellido}",
             ["{{nombre}}"]           = c.Nombre,
             ["{{apellido}}"]         = c.Apellido,
+            ["{{email}}"]            = c.Email ?? string.Empty,
+            ["{{telefono}}"]         = c.Telefono ?? string.Empty,
             ["{{cedula}}"]           = c.Cedula ?? string.Empty,
             ["{{cargo}}"]            = c.Cargo?.Nombre ?? string.Empty,
             ["{{area}}"]             = c.Area?.Nombre ?? string.Empty,
@@ -464,6 +472,7 @@ public class PlantillaDocumentoService(
             ["{{nombre_firmante}}"]  = p.NombreFirmante ?? string.Empty,
             ["{{cargo_firmante}}"]   = p.CargoFirmante ?? string.Empty,
             ["{{genero}}"]           = TextoGeneroParaDocumento(c.Genero),
+            ["{{rol}}"]              = c.Rol.ToString(),
         };
 
         if (extrasFiltrados is { Count: > 0 })

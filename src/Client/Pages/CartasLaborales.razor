@@ -1,4 +1,4 @@
-﻿@page "/cartas"
+@page "/cartas"
 @attribute [PageTitle("Mis cartas laborales")]
 @attribute [Authorize]
 @inject PlantillaDocumentoApiService ApiService
@@ -494,9 +494,20 @@ else
         "motivo"           => "Motivo de la carta",
         "entidad"          => "Entidad o empresa destinataria",
         "nombre_completo"  => "Nombre completo",
+        "nombre"           => "Nombre",
+        "apellido"         => "Apellido",
+        "email"            => "Correo electrónico",
+        "telefono"         => "Teléfono",
+        "cedula"           => "Cédula",
         "cargo"            => "Cargo",
+        "area"             => "Área",
         "ciudad"           => "Ciudad de expedición",
         "fecha_expedicion" => "Fecha de expedición",
+        "tipo_contrato"    => "Tipo de contrato",
+        "fecha_ingreso"    => "Fecha de ingreso",
+        "sueldo_basico"    => "Sueldo básico",
+        "genero"           => "Tratamiento de género",
+        "rol"              => "Rol",
         _                  => key.Replace("_", " "),
     };
 
@@ -507,6 +518,12 @@ else
         "entidad"          => "Ej: Ministerio de Educación",
         "ciudad"           => "Ej: Bogotá",
         "fecha_expedicion" => "Ej: 8 de abril de 2026",
+        "fecha_ingreso"    => "Ej: 1 de enero de 2025",
+        "tipo_contrato"    => "Ej: Término Indefinido",
+        "sueldo_basico"    => "Ej: $2.500.000",
+        "genero"           => "Ej: el señor / la señora",
+        "email"            => "Ej: colaborador@novaderma.com",
+        "telefono"         => "Ej: 3001234567",
         _                  => string.Empty,
     };
 }
