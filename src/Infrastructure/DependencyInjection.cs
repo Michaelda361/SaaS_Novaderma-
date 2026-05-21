@@ -29,12 +29,15 @@ public static class DependencyInjection
         services.AddScoped<IInscripcionRepository, InscripcionRepository>();
         services.AddScoped<IRecursoRepository, RecursoRepository>();
         services.AddScoped<IDocumentoRepository, DocumentoRepository>();
+        services.AddScoped<IControlDocumentalRepository, ControlDocumentalRepository>();
         services.AddScoped<IAuditLogRepository, AuditLogRepository>();
         services.AddScoped<IPlantillaDocumentoRepository, PlantillaDocumentoRepository>();
         services.AddScoped<ICuestionarioRepository, CuestionarioRepository>();
 
         // Servicios de aplicación
         services.AddScoped<ColaboradorService>();
+        services.AddScoped<ControlDocumentalService>();
+        services.AddScoped<IControlDocumentalService, ControlDocumentalService>();
         services.AddScoped<CapacitacionService>();
         services.AddScoped<CertificadoService>();
         services.AddScoped<AreaService>();

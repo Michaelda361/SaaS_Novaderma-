@@ -50,6 +50,7 @@ builder.Services.AddScoped<InscripcionApiService>();
 builder.Services.AddScoped<RecursoApiService>();
 builder.Services.AddScoped<DocumentoApiService>();
 builder.Services.AddScoped<PlantillaDocumentoApiService>();
+builder.Services.AddScoped<ControlDocumentalApiService>();
 builder.Services.AddScoped<OneDrivePickerService>();
 builder.Services.AddScoped<OneDriveGraphService>();
 builder.Services.AddScoped<ThemeService>();

@@ -26,6 +26,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<VersionDocumento> VersionesDocumento => Set<VersionDocumento>();
     public DbSet<PropuestaModificacion> PropuestasModificacion => Set<PropuestaModificacion>();
     public DbSet<FlujoAprobacionDoc> FlujosAprobacionDoc => Set<FlujoAprobacionDoc>();
+    public DbSet<ListadoMaestro> ListadosMaestros => Set<ListadoMaestro>();
+    public DbSet<DocumentoControl> DocumentosControl => Set<DocumentoControl>();
 
     // Cartas Laborales
     public DbSet<PlantillaDocumento> PlantillasDocumento => Set<PlantillaDocumento>();
@@ -91,6 +93,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
         // ── Control Documental ────────────────────────────────────────────────
 
+        modelBuilder.Entity<ListadoMaestro>().HasQueryFilter(l => l.Activo);
+        modelBuilder.Entity<DocumentoControl>().HasQueryFilter(d => d.Activo);
+
         // Enums como string para legibilidad en BD
         modelBuilder.Entity<Documento>()
             .Property(d => d.TipoDocumento).HasConversion<string>();
@@ -102,6 +107,18 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .Property(f => f.EstadoAnterior).HasConversion<string>();
         modelBuilder.Entity<FlujoAprobacionDoc>()
             .Property(f => f.EstadoNuevo).HasConversion<string>();
+
+        modelBuilder.Entity<DocumentoControl>()
+            .HasOne(d => d.ListadoMaestro)
+            .WithMany(l => l.Documentos)
+            .HasForeignKey(d => d.ListadoMaestroId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<DocumentoControl>()
+            .HasOne(d => d.Area)
+            .WithMany()
+            .HasForeignKey(d => d.AreaId)
+            .OnDelete(DeleteBehavior.Restrict);
 
         // FK sin cascade para evitar ciclos con Colaborador
         modelBuilder.Entity<PropuestaModificacion>()

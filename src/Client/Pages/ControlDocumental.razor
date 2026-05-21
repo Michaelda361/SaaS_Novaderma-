@@ -1,0 +1,546 @@
+@page "/control-documental"
+@attribute [PageTitle("Control Documental")]
+@attribute [Authorize]
+@inject ControlDocumentalApiService ControlDocumentalApi
+@inject AreaApiService AreaApi
+
+<Toast @ref="toast" />
+
+<div class="page-header">
+    <div>
+        <h2 class="page-title">Control Documental</h2>
+        <p class="page-subtitle">Registra, busca y audita documentos OneDrive con listados maestros.</p>
+    </div>
+    <div class="page-actions">
+        <button class="btn btn-secondary" @onclick="() => showListadoModal = true">
+            + Nuevo listado maestro
+        </button>
+        <button class="btn btn-primary" @onclick="AbrirNuevoDocumento" disabled="@(!selectedListadoId.HasValue)">
+            + Nuevo documento
+        </button>
+    </div>
+</div>
+
+<div class="card" style="margin-bottom:1rem;">
+    <div class="filter-bar">
+        <select class="form-control" @bind="selectedListadoId" @bind:after="Filtrar">
+            <option value="">Selecciona un listado maestro</option>
+            @foreach (var listado in listados)
+            {
+                <option value="@listado.Id">@listado.Nombre</option>
+            }
+        </select>
+        <select class="form-control" @bind="selectedAreaId" @bind:after="Filtrar">
+            <option value="0">Todas las áreas</option>
+            @foreach (var area in areas)
+            {
+                <option value="@area.Id">@area.Nombre</option>
+            }
+        </select>
+        <input type="text" class="form-control" placeholder="Buscar por nombre, código o proceso" @bind="filterBusqueda" @bind:after="Filtrar" />
+        <input type="text" class="form-control" placeholder="Código" @bind="filterCodigo" @bind:after="Filtrar" />
+        <input type="text" class="form-control" placeholder="Proceso responsable" @bind="filterProceso" @bind:after="Filtrar" />
+        <input type="text" class="form-control" placeholder="Estado" @bind="filterEstado" @bind:after="Filtrar" />
+    </div>
+</div>
+
+<div class="card">
+    @if (loading)
+    {
+        <div class="loading"><div class="spinner"></div> Cargando...</div>
+    }
+    else if (!selectedListadoId.HasValue)
+    {
+        <div class="empty-state">
+            <div class="empty-state-icon">📌</div>
+            <h3>Selecciona un listado maestro</h3>
+            <p>Elige un listado maestro para ver los documentos asociados.</p>
+        </div>
+    }
+    else if (!documentos.Any())
+    {
+        <div class="empty-state">
+            <div class="empty-state-icon">📄</div>
+            <h3>No hay documentos</h3>
+            <p>No se encontraron documentos para este listado con los filtros actuales.</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-wrapper">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Código</th>
+                        <th>Nombre</th>
+                        <th>Proceso</th>
+                        <th>Versión</th>
+                        <th>Fecha</th>
+                        <th>Estado</th>
+                        <th>Área</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in documentos)
+                    {
+                        <tr>
+                            <td>@item.Codigo</td>
+                            <td>@item.Nombre</td>
+                            <td>@item.ProcesoResponsable</td>
+                            <td>@item.Version</td>
+                            <td>@item.FechaDocumento.ToString("yyyy-MM-dd")</td>
+                            <td><span class="badge @GetEstadoClass(item.Estado)">@item.Estado</span></td>
+                            <td>@(item.AreaNombre ?? "—")</td>
+                            <td style="display:flex;gap:.25rem;flex-wrap:wrap;">
+                                <button class="btn btn-sm btn-secondary" @onclick="() => EditarDocumento(item.Id)">Editar</button>
+                                <button class="btn btn-sm btn-info" @onclick="() => VerAuditoria(item.Id)">Auditoría</button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@if (showModal)
+{
+    <div class="modal-overlay" @onclick="CerrarModal">
+        <div class="modal" @onclick:stopPropagation>
+            <div class="modal-header">
+                <h3>@(editing ? "Editar documento" : "Nuevo documento")</h3>
+                <button class="modal-close" @onclick="CerrarModal">×</button>
+            </div>
+            <div class="modal-body">
+                <EditForm Model="form" OnValidSubmit="GuardarDocumento">
+                    <DataAnnotationsValidator />
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Listado maestro *</label>
+                            <InputSelect class="form-control" @bind-Value="form.ListadoMaestroId">
+                                <option value="">Selecciona un listado maestro</option>
+                                @foreach (var listado in listados)
+                                {
+                                    <option value="@listado.Id">@listado.Nombre</option>
+                                }
+                            </InputSelect>
+                            <ValidationMessage For="() => form.ListadoMaestroId" />
+                        </div>
+                        <div class="form-group">
+                            <label>Código *</label>
+                            <InputText class="form-control" @bind-Value="form.Codigo" />
+                            <ValidationMessage For="() => form.Codigo" />
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Nombre *</label>
+                            <InputText class="form-control" @bind-Value="form.Nombre" />
+                            <ValidationMessage For="() => form.Nombre" />
+                        </div>
+                        <div class="form-group">
+                            <label>Proceso responsable *</label>
+                            <InputText class="form-control" @bind-Value="form.ProcesoResponsable" />
+                            <ValidationMessage For="() => form.ProcesoResponsable" />
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Versión</label>
+                            <InputText class="form-control" @bind-Value="form.Version" />
+                        </div>
+                        <div class="form-group">
+                            <label>Fecha de documento *</label>
+                            <InputDate class="form-control" @bind-Value="form.FechaDocumento" />
+                            <ValidationMessage For="() => form.FechaDocumento" />
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Archivo OneDrive *</label>
+                        <div class="one-drive-row">
+                            <InputText class="form-control" @bind-Value="form.OneDriveUrl" placeholder="URL de OneDrive" />
+                            <button type="button" class="btn btn-secondary" @onclick="() => showOneDriveBrowser = true">Buscar OneDrive</button>
+                        </div>
+                        <ValidationMessage For="() => form.OneDriveUrl" />
+                        @if (!string.IsNullOrWhiteSpace(form.ArchivoNombre))
+                        {
+                            <small class="text-muted">Archivo seleccionado: @form.ArchivoNombre</small>
+                        }
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Estado *</label>
+                            <InputSelect class="form-control" @bind-Value="form.Estado">
+                                <option value="">Selecciona estado...</option>
+                                <option value="Borrador">Borrador</option>
+                                <option value="Revision">Revisión</option>
+                                <option value="Aprobado">Aprobado</option>
+                                <option value="Publicado">Publicado</option>
+                            </InputSelect>
+                            <ValidationMessage For="() => form.Estado" />
+                        </div>
+                        <div class="form-group">
+                            <label>Área (opcional)</label>
+                            <InputSelect class="form-control" @bind-Value="form.AreaId">
+                                <option value="">Sin área específica</option>
+                                @foreach (var area in areas)
+                                {
+                                    <option value="@area.Id">@area.Nombre</option>
+                                }
+                            </InputSelect>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Comentario de cambio</label>
+                        <InputTextArea class="form-control" @bind-Value="form.ComentarioCambio" Rows="3" />
+                    </div>
+                    <div class="form-group">
+                        <label>Observaciones</label>
+                        <InputTextArea class="form-control" @bind-Value="form.Observaciones" Rows="3" />
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" @onclick="CerrarModal">Cancelar</button>
+                        <button type="submit" class="btn btn-primary" disabled="@guardando">@(guardando ? "Guardando..." : "Guardar")</button>
+                    </div>
+                </EditForm>
+            </div>
+        </div>
+    </div>
+}
+
+@if (showListadoModal)
+{
+    <div class="modal-overlay" @onclick="CerrarListadoModal">
+        <div class="modal" @onclick:stopPropagation>
+            <div class="modal-header">
+                <h3>Nuevo listado maestro</h3>
+                <button class="modal-close" @onclick="CerrarListadoModal">×</button>
+            </div>
+            <div class="modal-body">
+                <EditForm Model="listadoForm" OnValidSubmit="CrearListado">
+                    <DataAnnotationsValidator />
+                    <div class="form-group">
+                        <label>Nombre *</label>
+                        <InputText class="form-control" @bind-Value="listadoForm.Nombre" />
+                        <ValidationMessage For="() => listadoForm.Nombre" />
+                    </div>
+                    <div class="form-group">
+                        <label>Descripción</label>
+                        <InputTextArea class="form-control" @bind-Value="listadoForm.Descripcion" Rows="3" />
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" @onclick="CerrarListadoModal">Cancelar</button>
+                        <button type="submit" class="btn btn-primary" disabled="@guardandoListado">@(guardandoListado ? "Guardando..." : "Crear listado")</button>
+                    </div>
+                </EditForm>
+            </div>
+        </div>
+    </div>
+}
+
+@if (showAuditModal)
+{
+    <div class="modal-overlay" @onclick="CerrarAuditoriaModal">
+        <div class="modal large" @onclick:stopPropagation>
+            <div class="modal-header">
+                <h3>Historial de auditoría</h3>
+                <button class="modal-close" @onclick="CerrarAuditoriaModal">×</button>
+            </div>
+            <div class="modal-body">
+                @if (historial is null || !historial.Any())
+                {
+                    <div class="empty-state">
+                        <div class="empty-state-icon">🕘</div>
+                        <h3>Sin historial</h3>
+                        <p>Aún no hay registros de auditoría para este documento.</p>
+                    </div>
+                }
+                else
+                {
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Fecha</th>
+                                <th>Acción</th>
+                                <th>Usuario</th>
+                                <th>Observaciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in historial)
+                            {
+                                <tr>
+                                    <td>@item.FechaHora.ToLocalTime().ToString("g")</td>
+                                    <td>@item.Accion</td>
+                                    <td>@item.ColaboradorNombre</td>
+                                    <td>@item.Observaciones</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @onclick="CerrarAuditoriaModal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+}
+
+<OneDriveBrowser Visible="showOneDriveBrowser"
+                 OnSeleccionado="OnArchivoOneDriveSeleccionado"
+                 OnCancelado="() => showOneDriveBrowser = false" />
+
+@code {
+    private Toast toast = null!;
+    private bool loading = true;
+    private bool editing = false;
+    private bool showModal = false;
+    private bool showListadoModal = false;
+    private bool showAuditModal = false;
+    private bool guardando = false;
+    private bool guardandoListado = false;
+    private bool showOneDriveBrowser = false;
+
+    private int? selectedListadoId;
+    private int? selectedAreaId;
+    private string filterBusqueda = string.Empty;
+    private string filterCodigo = string.Empty;
+    private string filterProceso = string.Empty;
+    private string filterEstado = string.Empty;
+
+    private CreateDocumentoControlDto form = new();
+    private CreateListadoMaestroDto listadoForm = new();
+    private int? editingId;
+
+    private List<ListadoMaestroDto> listados = [];
+    private List<DocumentoControlDto> documentos = [];
+    private List<AreaDto> areas = [];
+    private List<AuditLogDto> historial = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            areas = await AreaApi.GetAllAsync() ?? [];
+            listados = await ControlDocumentalApi.GetListadosMaestrosAsync() ?? [];
+            selectedListadoId = listados.FirstOrDefault()?.Id;
+            await Filtrar();
+        }
+        catch (Exception ex)
+        {
+            await toast.Show($"Error al cargar datos: {ex.Message}", "error");
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private async Task Filtrar()
+    {
+        loading = true;
+        if (!selectedListadoId.HasValue)
+        {
+            documentos = [];
+            loading = false;
+            return;
+        }
+
+        documentos = await ControlDocumentalApi.GetDocumentosAsync(
+            selectedListadoId.Value,
+            selectedAreaId > 0 ? selectedAreaId : null,
+            string.IsNullOrWhiteSpace(filterBusqueda) ? null : filterBusqueda,
+            string.IsNullOrWhiteSpace(filterCodigo) ? null : filterCodigo,
+            string.IsNullOrWhiteSpace(filterProceso) ? null : filterProceso,
+            string.IsNullOrWhiteSpace(filterEstado) ? null : filterEstado);
+        loading = false;
+    }
+
+    private void AbrirNuevoDocumento()
+    {
+        editing = false;
+        editingId = null;
+        form = new CreateDocumentoControlDto
+        {
+            ListadoMaestroId = selectedListadoId ?? 0,
+            Version = "1.0",
+            FechaDocumento = DateTime.Today,
+            Estado = "Borrador"
+        };
+        showModal = true;
+    }
+
+    private async Task EditarDocumento(int id)
+    {
+        var detail = await ControlDocumentalApi.GetDocumentoAsync(id);
+        if (detail is null)
+        {
+            await toast.Show("No se pudo cargar el documento.", "error");
+            return;
+        }
+
+        editing = true;
+        editingId = id;
+        form = new CreateDocumentoControlDto
+        {
+            ListadoMaestroId = detail.ListadoMaestroId,
+            Codigo = detail.Codigo,
+            Nombre = detail.Nombre,
+            ProcesoResponsable = detail.ProcesoResponsable,
+            Version = detail.Version,
+            FechaDocumento = detail.FechaDocumento,
+            OneDriveUrl = detail.OneDriveUrl,
+            OneDriveItemId = detail.OneDriveItemId,
+            ArchivoNombre = detail.ArchivoNombre,
+            Uso = detail.Uso,
+            TiempoRetencion = detail.TiempoRetencion,
+            Proteccion = detail.Proteccion,
+            Recuperacion = detail.Recuperacion,
+            DisposicionFinal = detail.DisposicionFinal,
+            Estado = detail.Estado,
+            Observaciones = detail.Observaciones,
+            ComentarioCambio = detail.ComentarioCambio,
+            AreaId = detail.AreaId
+        };
+        showModal = true;
+    }
+
+    private async Task GuardarDocumento()
+    {
+        guardando = true;
+        try
+        {
+            if (editingId.HasValue)
+            {
+                var updateDto = new UpdateDocumentoControlDto
+                {
+                    ListadoMaestroId = form.ListadoMaestroId,
+                    Codigo = form.Codigo,
+                    Nombre = form.Nombre,
+                    ProcesoResponsable = form.ProcesoResponsable,
+                    Version = form.Version,
+                    FechaDocumento = form.FechaDocumento,
+                    OneDriveUrl = form.OneDriveUrl,
+                    OneDriveItemId = form.OneDriveItemId,
+                    ArchivoNombre = form.ArchivoNombre,
+                    Uso = form.Uso,
+                    TiempoRetencion = form.TiempoRetencion,
+                    Proteccion = form.Proteccion,
+                    Recuperacion = form.Recuperacion,
+                    DisposicionFinal = form.DisposicionFinal,
+                    Estado = form.Estado,
+                    Observaciones = form.Observaciones,
+                    ComentarioCambio = form.ComentarioCambio,
+                    AreaId = form.AreaId
+                };
+                var ok = await ControlDocumentalApi.UpdateDocumentoAsync(editingId.Value, updateDto);
+                if (!ok)
+                {
+                    await toast.Show("No se pudo actualizar el documento.", "error");
+                    return;
+                }
+
+                await toast.Show("Documento actualizado correctamente.");
+            }
+            else
+            {
+                var createDto = new CreateDocumentoControlDto
+                {
+                    ListadoMaestroId = form.ListadoMaestroId,
+                    Codigo = form.Codigo,
+                    Nombre = form.Nombre,
+                    ProcesoResponsable = form.ProcesoResponsable,
+                    Version = form.Version,
+                    FechaDocumento = form.FechaDocumento,
+                    OneDriveUrl = form.OneDriveUrl,
+                    OneDriveItemId = form.OneDriveItemId,
+                    ArchivoNombre = form.ArchivoNombre,
+                    Uso = form.Uso,
+                    TiempoRetencion = form.TiempoRetencion,
+                    Proteccion = form.Proteccion,
+                    Recuperacion = form.Recuperacion,
+                    DisposicionFinal = form.DisposicionFinal,
+                    Estado = form.Estado,
+                    Observaciones = form.Observaciones,
+                    ComentarioCambio = form.ComentarioCambio,
+                    AreaId = form.AreaId
+                };
+                var created = await ControlDocumentalApi.CreateDocumentoAsync(createDto);
+                if (created is null)
+                {
+                    await toast.Show("No se pudo crear el documento.", "error");
+                    return;
+                }
+
+                await toast.Show("Documento creado correctamente.");
+            }
+
+            showModal = false;
+            await Filtrar();
+        }
+        finally
+        {
+            guardando = false;
+        }
+    }
+
+    private async Task CrearListado()
+    {
+        guardandoListado = true;
+        try
+        {
+            var created = await ControlDocumentalApi.CreateListadoMaestroAsync(listadoForm);
+            if (created is null)
+            {
+                await toast.Show("No se pudo crear el listado maestro.", "error");
+                return;
+            }
+
+            listados.Add(created);
+            selectedListadoId = created.Id;
+            listadoForm = new CreateListadoMaestroDto();
+            showListadoModal = false;
+            await Filtrar();
+            await toast.Show("Listado maestro creado correctamente.");
+        }
+        finally
+        {
+            guardandoListado = false;
+        }
+    }
+
+    private async Task VerAuditoria(int id)
+    {
+        historial = await ControlDocumentalApi.GetHistorialAsync(id);
+        showAuditModal = true;
+    }
+
+    private void CerrarModal()
+    {
+        showModal = false;
+        editing = false;
+        editingId = null;
+    }
+
+    private void CerrarListadoModal() => showListadoModal = false;
+    private void CerrarAuditoriaModal() => showAuditModal = false;
+
+    private Task OnArchivoOneDriveSeleccionado(OneDriveItem item)
+    {
+        form.OneDriveUrl = item.WebUrl ?? string.Empty;
+        form.OneDriveItemId = item.Id;
+        form.ArchivoNombre = item.Name;
+        showOneDriveBrowser = false;
+        return Task.CompletedTask;
+    }
+
+    private string GetEstadoClass(string estado) => estado switch
+    {
+        "Publicado" => "badge-success",
+        "Aprobado" => "badge-primary",
+        "Revision" => "badge-warning",
+        _ => "badge-secondary"
+    };
+}
