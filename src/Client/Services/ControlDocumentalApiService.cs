@@ -50,23 +50,29 @@ public class ControlDocumentalApiService(HttpClient http)
         return await System.Text.Json.JsonSerializer.DeserializeAsync<DocumentoControlDetalleDto>(stream, JsonOptions);
     }
 
-    public async Task<DocumentoControlDto?> CreateDocumentoAsync(CreateDocumentoControlDto dto)
+    public async Task<HttpResponseMessage> CreateDocumentoAsync(CreateDocumentoControlDto dto)
     {
-        var response = await http.PostAsJsonAsync($"{Base}/documentos", dto);
-        if (!response.IsSuccessStatusCode) return null;
-        await using var stream = await response.Content.ReadAsStreamAsync();
-        return await System.Text.Json.JsonSerializer.DeserializeAsync<DocumentoControlDto>(stream, JsonOptions);
+        return await http.PostAsJsonAsync($"{Base}/documentos", dto);
     }
 
-    public async Task<bool> UpdateDocumentoAsync(int id, UpdateDocumentoControlDto dto)
+    public async Task<HttpResponseMessage> UpdateDocumentoAsync(int id, UpdateDocumentoControlDto dto)
     {
-        var response = await http.PutAsJsonAsync($"{Base}/documentos/{id}", dto);
-        return response.IsSuccessStatusCode;
+        return await http.PutAsJsonAsync($"{Base}/documentos/{id}", dto);
     }
 
-    public async Task<ListadoMaestroDto?> CreateListadoMaestroAsync(CreateListadoMaestroDto dto)
+    public async Task<HttpResponseMessage> CreateListadoMaestroAsync(CreateListadoMaestroDto dto)
     {
-        var response = await http.PostAsJsonAsync($"{Base}/listados-maestros", dto);
+        return await http.PostAsJsonAsync($"{Base}/listados-maestros", dto);
+    }
+
+    public async Task<HttpResponseMessage> UpdateListadoMaestroAsync(int id, CreateListadoMaestroDto dto)
+    {
+        return await http.PutAsJsonAsync($"{Base}/listados-maestros/{id}", dto);
+    }
+
+    public async Task<ListadoMaestroDto?> GetListadoMaestroAsync(int id)
+    {
+        var response = await http.GetAsync($"{Base}/listados-maestros/{id}");
         if (!response.IsSuccessStatusCode) return null;
         await using var stream = await response.Content.ReadAsStreamAsync();
         return await System.Text.Json.JsonSerializer.DeserializeAsync<ListadoMaestroDto>(stream, JsonOptions);

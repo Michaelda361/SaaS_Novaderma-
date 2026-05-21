@@ -24,6 +24,12 @@ public class ControlDocumentalService(
         }).ToList();
     }
 
+    public async Task<ListadoMaestroDto?> GetListadoAsync(int id)
+    {
+        var listado = await repository.GetListadoByIdAsync(id);
+        return listado is null ? null : MapToListadoDto(listado);
+    }
+
     public async Task<List<DocumentoControlDto>> GetDocumentosAsync(
         int listadoId, int? areaId, string? busqueda, string? codigo,
         string? proceso, string? estado)
@@ -38,8 +44,13 @@ public class ControlDocumentalService(
         return doc is null ? null : MapToDetalleDto(doc);
     }
 
-    public async Task<ListadoMaestroDto> CreateListadoAsync(CreateListadoMaestroDto dto)
+    public async Task<ListadoMaestroDto> CreateListadoAsync(CreateListadoMaestroDto dto, string usuarioEmail)
     {
+        // Verificar permisos: solo Jefe o Admin pueden crear listados maestros
+        var creador = await TryResolverColaboradorAsync(usuarioEmail);
+        if (creador is null || (creador.Rol != Domain.Enums.RolUsuario.Admin && creador.Rol != Domain.Enums.RolUsuario.Jefe))
+            throw new UnauthorizedAccessException("No tiene permisos para crear listados maestros.");
+
         var listado = new ListadoMaestro
         {
             Nombre = dto.Nombre.Trim(),
@@ -47,11 +58,136 @@ public class ControlDocumentalService(
         };
 
         var created = await repository.CreateListadoAsync(listado);
+
+        if (dto.Documentos != null && dto.Documentos.Any())
+        {
+            foreach (var docDto in dto.Documentos)
+            {
+                var doc = new DocumentoControl
+                {
+                    ListadoMaestroId = created.Id,
+                    Codigo = docDto.Codigo.Trim(),
+                    Nombre = docDto.Nombre.Trim(),
+                    ProcesoResponsable = docDto.ProcesoResponsable.Trim(),
+                    Version = string.IsNullOrWhiteSpace(docDto.Version) ? "1.0" : docDto.Version.Trim(),
+                    FechaDocumento = DateTime.Today,
+                    OneDriveUrl = "https://onedrive.live.com/placeholder",
+                    Estado = string.IsNullOrWhiteSpace(docDto.Estado) ? "Borrador" : docDto.Estado.Trim(),
+                    Activo = true
+                };
+
+                var createdDoc = await repository.CreateDocumentoAsync(doc);
+                
+                var log = await BuildAuditLogAsync(
+                    createdDoc.Id,
+                    createdDoc.Nombre,
+                    "Creado",
+                    "Documento inicializado con plantilla base",
+                    usuarioEmail,
+                    createdDoc,
+                    null);
+                await auditRepository.CreateAsync(log);
+            }
+        }
+
         return new ListadoMaestroDto
         {
             Id = created.Id,
             Nombre = created.Nombre,
             Descripcion = created.Descripcion
+        };
+    }
+
+    public async Task<ListadoMaestroDto?> UpdateListadoAsync(int id, CreateListadoMaestroDto dto, string usuarioEmail)
+    {
+        // Verificar permisos: solo Jefe o Admin pueden actualizar listados maestros
+        var editor = await TryResolverColaboradorAsync(usuarioEmail);
+        if (editor is null || (editor.Rol != Domain.Enums.RolUsuario.Admin && editor.Rol != Domain.Enums.RolUsuario.Jefe))
+            throw new UnauthorizedAccessException("No tiene permisos para actualizar listados maestros.");
+
+        var existing = await repository.GetListadoByIdAsync(id);
+        if (existing is null) return null;
+
+        existing.Nombre = dto.Nombre.Trim();
+        existing.Descripcion = dto.Descripcion?.Trim();
+
+        var updated = await repository.UpdateListadoAsync(existing);
+
+        if (dto.Documentos is not null && dto.Documentos.Any())
+        {
+            foreach (var docDto in dto.Documentos)
+            {
+                var doc = new DocumentoControl
+                {
+                    ListadoMaestroId = updated.Id,
+                    Codigo = docDto.Codigo.Trim(),
+                    Nombre = docDto.Nombre.Trim(),
+                    ProcesoResponsable = docDto.ProcesoResponsable.Trim(),
+                    Version = string.IsNullOrWhiteSpace(docDto.Version) ? "1.0" : docDto.Version.Trim(),
+                    FechaDocumento = DateTime.Today,
+                    OneDriveUrl = "https://onedrive.live.com/placeholder",
+                    Estado = string.IsNullOrWhiteSpace(docDto.Estado) ? "Borrador" : docDto.Estado.Trim(),
+                    Activo = true
+                };
+
+                var createdDoc = await repository.CreateDocumentoAsync(doc);
+                var log = await BuildAuditLogAsync(
+                    createdDoc.Id,
+                    createdDoc.Nombre,
+                    "Creado",
+                    "Documento inicializado con plantilla base",
+                    usuarioEmail,
+                    createdDoc,
+                    null);
+                await auditRepository.CreateAsync(log);
+            }
+        }
+
+        if ((existing.Campos is null || !existing.Campos.Any()) && (dto.Campos is null || !dto.Campos.Any()))
+        {
+            var predeterminados = GenerateDefaultCampoDefiniciones(updated.Id);
+            foreach (var campo in predeterminados)
+                await repository.CreateCampoAsync(campo);
+        }
+        else if (dto.Campos is not null && dto.Campos.Any())
+        {
+            var existentes = existing.Campos?.ToDictionary(c => c.CampoClave, StringComparer.OrdinalIgnoreCase) ?? new Dictionary<string, DocumentoControlCampoDefinicion>(StringComparer.OrdinalIgnoreCase);
+            var solicitados = dto.Campos.ToDictionary(c => c.CampoClave, StringComparer.OrdinalIgnoreCase);
+
+            foreach (var campoDto in dto.Campos)
+            {
+                if (existentes.TryGetValue(campoDto.CampoClave, out var existente))
+                {
+                    existente.Nombre = campoDto.Nombre.Trim();
+                    existente.Tipo = string.IsNullOrWhiteSpace(campoDto.Tipo) ? "Texto" : campoDto.Tipo.Trim();
+                    existente.Requerido = campoDto.Requerido;
+                    existente.OpcionesJson = string.IsNullOrWhiteSpace(campoDto.Opciones)
+                        ? null
+                        : JsonSerializer.Serialize(campoDto.Opciones.Split(',').Select(o => o.Trim()).Where(o => !string.IsNullOrWhiteSpace(o)).ToList());
+                    existente.Orden = campoDto.Orden;
+                    await repository.UpdateCampoAsync(existente);
+                }
+                else
+                {
+                    var nuevo = MapToCampoDefinicion(campoDto, updated.Id);
+                    await repository.CreateCampoAsync(nuevo);
+                }
+            }
+
+            foreach (var existente in existentes.Values)
+            {
+                if (!existente.EsPredeterminado && !solicitados.ContainsKey(existente.CampoClave))
+                {
+                    await repository.DeleteCampoAsync(existente);
+                }
+            }
+        }
+
+        return new ListadoMaestroDto
+        {
+            Id = updated.Id,
+            Nombre = updated.Nombre,
+            Descripcion = updated.Descripcion
         };
     }
 
@@ -63,6 +199,8 @@ public class ControlDocumentalService(
 
         if (string.IsNullOrWhiteSpace(dto.OneDriveUrl))
             throw new ArgumentException("La ruta del documento en OneDrive es obligatoria.");
+
+        await ValidateCamposPersonalizados(dto.ListadoMaestroId, dto.CamposPersonalizados);
 
         var doc = new DocumentoControl
         {
@@ -83,7 +221,10 @@ public class ControlDocumentalService(
             Estado = dto.Estado.Trim(),
             Observaciones = dto.Observaciones?.Trim(),
             ComentarioCambio = dto.ComentarioCambio?.Trim(),
-            AreaId = dto.AreaId
+            AreaId = dto.AreaId,
+            DatosPersonalizados = dto.CamposPersonalizados is not null && dto.CamposPersonalizados.Any()
+                ? JsonSerializer.Serialize(dto.CamposPersonalizados)
+                : null
         };
 
         var created = await repository.CreateDocumentoAsync(doc);
@@ -98,6 +239,16 @@ public class ControlDocumentalService(
     {
         var existing = await repository.GetDocumentoByIdAsync(id);
         if (existing is null) return null;
+
+        // Si el usuario intenta cambiar el ListadoMaestro del documento, requiere permisos de gestión (Jefe/Admin)
+        if (dto.ListadoMaestroId != existing.ListadoMaestroId)
+        {
+            var editor = await TryResolverColaboradorAsync(usuarioEmail);
+            if (editor is null || (editor.Rol != Domain.Enums.RolUsuario.Admin && editor.Rol != Domain.Enums.RolUsuario.Jefe))
+                throw new UnauthorizedAccessException("No tiene permisos para reasignar el listado maestro del documento.");
+        }
+
+        await ValidateCamposPersonalizados(dto.ListadoMaestroId, dto.CamposPersonalizados);
 
         var original = CloneForDiff(existing);
 
@@ -119,6 +270,9 @@ public class ControlDocumentalService(
         existing.Observaciones = dto.Observaciones?.Trim();
         existing.ComentarioCambio = dto.ComentarioCambio?.Trim();
         existing.AreaId = dto.AreaId;
+        existing.DatosPersonalizados = dto.CamposPersonalizados is null
+            ? existing.DatosPersonalizados
+            : JsonSerializer.Serialize(dto.CamposPersonalizados);
 
         var updated = await repository.UpdateDocumentoAsync(existing);
         var cambios = BuildDiff(original, updated);
@@ -284,6 +438,155 @@ public class ControlDocumentalService(
         ComentarioCambio = d.ComentarioCambio,
         AreaId = d.AreaId,
         AreaNombre = d.Area?.Nombre,
-        ListadoMaestroDescripcion = d.ListadoMaestro?.Descripcion
+        ListadoMaestroDescripcion = d.ListadoMaestro?.Descripcion,
+        CamposPersonalizados = string.IsNullOrWhiteSpace(d.DatosPersonalizados)
+            ? new Dictionary<string, string?>()
+            : JsonSerializer.Deserialize<Dictionary<string, string?>>(d.DatosPersonalizados) ?? new Dictionary<string, string?>()
     };
+
+    private static ListadoMaestroDto MapToListadoDto(ListadoMaestro listado) => new()
+    {
+        Id = listado.Id,
+        Nombre = listado.Nombre,
+        Descripcion = listado.Descripcion,
+        Campos = listado.Campos?.OrderBy(c => c.Orden).Select(MapToCampoDto).ToList() ?? new List<DocumentoControlCampoDto>()
+    };
+
+    private static DocumentoControlCampoDefinicion MapToCampoDefinicion(DocumentoControlCampoDto dto, int listadoId) => new()
+    {
+        ListadoMaestroId = listadoId,
+        CampoClave = dto.CampoClave,
+        Nombre = dto.Nombre.Trim(),
+        Tipo = string.IsNullOrWhiteSpace(dto.Tipo) ? "Texto" : dto.Tipo.Trim(),
+        Requerido = dto.Requerido,
+        EsPredeterminado = dto.EsPredeterminado,
+        Orden = dto.Orden,
+        OpcionesJson = string.IsNullOrWhiteSpace(dto.Opciones)
+            ? null
+            : JsonSerializer.Serialize(dto.Opciones.Split(',').Select(o => o.Trim()).Where(o => !string.IsNullOrWhiteSpace(o)).ToList())
+    };
+
+    private static DocumentoControlCampoDto MapToCampoDto(DocumentoControlCampoDefinicion c) => new()
+    {
+        CampoClave = c.CampoClave,
+        Nombre = c.Nombre,
+        Tipo = c.Tipo,
+        Requerido = c.Requerido,
+        EsPredeterminado = c.EsPredeterminado,
+        Orden = c.Orden,
+        Opciones = string.IsNullOrWhiteSpace(c.OpcionesJson)
+            ? null
+            : string.Join(", ", JsonSerializer.Deserialize<List<string>>(c.OpcionesJson) ?? new List<string>())
+    };
+
+    private static List<DocumentoControlCampoDefinicion> GenerateDefaultCampoDefiniciones(int listadoId) => new()
+    {
+        new DocumentoControlCampoDefinicion
+        {
+            ListadoMaestroId = listadoId,
+            CampoClave = "Codigo",
+            Nombre = "Código",
+            Tipo = "Texto",
+            Requerido = true,
+            EsPredeterminado = true,
+            Orden = 1
+        },
+        new DocumentoControlCampoDefinicion
+        {
+            ListadoMaestroId = listadoId,
+            CampoClave = "Nombre",
+            Nombre = "Nombre",
+            Tipo = "Texto",
+            Requerido = true,
+            EsPredeterminado = true,
+            Orden = 2
+        },
+        new DocumentoControlCampoDefinicion
+        {
+            ListadoMaestroId = listadoId,
+            CampoClave = "ProcesoResponsable",
+            Nombre = "Proceso responsable",
+            Tipo = "Texto",
+            Requerido = true,
+            EsPredeterminado = true,
+            Orden = 3
+        },
+        new DocumentoControlCampoDefinicion
+        {
+            ListadoMaestroId = listadoId,
+            CampoClave = "Version",
+            Nombre = "Versión",
+            Tipo = "Texto",
+            Requerido = false,
+            EsPredeterminado = true,
+            Orden = 4
+        },
+        new DocumentoControlCampoDefinicion
+        {
+            ListadoMaestroId = listadoId,
+            CampoClave = "FechaDocumento",
+            Nombre = "Fecha de documento",
+            Tipo = "Fecha",
+            Requerido = true,
+            EsPredeterminado = true,
+            Orden = 5
+        },
+        new DocumentoControlCampoDefinicion
+        {
+            ListadoMaestroId = listadoId,
+            CampoClave = "OneDriveUrl",
+            Nombre = "Archivo OneDrive",
+            Tipo = "Texto",
+            Requerido = true,
+            EsPredeterminado = true,
+            Orden = 6
+        },
+        new DocumentoControlCampoDefinicion
+        {
+            ListadoMaestroId = listadoId,
+            CampoClave = "Estado",
+            Nombre = "Estado",
+            Tipo = "Texto",
+            Requerido = true,
+            EsPredeterminado = true,
+            Orden = 7
+        }
+    };
+
+    private async Task ValidateCamposPersonalizados(int listadoId, Dictionary<string, string?>? camposPersonalizados)
+    {
+        var definiciones = await repository.GetCamposPorListadoAsync(listadoId);
+        if (definiciones is null || !definiciones.Any())
+            return;
+
+        foreach (var definicion in definiciones.Where(d => d.Requerido && !d.EsPredeterminado))
+        {
+            if (camposPersonalizados is null || !camposPersonalizados.TryGetValue(definicion.CampoClave, out var valor) || string.IsNullOrWhiteSpace(valor))
+            {
+                throw new ArgumentException($"El campo '{definicion.Nombre}' es obligatorio.");
+            }
+
+            if (definicion.Tipo == "Lista")
+            {
+                var opciones = GetOpciones(definicion);
+                if (opciones.Any() && !opciones.Contains(valor, StringComparer.OrdinalIgnoreCase))
+                {
+                    throw new ArgumentException($"El valor '{valor}' no es válido para el campo '{definicion.Nombre}'.");
+                }
+            }
+
+            if (definicion.Tipo == "Numero" && !string.IsNullOrWhiteSpace(valor) && !decimal.TryParse(valor, out _))
+            {
+                throw new ArgumentException($"El campo '{definicion.Nombre}' requiere un número válido.");
+            }
+        }
+    }
+
+    private static List<string> GetOpciones(DocumentoControlCampoDefinicion definicion)
+    {
+        if (string.IsNullOrWhiteSpace(definicion.OpcionesJson))
+            return new List<string>();
+
+        return JsonSerializer.Deserialize<List<string>>(definicion.OpcionesJson) ?? new List<string>();
+    }
 }

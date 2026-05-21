@@ -26,6 +26,8 @@ public class DocumentoControl : BaseEntity
     public string? Observaciones { get; set; }
     public string? ComentarioCambio { get; set; }
 
+    public string? DatosPersonalizados { get; set; }
+
     public int? AreaId { get; set; }
     public Area? Area { get; set; }
 }

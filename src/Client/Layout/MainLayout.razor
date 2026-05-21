@@ -59,16 +59,17 @@
             @if (!AuthInfo.EsSoloColaborador)
             {
                 <NavLink class="nav-link" href="documentos">
-                    <span class="nav-icon"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg></span> Documentos
+                    <span class="nav-icon"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2h4z"/></svg></span> Documentos
                     @if (propuestasPendientes > 0)
                     {
                         <span class="badge badge-warning badge-pill">@propuestasPendientes</span>
                     }
                 </NavLink>
-                <NavLink class="nav-link" href="control-documental">
-                    <span class="nav-icon"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2a4 4 0 014-4h3m-7 6h7a2 2 0 002-2v-5a2 2 0 00-2-2h-3.5a2 2 0 01-1.414-.586L10 3H5a2 2 0 00-2 2v11a2 2 0 002 2h4z"/></svg></span> Control Documental
-                </NavLink>
             }
+
+            <NavLink class="nav-link" href="control-documental">
+                <span class="nav-icon"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2a4 4 0 014-4h3m-7 6h7a2 2 0 002-2v-5a2 2 0 00-2-2h-3.5a2 2 0 01-1.414-.586L10 3H5a2 2 0 00-2 2v11a2 2 0 002 2h4z"/></svg></span> Control Documental
+            </NavLink>
 
             <NavLink class="nav-link" href="cartas">
                 <span class="nav-icon"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg></span> Mis Cartas

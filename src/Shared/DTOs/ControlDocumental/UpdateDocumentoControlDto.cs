@@ -39,4 +39,5 @@ public class UpdateDocumentoControlDto
     public string? Observaciones { get; set; }
     public string? ComentarioCambio { get; set; }
     public int? AreaId { get; set; }
+    public Dictionary<string, string?>? CamposPersonalizados { get; set; } = new Dictionary<string, string?>();
 }

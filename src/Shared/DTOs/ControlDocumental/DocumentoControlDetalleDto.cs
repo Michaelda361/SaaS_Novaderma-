@@ -12,4 +12,5 @@ public class DocumentoControlDetalleDto : DocumentoControlDto
     public string? Observaciones { get; set; }
     public string? ComentarioCambio { get; set; }
     public string? ListadoMaestroDescripcion { get; set; }
+    public Dictionary<string, string?>? CamposPersonalizados { get; set; } = new Dictionary<string, string?>();
 }

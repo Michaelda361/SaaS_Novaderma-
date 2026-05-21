@@ -1,8 +1,10 @@
 @page "/control-documental"
 @attribute [PageTitle("Control Documental")]
 @attribute [Authorize]
+@using System.Net
 @inject ControlDocumentalApiService ControlDocumentalApi
 @inject AreaApiService AreaApi
+@inject AuthInfoService AuthInfo
 
 <Toast @ref="toast" />
 
@@ -12,9 +14,15 @@
         <p class="page-subtitle">Registra, busca y audita documentos OneDrive con listados maestros.</p>
     </div>
     <div class="page-actions">
-        <button class="btn btn-secondary" @onclick="() => showListadoModal = true">
-            + Nuevo listado maestro
-        </button>
+        @if (AuthInfo.EsAdmin || AuthInfo.EsJefe)
+        {
+            <button class="btn btn-secondary" @onclick="AbrirNuevoListado">
+                + Nuevo listado maestro
+            </button>
+            <button class="btn btn-secondary" @onclick="AbrirEditarListado" disabled="@(!selectedListadoId.HasValue)">
+                ✏️ Editar listado
+            </button>
+        }
         <button class="btn btn-primary" @onclick="AbrirNuevoDocumento" disabled="@(!selectedListadoId.HasValue)">
             + Nuevo documento
         </button>
@@ -23,7 +31,7 @@
 
 <div class="card" style="margin-bottom:1rem;">
     <div class="filter-bar">
-        <select class="form-control" @bind="selectedListadoId" @bind:after="Filtrar">
+        <select class="form-control" @bind="selectedListadoId" @bind:after="OnSelectedListadoChanged">
             <option value="">Selecciona un listado maestro</option>
             @foreach (var listado in listados)
             {
@@ -92,8 +100,8 @@
                             <td>@item.FechaDocumento.ToString("yyyy-MM-dd")</td>
                             <td><span class="badge @GetEstadoClass(item.Estado)">@item.Estado</span></td>
                             <td>@(item.AreaNombre ?? "—")</td>
-                            <td style="display:flex;gap:.25rem;flex-wrap:wrap;">
-                                <button class="btn btn-sm btn-secondary" @onclick="() => EditarDocumento(item.Id)">Editar</button>
+                                <td style="display:flex;gap:.25rem;flex-wrap:wrap;">
+                                <button class="btn btn-sm btn-secondary" @onclick="() => EditarDocumento(item.Id)">@(AuthInfo.EsSoloColaborador ? "Actualizar" : "Editar")</button>
                                 <button class="btn btn-sm btn-info" @onclick="() => VerAuditoria(item.Id)">Auditoría</button>
                             </td>
                         </tr>
@@ -108,8 +116,8 @@
 {
     <div class="modal-overlay" @onclick="CerrarModal">
         <div class="modal" @onclick:stopPropagation>
-            <div class="modal-header">
-                <h3>@(editing ? "Editar documento" : "Nuevo documento")</h3>
+                <div class="modal-header">
+                <h3>@(editing ? (AuthInfo.EsSoloColaborador ? "Actualizar documento" : "Editar documento") : "Nuevo documento")</h3>
                 <button class="modal-close" @onclick="CerrarModal">×</button>
             </div>
             <div class="modal-body">
@@ -118,7 +126,7 @@
                     <div class="form-row">
                         <div class="form-group">
                             <label>Listado maestro *</label>
-                            <InputSelect class="form-control" @bind-Value="form.ListadoMaestroId">
+                            <InputSelect class="form-control" @bind-Value="form.ListadoMaestroId" disabled="@(editing && !(AuthInfo.EsAdmin || AuthInfo.EsJefe))">
                                 <option value="">Selecciona un listado maestro</option>
                                 @foreach (var listado in listados)
                                 {
@@ -128,36 +136,36 @@
                             <ValidationMessage For="() => form.ListadoMaestroId" />
                         </div>
                         <div class="form-group">
-                            <label>Código *</label>
+                            <label>@GetCampoLabel("Codigo", "Código") *</label>
                             <InputText class="form-control" @bind-Value="form.Codigo" />
                             <ValidationMessage For="() => form.Codigo" />
                         </div>
                     </div>
                     <div class="form-row">
                         <div class="form-group">
-                            <label>Nombre *</label>
+                            <label>@GetCampoLabel("Nombre", "Nombre") *</label>
                             <InputText class="form-control" @bind-Value="form.Nombre" />
                             <ValidationMessage For="() => form.Nombre" />
                         </div>
                         <div class="form-group">
-                            <label>Proceso responsable *</label>
+                            <label>@GetCampoLabel("ProcesoResponsable", "Proceso responsable") *</label>
                             <InputText class="form-control" @bind-Value="form.ProcesoResponsable" />
                             <ValidationMessage For="() => form.ProcesoResponsable" />
                         </div>
                     </div>
                     <div class="form-row">
                         <div class="form-group">
-                            <label>Versión</label>
+                            <label>@GetCampoLabel("Version", "Versión")</label>
                             <InputText class="form-control" @bind-Value="form.Version" />
                         </div>
                         <div class="form-group">
-                            <label>Fecha de documento *</label>
+                            <label>@GetCampoLabel("FechaDocumento", "Fecha de documento") *</label>
                             <InputDate class="form-control" @bind-Value="form.FechaDocumento" />
                             <ValidationMessage For="() => form.FechaDocumento" />
                         </div>
                     </div>
                     <div class="form-group">
-                        <label>Archivo OneDrive *</label>
+                        <label>@GetCampoLabel("OneDriveUrl", "Archivo OneDrive") *</label>
                         <div class="one-drive-row">
                             <InputText class="form-control" @bind-Value="form.OneDriveUrl" placeholder="URL de OneDrive" />
                             <button type="button" class="btn btn-secondary" @onclick="() => showOneDriveBrowser = true">Buscar OneDrive</button>
@@ -170,7 +178,7 @@
                     </div>
                     <div class="form-row">
                         <div class="form-group">
-                            <label>Estado *</label>
+                            <label>@GetCampoLabel("Estado", "Estado") *</label>
                             <InputSelect class="form-control" @bind-Value="form.Estado">
                                 <option value="">Selecciona estado...</option>
                                 <option value="Borrador">Borrador</option>
@@ -191,6 +199,42 @@
                             </InputSelect>
                         </div>
                     </div>
+
+                    @if (listadoCampos.Any(c => !c.EsPredeterminado))
+                    {
+                        <div class="form-group">
+                            <h4>Campos adicionales</h4>
+                            @foreach (var campo in listadoCampos.Where(c => !c.EsPredeterminado))
+                            {
+                                <div class="form-group">
+                                    <label>@campo.Nombre@if (campo.Requerido) { <span class="text-danger">*</span> }</label>
+                                    @if (campo.Tipo == "Lista")
+                                    {
+                                        <InputSelect class="form-control" @bind-Value="form.CamposPersonalizados[campo.CampoClave]">
+                                            <option value="">Selecciona...</option>
+                                            @foreach (var opcion in campo.Opciones?.Split(',').Select(o => o.Trim()).Where(o => !string.IsNullOrWhiteSpace(o)) ?? Enumerable.Empty<string>())
+                                            {
+                                                <option value="@opcion">@opcion</option>
+                                            }
+                                        </InputSelect>
+                                    }
+                                    else if (campo.Tipo == "Fecha")
+                                    {
+                                        <InputText type="date" class="form-control" @bind-Value="form.CamposPersonalizados[campo.CampoClave]" />
+                                    }
+                                    else if (campo.Tipo == "Numero")
+                                    {
+                                        <InputText type="number" class="form-control" @bind-Value="form.CamposPersonalizados[campo.CampoClave]" />
+                                    }
+                                    else
+                                    {
+                                        <InputText class="form-control" @bind-Value="form.CamposPersonalizados[campo.CampoClave]" />
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+
                     <div class="form-group">
                         <label>Comentario de cambio</label>
                         <InputTextArea class="form-control" @bind-Value="form.ComentarioCambio" Rows="3" />
@@ -201,7 +245,7 @@
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" @onclick="CerrarModal">Cancelar</button>
-                        <button type="submit" class="btn btn-primary" disabled="@guardando">@(guardando ? "Guardando..." : "Guardar")</button>
+                        <button type="submit" class="btn btn-primary" disabled="@guardando">@(guardando ? (editing ? "Actualizando..." : "Guardando...") : (editing ? (AuthInfo.EsSoloColaborador ? "Actualizar" : "Guardar") : "Guardar"))</button>
                     </div>
                 </EditForm>
             </div>
@@ -214,7 +258,7 @@
     <div class="modal-overlay" @onclick="CerrarListadoModal">
         <div class="modal" @onclick:stopPropagation>
             <div class="modal-header">
-                <h3>Nuevo listado maestro</h3>
+                <h3>@(editingListado ? "Editar listado maestro" : "Nuevo listado maestro")</h3>
                 <button class="modal-close" @onclick="CerrarListadoModal">×</button>
             </div>
             <div class="modal-body">
@@ -229,9 +273,70 @@
                         <label>Descripción</label>
                         <InputTextArea class="form-control" @bind-Value="listadoForm.Descripcion" Rows="3" />
                     </div>
+                    <div class="form-group">
+                        <label>Campos configurables</label>
+                        <div class="template-documents">
+                            @if (!listadoForm.Campos.Any())
+                            {
+                                <div class="text-muted mb-2">No hay campos configurados. Agrega uno para definir los parámetros del listado.</div>
+                            }
+                            @foreach (var campo in listadoForm.Campos.OrderBy(c => c.Orden))
+                            {
+                                <div class="template-document mb-3 p-3 border rounded">
+                                    <div class="d-flex justify-content-between align-items-start mb-2">
+                                        <div>
+                                            <strong>@campo.CampoClave</strong>
+                                            @if (campo.EsPredeterminado)
+                                            {
+                                                <span class="badge badge-secondary ml-2">Predeterminado</span>
+                                            }
+                                        </div>
+                                        @if (!campo.EsPredeterminado)
+                                        {
+                                            <button type="button" class="btn btn-sm btn-danger" @onclick="() => EliminarCampoPlantilla(campo.CampoClave)">Eliminar</button>
+                                        }
+                                    </div>
+                                    <div class="row gx-2">
+                                        <div class="col-12 col-md-5 mb-2">
+                                            <label>Etiqueta</label>
+                                            <InputText class="form-control" @bind-Value="campo.Nombre" />
+                                        </div>
+                                        <div class="col-12 col-md-3 mb-2">
+                                            <label>Tipo</label>
+                                            <InputSelect class="form-control" @bind-Value="campo.Tipo">
+                                                <option value="Texto">Texto</option>
+                                                <option value="Numero">Número</option>
+                                                <option value="Fecha">Fecha</option>
+                                                <option value="Lista">Lista</option>
+                                            </InputSelect>
+                                        </div>
+                                        <div class="col-12 col-md-2 mb-2">
+                                            <label>Requerido</label>
+                                            <div class="form-check">
+                                                <InputCheckbox class="form-check-input" @bind-Value="campo.Requerido" />
+                                                <label class="form-check-label">Sí</label>
+                                            </div>
+                                        </div>
+                                        <div class="col-12 col-md-2 mb-2">
+                                            <label>Orden</label>
+                                            <InputNumber class="form-control" @bind-Value="campo.Orden" />
+                                        </div>
+                                    </div>
+                                    @if (campo.Tipo == "Lista")
+                                    {
+                                        <div class="mb-2">
+                                            <label>Opciones (separadas por coma)</label>
+                                            <InputText class="form-control" @bind-Value="campo.Opciones" />
+                                        </div>
+                                    }
+                                </div>
+                            }
+                            <button type="button" class="btn btn-outline-primary btn-sm" @onclick="AgregarCampoPlantilla">Agregar campo personalizado</button>
+                        </div>
+                    </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" @onclick="CerrarListadoModal">Cancelar</button>
-                        <button type="submit" class="btn btn-primary" disabled="@guardandoListado">@(guardandoListado ? "Guardando..." : "Crear listado")</button>
+                        <button type="submit" class="btn btn-primary" disabled="@guardandoListado">@(guardandoListado ? "Guardando..." : (editingListado ? "Guardar cambios" : "Crear listado"))</button>
                     </div>
                 </EditForm>
             </div>
@@ -258,27 +363,141 @@
                 }
                 else
                 {
-                    <table class="table">
-                        <thead>
-                            <tr>
-                                <th>Fecha</th>
-                                <th>Acción</th>
-                                <th>Usuario</th>
-                                <th>Observaciones</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var item in historial)
-                            {
-                                <tr>
-                                    <td>@item.FechaHora.ToLocalTime().ToString("g")</td>
-                                    <td>@item.Accion</td>
-                                    <td>@item.ColaboradorNombre</td>
-                                    <td>@item.Observaciones</td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
+                    @if (auditDocumentDetail is null)
+                    {
+                        <div class="empty-state">
+                            <div class="empty-state-icon">⚠️</div>
+                            <h3>Error al cargar el documento</h3>
+                            <p>No se pudo cargar la versión actual del documento para mostrar el historial.</p>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="table-responsive mb-4">
+                            <table class="table table-bordered table-striped">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th colspan="18">Versión actual</th>
+                                    </tr>
+                                    <tr>
+                                        <th>Listado maestro</th>
+                                        <th>Código</th>
+                                        <th>Nombre</th>
+                                        <th>Proceso responsable</th>
+                                        <th>Versión</th>
+                                        <th>Fecha documento</th>
+                                        <th>Ubicación</th>
+                                        <th>OneDrive URL</th>
+                                        <th>OneDrive Item ID</th>
+                                        <th>Archivo</th>
+                                        <th>Uso</th>
+                                        <th>Tiempo retención</th>
+                                        <th>Protección</th>
+                                        <th>Recuperación</th>
+                                        <th>Disposición final</th>
+                                        <th>Estado</th>
+                                        <th>Área</th>
+                                        <th>Observaciones</th>
+                                        <th>Comentario</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>@GetSnapshotValue(BuildSnapshot(auditDocumentDetail), "Listado maestro")</td>
+                                        <td>@GetSnapshotValue(BuildSnapshot(auditDocumentDetail), "Código")</td>
+                                        <td>@GetSnapshotValue(BuildSnapshot(auditDocumentDetail), "Nombre")</td>
+                                        <td>@GetSnapshotValue(BuildSnapshot(auditDocumentDetail), "Proceso responsable")</td>
+                                        <td>@GetSnapshotValue(BuildSnapshot(auditDocumentDetail), "Versión")</td>
+                                        <td>@GetSnapshotValue(BuildSnapshot(auditDocumentDetail), "Fecha documento")</td>
+                                        <td>@GetSnapshotValue(BuildSnapshot(auditDocumentDetail), "Ubicación")</td>
+                                        <td>@GetSnapshotValue(BuildSnapshot(auditDocumentDetail), "OneDrive URL")</td>
+                                        <td>@GetSnapshotValue(BuildSnapshot(auditDocumentDetail), "OneDrive Item ID")</td>
+                                        <td>@GetSnapshotValue(BuildSnapshot(auditDocumentDetail), "Archivo")</td>
+                                        <td>@GetSnapshotValue(BuildSnapshot(auditDocumentDetail), "Uso")</td>
+                                        <td>@GetSnapshotValue(BuildSnapshot(auditDocumentDetail), "Tiempo de retención")</td>
+                                        <td>@GetSnapshotValue(BuildSnapshot(auditDocumentDetail), "Protección")</td>
+                                        <td>@GetSnapshotValue(BuildSnapshot(auditDocumentDetail), "Recuperación")</td>
+                                        <td>@GetSnapshotValue(BuildSnapshot(auditDocumentDetail), "Disposición final")</td>
+                                        <td>@GetSnapshotValue(BuildSnapshot(auditDocumentDetail), "Estado")</td>
+                                        <td>@GetSnapshotValue(BuildSnapshot(auditDocumentDetail), "Área")</td>
+                                        <td>@GetSnapshotValue(BuildSnapshot(auditDocumentDetail), "Observaciones")</td>
+                                        <td>@GetSnapshotValue(BuildSnapshot(auditDocumentDetail), "Comentario de cambio")</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="mb-3">
+                            <h4>Versiones anteriores</h4>
+                        </div>
+
+                        @if (!versionesAnteriores.Any())
+                        {
+                            <div class="empty-state">
+                                <div class="empty-state-icon">🕘</div>
+                                <h3>Sin versiones anteriores</h3>
+                                <p>Aún no hay registros de versiones anteriores para este documento.</p>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-striped table-hover">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Fecha / Usuario</th>
+                                            <th>Acción</th>
+                                            <th>Listado maestro</th>
+                                            <th>Código</th>
+                                            <th>Nombre</th>
+                                            <th>Proceso responsable</th>
+                                            <th>Versión</th>
+                                            <th>Fecha documento</th>
+                                            <th>Ubicación</th>
+                                            <th>OneDrive Item ID</th>
+                                            <th>Archivo</th>
+                                            <th>Uso</th>
+                                            <th>Tiempo retención</th>
+                                            <th>Protección</th>
+                                            <th>Recuperación</th>
+                                            <th>Disposición final</th>
+                                            <th>Estado</th>
+                                            <th>Área</th>
+                                            <th>Observaciones</th>
+                                            <th>Comentario</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var version in versionesAnteriores)
+                                        {
+                                            <tr>
+                                                <td>@version.Descripcion</td>
+                                                <td>@version.Titulo</td>
+                                                <td>@GetSnapshotValue(version.Campos, "Listado maestro")</td>
+                                                <td>@GetSnapshotValue(version.Campos, "Código")</td>
+                                                <td>@GetSnapshotValue(version.Campos, "Nombre")</td>
+                                                <td>@GetSnapshotValue(version.Campos, "Proceso responsable")</td>
+                                                <td>@GetSnapshotValue(version.Campos, "Versión")</td>
+                                                <td>@GetSnapshotValue(version.Campos, "Fecha documento")</td>
+                                                <td>@GetSnapshotValue(version.Campos, "Ubicación")</td>
+                                                <td>@GetSnapshotValue(version.Campos, "OneDrive Item ID")</td>
+                                                <td>@GetSnapshotValue(version.Campos, "Archivo")</td>
+                                                <td>@GetSnapshotValue(version.Campos, "Uso")</td>
+                                                <td>@GetSnapshotValue(version.Campos, "Tiempo de retención")</td>
+                                                <td>@GetSnapshotValue(version.Campos, "Protección")</td>
+                                                <td>@GetSnapshotValue(version.Campos, "Recuperación")</td>
+                                                <td>@GetSnapshotValue(version.Campos, "Disposición final")</td>
+                                                <td>@GetSnapshotValue(version.Campos, "Estado")</td>
+                                                <td>@GetSnapshotValue(version.Campos, "Área")</td>
+                                                <td>@GetSnapshotValue(version.Campos, "Observaciones")</td>
+                                                <td>@GetSnapshotValue(version.Campos, "Comentario de cambio")</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                    }
                 }
             </div>
             <div class="modal-footer">
@@ -302,6 +521,7 @@
     private bool guardando = false;
     private bool guardandoListado = false;
     private bool showOneDriveBrowser = false;
+    private bool editingListado = false;
 
     private int? selectedListadoId;
     private int? selectedAreaId;
@@ -313,19 +533,27 @@
     private CreateDocumentoControlDto form = new();
     private CreateListadoMaestroDto listadoForm = new();
     private int? editingId;
+    private List<DocumentoControlCampoDto> listadoCampos = [];
 
     private List<ListadoMaestroDto> listados = [];
     private List<DocumentoControlDto> documentos = [];
     private List<AreaDto> areas = [];
     private List<AuditLogDto> historial = [];
+    private DocumentoControlDetalleDto? auditDocumentDetail;
+    private List<DocumentVersionSnapshot> versionesAnteriores = [];
 
     protected override async Task OnInitializedAsync()
     {
         try
         {
+            await AuthInfo.LoadAsync();
             areas = await AreaApi.GetAllAsync() ?? [];
             listados = await ControlDocumentalApi.GetListadosMaestrosAsync() ?? [];
             selectedListadoId = listados.FirstOrDefault()?.Id;
+            if (selectedListadoId.HasValue)
+            {
+                await LoadListadoCamposAsync(selectedListadoId.Value);
+            }
             await Filtrar();
         }
         catch (Exception ex)
@@ -358,17 +586,32 @@
         loading = false;
     }
 
-    private void AbrirNuevoDocumento()
+    private async Task OnSelectedListadoChanged()
+    {
+        if (selectedListadoId.HasValue)
+        {
+            await LoadListadoCamposAsync(selectedListadoId.Value);
+        }
+        await Filtrar();
+    }
+
+    private async Task AbrirNuevoDocumento()
     {
         editing = false;
         editingId = null;
+        if (selectedListadoId.HasValue)
+        {
+            await LoadListadoCamposAsync(selectedListadoId.Value);
+        }
         form = new CreateDocumentoControlDto
         {
             ListadoMaestroId = selectedListadoId ?? 0,
             Version = "1.0",
             FechaDocumento = DateTime.Today,
-            Estado = "Borrador"
+            Estado = "Borrador",
+            CamposPersonalizados = new Dictionary<string, string?>()
         };
+        InitializeCamposPersonalizados();
         showModal = true;
     }
 
@@ -380,6 +623,8 @@
             await toast.Show("No se pudo cargar el documento.", "error");
             return;
         }
+
+        await LoadListadoCamposAsync(detail.ListadoMaestroId);
 
         editing = true;
         editingId = id;
@@ -402,8 +647,10 @@
             Estado = detail.Estado,
             Observaciones = detail.Observaciones,
             ComentarioCambio = detail.ComentarioCambio,
-            AreaId = detail.AreaId
+            AreaId = detail.AreaId,
+            CamposPersonalizados = detail.CamposPersonalizados ?? new Dictionary<string, string?>()
         };
+        InitializeCamposPersonalizados();
         showModal = true;
     }
 
@@ -433,10 +680,17 @@
                     Estado = form.Estado,
                     Observaciones = form.Observaciones,
                     ComentarioCambio = form.ComentarioCambio,
-                    AreaId = form.AreaId
+                    AreaId = form.AreaId,
+                    CamposPersonalizados = form.CamposPersonalizados
                 };
-                var ok = await ControlDocumentalApi.UpdateDocumentoAsync(editingId.Value, updateDto);
-                if (!ok)
+                var response = await ControlDocumentalApi.UpdateDocumentoAsync(editingId.Value, updateDto);
+                if (response.StatusCode == HttpStatusCode.Forbidden)
+                {
+                    await toast.Show("No tiene permisos para reasignar el listado maestro o actualizar este documento.", "warning");
+                    return;
+                }
+
+                if (!response.IsSuccessStatusCode)
                 {
                     await toast.Show("No se pudo actualizar el documento.", "error");
                     return;
@@ -465,10 +719,17 @@
                     Estado = form.Estado,
                     Observaciones = form.Observaciones,
                     ComentarioCambio = form.ComentarioCambio,
-                    AreaId = form.AreaId
+                    AreaId = form.AreaId,
+                    CamposPersonalizados = form.CamposPersonalizados
                 };
-                var created = await ControlDocumentalApi.CreateDocumentoAsync(createDto);
-                if (created is null)
+                var response = await ControlDocumentalApi.CreateDocumentoAsync(createDto);
+                if (response.StatusCode == HttpStatusCode.Forbidden)
+                {
+                    await toast.Show("No tiene permisos para crear documentos en este listado.", "warning");
+                    return;
+                }
+
+                if (!response.IsSuccessStatusCode)
                 {
                     await toast.Show("No se pudo crear el documento.", "error");
                     return;
@@ -486,24 +747,95 @@
         }
     }
 
+    private void AbrirNuevoListado()
+    {
+        editingListado = false;
+        listadoForm = new CreateListadoMaestroDto
+        {
+            Campos = GetDefaultCampoPlantilla()
+        };
+        showListadoModal = true;
+    }
+
+    private async Task AbrirEditarListado()
+    {
+        if (!selectedListadoId.HasValue) return;
+        var listado = await ControlDocumentalApi.GetListadoMaestroAsync(selectedListadoId.Value);
+        if (listado is null)
+        {
+            await toast.Show("No se pudo cargar la configuración del listado.", "error");
+            return;
+        }
+
+        editingListado = true;
+        listadoForm = new CreateListadoMaestroDto
+        {
+            Nombre = listado.Nombre,
+            Descripcion = listado.Descripcion,
+            Campos = listado.Campos.Any() ? listado.Campos.OrderBy(c => c.Orden).ToList() : GetDefaultCampoPlantilla()
+        };
+        showListadoModal = true;
+    }
+
     private async Task CrearListado()
     {
         guardandoListado = true;
         try
         {
-            var created = await ControlDocumentalApi.CreateListadoMaestroAsync(listadoForm);
-            if (created is null)
+            if (editingListado)
             {
-                await toast.Show("No se pudo crear el listado maestro.", "error");
-                return;
+                if (!selectedListadoId.HasValue) return;
+                var response = await ControlDocumentalApi.UpdateListadoMaestroAsync(selectedListadoId.Value, listadoForm);
+                if (response.StatusCode == HttpStatusCode.Forbidden)
+                {
+                    await toast.Show("No tiene permisos para editar este listado maestro.", "warning");
+                    return;
+                }
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    await toast.Show("No se pudo actualizar el listado maestro.", "error");
+                    return;
+                }
+
+                var local = listados.FirstOrDefault(l => l.Id == selectedListadoId.Value);
+                if (local is not null)
+                {
+                    local.Nombre = listadoForm.Nombre;
+                    local.Descripcion = listadoForm.Descripcion;
+                }
+                await toast.Show("Listado maestro actualizado correctamente.");
+            }
+            else
+            {
+                var response = await ControlDocumentalApi.CreateListadoMaestroAsync(listadoForm);
+                if (response.StatusCode == HttpStatusCode.Forbidden)
+                {
+                    await toast.Show("No tiene permisos para crear un listado maestro.", "warning");
+                    return;
+                }
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    await toast.Show("No se pudo crear el listado maestro.", "error");
+                    return;
+                }
+
+                var created = await response.Content.ReadFromJsonAsync<ListadoMaestroDto>(new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                if (created is null)
+                {
+                    await toast.Show("No se pudo crear el listado maestro.", "error");
+                    return;
+                }
+
+                listados.Add(created);
+                selectedListadoId = created.Id;
+                await toast.Show("Listado maestro creado correctamente.");
             }
 
-            listados.Add(created);
-            selectedListadoId = created.Id;
             listadoForm = new CreateListadoMaestroDto();
             showListadoModal = false;
             await Filtrar();
-            await toast.Show("Listado maestro creado correctamente.");
         }
         finally
         {
@@ -513,8 +845,166 @@
 
     private async Task VerAuditoria(int id)
     {
+        auditDocumentDetail = await ControlDocumentalApi.GetDocumentoAsync(id);
         historial = await ControlDocumentalApi.GetHistorialAsync(id);
+        versionesAnteriores = BuildVersionHistory(auditDocumentDetail, historial);
         showAuditModal = true;
+    }
+
+    private List<DocumentVersionSnapshot> BuildVersionHistory(
+        DocumentoControlDetalleDto? detalle,
+        List<AuditLogDto> logs)
+    {
+        if (detalle is null || logs is null || !logs.Any())
+            return new List<DocumentVersionSnapshot>();
+
+        var snapshot = BuildSnapshot(detalle);
+        var versiones = new List<DocumentVersionSnapshot>();
+
+        foreach (var log in logs.OrderByDescending(l => l.FechaHora))
+        {
+            if (string.IsNullOrWhiteSpace(log.CamposModificados))
+                continue;
+
+            var cambios = ParseCamposModificados(log.CamposModificados);
+            var anterior = snapshot.ToDictionary(k => k.Key, v => v.Value, StringComparer.OrdinalIgnoreCase);
+
+            foreach (var cambio in cambios)
+            {
+                var label = GetFieldLabel(cambio.Key);
+                anterior[label] = FormatFieldValue(cambio.Key, cambio.Value.Antes);
+            }
+
+            versiones.Add(new DocumentVersionSnapshot(
+                log.Accion,
+                $"{log.ColaboradorNombre} · {log.FechaHora.ToLocalTime():g}",
+                anterior));
+
+            snapshot = anterior;
+        }
+
+        return versiones;
+    }
+
+    private static Dictionary<string, string?> BuildSnapshot(DocumentoControlDetalleDto detalle)
+    {
+        var snapshot = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Listado maestro"] = detalle.ListadoMaestroNombre,
+            ["Código"] = detalle.Codigo,
+            ["Nombre"] = detalle.Nombre,
+            ["Proceso responsable"] = detalle.ProcesoResponsable,
+            ["Versión"] = detalle.Version,
+            ["Fecha documento"] = detalle.FechaDocumento.ToString("d"),
+            ["Ubicación"] = null,
+            ["OneDrive URL"] = detalle.OneDriveUrl,
+            ["OneDrive Item ID"] = detalle.OneDriveItemId,
+            ["Archivo"] = detalle.ArchivoNombre,
+            ["Uso"] = detalle.Uso,
+            ["Tiempo de retención"] = detalle.TiempoRetencion,
+            ["Protección"] = detalle.Proteccion,
+            ["Recuperación"] = detalle.Recuperacion,
+            ["Disposición final"] = detalle.DisposicionFinal,
+            ["Estado"] = detalle.Estado,
+            ["Observaciones"] = detalle.Observaciones,
+            ["Comentario de cambio"] = detalle.ComentarioCambio,
+            ["Área"] = detalle.AreaNombre,
+            ["Descripción de listado"] = detalle.ListadoMaestroDescripcion
+        };
+
+        if (detalle.CamposPersonalizados != null)
+        {
+            foreach (var campo in detalle.CamposPersonalizados)
+            {
+                if (!snapshot.ContainsKey(campo.Key))
+                {
+                    snapshot[campo.Key] = campo.Value;
+                }
+            }
+
+            if (detalle.CamposPersonalizados.TryGetValue("Ubicación", out var ubicacion))
+            {
+                snapshot["Ubicación"] = ubicacion;
+            }
+        }
+
+        return snapshot;
+    }
+
+    private string GetFieldLabel(string propertyName) => propertyName switch
+    {
+        "ListadoMaestroId" => "Listado maestro",
+        "AreaId" => "Área",
+        "OneDriveUrl" => "OneDrive URL",
+        "OneDriveItemId" => "OneDrive Item ID",
+        "ArchivoNombre" => "Archivo",
+        "TiempoRetencion" => "Tiempo de retención",
+        "DisposicionFinal" => "Disposición final",
+        "ComentarioCambio" => "Comentario de cambio",
+        "FechaDocumento" => "Fecha documento",
+        "Ubicacion" => "Ubicación",
+        _ => propertyName
+    };
+
+    private string? FormatFieldValue(string propertyName, string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return value;
+
+        return propertyName switch
+        {
+            "ListadoMaestroId" when int.TryParse(value, out var listadoId) => GetListadoNombre(listadoId),
+            "AreaId" when int.TryParse(value, out var areaId) => GetAreaNombre(areaId),
+            "FechaDocumento" when DateTime.TryParse(value, out var fecha) => fecha.ToString("d"),
+            _ => value
+        };
+    }
+
+    private string GetListadoNombre(int listadoId) => listados.FirstOrDefault(l => l.Id == listadoId)?.Nombre ?? $"#{listadoId}";
+
+    private string GetAreaNombre(int areaId) => areas.FirstOrDefault(a => a.Id == areaId)?.Nombre ?? $"#{areaId}";
+
+    private static string? GetSnapshotValue(Dictionary<string, string?> campos, string clave) =>
+        campos.TryGetValue(clave, out var valor) ? valor : string.Empty;
+
+    private record DocumentVersionSnapshot(string Titulo, string Descripcion, Dictionary<string, string?> Campos);
+
+    private static Dictionary<string, (string Antes, string Despues)> ParseCamposModificados(string cambiosJson)
+    {
+        if (string.IsNullOrWhiteSpace(cambiosJson))
+            return new Dictionary<string, (string Antes, string Despues)>();
+
+        try
+        {
+            var document = System.Text.Json.JsonDocument.Parse(cambiosJson);
+            var parsed = new Dictionary<string, (string Antes, string Despues)>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var property in document.RootElement.EnumerateObject())
+            {
+                if (property.Value.ValueKind == System.Text.Json.JsonValueKind.Object)
+                {
+                    var antes = property.Value.TryGetProperty("de", out var antesElement)
+                        ? antesElement.GetString() ?? string.Empty
+                        : string.Empty;
+
+                    var despues = property.Value.TryGetProperty("a", out var despuesElement)
+                        ? despuesElement.GetString() ?? string.Empty
+                        : string.Empty;
+
+                    parsed[property.Name] = (antes, despues);
+                }
+                else
+                {
+                    parsed[property.Name] = (property.Value.ToString() ?? string.Empty, string.Empty);
+                }
+            }
+
+            return parsed;
+        }
+        catch
+        {
+            return new Dictionary<string, (string Antes, string Despues)>();
+        }
     }
 
     private void CerrarModal()
@@ -524,8 +1014,128 @@
         editingId = null;
     }
 
+    private void AgregarCampoPlantilla()
+    {
+        var nuevoCampo = new DocumentoControlCampoDto
+        {
+            CampoClave = $"CampoPersonalizado{listadoForm.Campos.Count + 1}",
+            Nombre = "Nuevo campo",
+            Tipo = "Texto",
+            Requerido = false,
+            Orden = listadoForm.Campos.Any() ? listadoForm.Campos.Max(c => c.Orden) + 1 : 1,
+            EsPredeterminado = false
+        };
+
+        listadoForm.Campos.Add(nuevoCampo);
+    }
+
+    private void EliminarCampoPlantilla(string campoClave)
+    {
+        var campo = listadoForm.Campos.FirstOrDefault(c => c.CampoClave == campoClave);
+        if (campo is not null)
+        {
+            listadoForm.Campos.Remove(campo);
+        }
+    }
+
     private void CerrarListadoModal() => showListadoModal = false;
     private void CerrarAuditoriaModal() => showAuditModal = false;
+
+    private string GetCampoLabel(string campoClave, string nombrePredeterminado)
+    {
+        return listadoCampos.FirstOrDefault(c => c.CampoClave == campoClave)?.Nombre ?? nombrePredeterminado;
+    }
+
+    private async Task LoadListadoCamposAsync(int listadoId)
+    {
+        var listado = await ControlDocumentalApi.GetListadoMaestroAsync(listadoId);
+        listadoCampos = listado is null
+            ? GetDefaultCampoPlantilla()
+            : listado.Campos.Any()
+                ? listado.Campos.OrderBy(c => c.Orden).ToList()
+                : GetDefaultCampoPlantilla();
+    }
+
+    private void InitializeCamposPersonalizados()
+    {
+        if (form.CamposPersonalizados is null)
+            form.CamposPersonalizados = new Dictionary<string, string?>();
+
+        foreach (var campo in listadoCampos.Where(c => !c.EsPredeterminado))
+        {
+            if (!form.CamposPersonalizados.ContainsKey(campo.CampoClave))
+            {
+                form.CamposPersonalizados[campo.CampoClave] = null;
+            }
+        }
+    }
+
+    private static List<DocumentoControlCampoDto> GetDefaultCampoPlantilla() => new()
+    {
+        new DocumentoControlCampoDto
+        {
+            CampoClave = "Codigo",
+            Nombre = "Código",
+            Tipo = "Texto",
+            Requerido = true,
+            EsPredeterminado = true,
+            Orden = 1
+        },
+        new DocumentoControlCampoDto
+        {
+            CampoClave = "Nombre",
+            Nombre = "Nombre",
+            Tipo = "Texto",
+            Requerido = true,
+            EsPredeterminado = true,
+            Orden = 2
+        },
+        new DocumentoControlCampoDto
+        {
+            CampoClave = "ProcesoResponsable",
+            Nombre = "Proceso responsable",
+            Tipo = "Texto",
+            Requerido = true,
+            EsPredeterminado = true,
+            Orden = 3
+        },
+        new DocumentoControlCampoDto
+        {
+            CampoClave = "Version",
+            Nombre = "Versión",
+            Tipo = "Texto",
+            Requerido = false,
+            EsPredeterminado = true,
+            Orden = 4
+        },
+        new DocumentoControlCampoDto
+        {
+            CampoClave = "FechaDocumento",
+            Nombre = "Fecha de documento",
+            Tipo = "Fecha",
+            Requerido = true,
+            EsPredeterminado = true,
+            Orden = 5
+        },
+        new DocumentoControlCampoDto
+        {
+            CampoClave = "OneDriveUrl",
+            Nombre = "Archivo OneDrive",
+            Tipo = "Texto",
+            Requerido = true,
+            EsPredeterminado = true,
+            Orden = 6
+        },
+        new DocumentoControlCampoDto
+        {
+            CampoClave = "Estado",
+            Nombre = "Estado",
+            Tipo = "Texto",
+            Requerido = true,
+            EsPredeterminado = true,
+            Orden = 7
+        }
+    };
 
     private Task OnArchivoOneDriveSeleccionado(OneDriveItem item)
     {

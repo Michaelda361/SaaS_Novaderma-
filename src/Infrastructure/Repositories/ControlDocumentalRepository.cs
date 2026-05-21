@@ -20,7 +20,35 @@ public class ControlDocumentalRepository(AppDbContext context) : IControlDocumen
         await Listados().OrderBy(l => l.Nombre).ToListAsync();
 
     public async Task<ListadoMaestro?> GetListadoByIdAsync(int id) =>
-        await Listados().FirstOrDefaultAsync(l => l.Id == id);
+        await context.ListadosMaestros
+            .Include(l => l.Campos)
+            .FirstOrDefaultAsync(l => l.Id == id);
+
+    public async Task<IEnumerable<DocumentoControlCampoDefinicion>> GetCamposPorListadoAsync(int listadoId) =>
+        await context.DocumentoControlCampoDefiniciones
+            .Where(c => c.ListadoMaestroId == listadoId)
+            .OrderBy(c => c.Orden)
+            .ToListAsync();
+
+    public async Task<DocumentoControlCampoDefinicion> CreateCampoAsync(DocumentoControlCampoDefinicion campo)
+    {
+        context.DocumentoControlCampoDefiniciones.Add(campo);
+        await context.SaveChangesAsync();
+        return campo;
+    }
+
+    public async Task<DocumentoControlCampoDefinicion> UpdateCampoAsync(DocumentoControlCampoDefinicion campo)
+    {
+        context.DocumentoControlCampoDefiniciones.Update(campo);
+        await context.SaveChangesAsync();
+        return campo;
+    }
+
+    public async Task DeleteCampoAsync(DocumentoControlCampoDefinicion campo)
+    {
+        context.DocumentoControlCampoDefiniciones.Remove(campo);
+        await context.SaveChangesAsync();
+    }
 
     public async Task<IEnumerable<DocumentoControl>> GetDocumentosAsync(
         int listadoId, int? areaId, string? busqueda, string? codigo,
@@ -69,6 +97,13 @@ public class ControlDocumentalRepository(AppDbContext context) : IControlDocumen
     public async Task<ListadoMaestro> CreateListadoAsync(ListadoMaestro listado)
     {
         context.ListadosMaestros.Add(listado);
+        await context.SaveChangesAsync();
+        return listado;
+    }
+
+    public async Task<ListadoMaestro> UpdateListadoAsync(ListadoMaestro listado)
+    {
+        context.ListadosMaestros.Update(listado);
         await context.SaveChangesAsync();
         return listado;
     }

@@ -28,6 +28,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<FlujoAprobacionDoc> FlujosAprobacionDoc => Set<FlujoAprobacionDoc>();
     public DbSet<ListadoMaestro> ListadosMaestros => Set<ListadoMaestro>();
     public DbSet<DocumentoControl> DocumentosControl => Set<DocumentoControl>();
+    public DbSet<DocumentoControlCampoDefinicion> DocumentoControlCampoDefiniciones => Set<DocumentoControlCampoDefinicion>();
 
     // Cartas Laborales
     public DbSet<PlantillaDocumento> PlantillasDocumento => Set<PlantillaDocumento>();
@@ -95,6 +96,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
         modelBuilder.Entity<ListadoMaestro>().HasQueryFilter(l => l.Activo);
         modelBuilder.Entity<DocumentoControl>().HasQueryFilter(d => d.Activo);
+        modelBuilder.Entity<DocumentoControlCampoDefinicion>().HasQueryFilter(c => c.Activo);
 
         // Enums como string para legibilidad en BD
         modelBuilder.Entity<Documento>()
@@ -113,7 +115,11 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .WithMany(l => l.Documentos)
             .HasForeignKey(d => d.ListadoMaestroId)
             .OnDelete(DeleteBehavior.Restrict);
-
+        modelBuilder.Entity<DocumentoControlCampoDefinicion>()
+            .HasOne(c => c.ListadoMaestro)
+            .WithMany(l => l.Campos)
+            .HasForeignKey(c => c.ListadoMaestroId)
+            .OnDelete(DeleteBehavior.Cascade);
         modelBuilder.Entity<DocumentoControl>()
             .HasOne(d => d.Area)
             .WithMany()

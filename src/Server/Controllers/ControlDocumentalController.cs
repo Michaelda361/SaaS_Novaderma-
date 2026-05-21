@@ -20,16 +20,47 @@ public class ControlDocumentalController(
         return Ok(listados);
     }
 
+    [HttpGet("listados-maestros/{id:int}")]
+    public async Task<IActionResult> GetListadoMaestro(int id)
+    {
+        var listado = await service.GetListadoAsync(id);
+        return listado is null ? NotFound() : Ok(listado);
+    }
+
     [HttpPost("listados-maestros")]
     public async Task<IActionResult> CreateListadoMaestro([FromBody] CreateListadoMaestroDto dto)
     {
+        if (!await currentUser.PuedeGestionarPlantillasAsync())
+        {
+            return Forbid();
+        }
+
         if (!ModelState.IsValid)
         {
             return BadRequest(ModelState);
         }
 
-        var created = await service.CreateListadoAsync(dto);
+        var email = currentUser.GetEmail();
+        var created = await service.CreateListadoAsync(dto, email);
         return CreatedAtAction(nameof(GetListadosMaestros), new { id = created.Id }, created);
+    }
+
+    [HttpPut("listados-maestros/{id:int}")]
+    public async Task<IActionResult> UpdateListadoMaestro(int id, [FromBody] CreateListadoMaestroDto dto)
+    {
+        if (!await currentUser.PuedeGestionarPlantillasAsync())
+        {
+            return Forbid();
+        }
+
+        if (!ModelState.IsValid)
+        {
+            return BadRequest(ModelState);
+        }
+
+        var email = currentUser.GetEmail();
+        var updated = await service.UpdateListadoAsync(id, dto, email);
+        return updated is null ? NotFound() : NoContent();
     }
 
     [HttpGet("documentos")]
@@ -74,6 +105,10 @@ public class ControlDocumentalController(
         {
             return NotFound(ex.Message);
         }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
     }
 
     [HttpPut("documentos/{id:int}")]
@@ -84,9 +119,20 @@ public class ControlDocumentalController(
             return BadRequest(ModelState);
         }
 
-        var email = currentUser.GetEmail();
-        var updated = await service.UpdateDocumentoAsync(id, dto, email);
-        return updated is null ? NotFound() : NoContent();
+        try
+        {
+            var email = currentUser.GetEmail();
+            var updated = await service.UpdateDocumentoAsync(id, dto, email);
+            return updated is null ? NotFound() : NoContent();
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(ex.Message);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
     }
 
     [HttpGet("documentos/{id:int}/auditoria")]
