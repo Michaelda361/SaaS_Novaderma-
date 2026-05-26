@@ -1,0 +1,311 @@
+@page "/control-documental/permisos"
+@attribute [PageTitle("Permisos - Control Documental")]
+@attribute [Authorize(Roles = "Admin")]
+@using TalentManagement.Shared.DTOs.ControlDocumental
+@inject ControlDocumentalApiService ControlDocumentalApi
+@inject ColaboradorApiService ColaboradorApi
+@inject IJSRuntime JS
+
+<Toast @ref="toast" />
+
+<div class="page-header">
+    <div>
+        <h2 class="page-title">Permisos - Control Documental</h2>
+        <p class="page-subtitle">Configura quién puede ver, editar y aprobar cambios en cada listado maestro.</p>
+    </div>
+</div>
+
+<div class="card" style="margin-bottom:1rem;">
+    <div class="filter-bar">
+        <select class="form-control" @bind="selectedListadoId" @bind:after="OnSelectedListadoChanged">
+            <option value="">Selecciona un listado maestro</option>
+            @foreach (var listado in listados)
+            {
+                <option value="@listado.Id">@listado.Nombre</option>
+            }
+        </select>
+    </div>
+</div>
+
+@if (loading)
+{
+    <div class="loading"><div class="spinner"></div> Cargando...</div>
+}
+else if (!selectedListadoId.HasValue)
+{
+    <div class="card">
+        <div class="empty-state">
+            <div class="empty-state-icon">�</div>
+            <h3>Selecciona un listado maestro</h3>
+            <p>Elige un listado para configurar los permisos de acceso.</p>
+        </div>
+    </div>
+}
+else
+{
+    <div class="card">
+        <div class="section-header" style="display:flex; justify-content:space-between; align-items:center; gap:1rem; margin-bottom:1rem;">
+            <div>
+                <h3 style="margin:0;">Gestión de permisos</h3>
+                <p style="margin:0.25rem 0 0; color:var(--text-muted);">Asigna roles a colaboradores para este listado.</p>
+            </div>
+            <button class="btn btn-primary" @onclick="AgregarFila">+ Agregar colaborador</button>
+        </div>
+
+        @if (!permisos.Any() && !nuevosPermisos.Any())
+        {
+            <div class="empty-state">
+                <div class="empty-state-icon">👥</div>
+                <h3>Sin permisos configurados</h3>
+                <p>Haz clic en "Agregar colaborador" para comenzar a asignar permisos.</p>
+            </div>
+        }
+        else
+        {
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Colaborador</th>
+                            <th>Email</th>
+                            <th style="text-align:center;">Puede Ver</th>
+                            <th style="text-align:center;">Puede Editar</th>
+                            <th style="text-align:center;">Puede Aprobar</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var (permiso, index) in permisos.Select((p, i) => (p, i)))
+                        {
+                            <tr>
+                                <td>@permiso.ColaboradorNombre</td>
+                                <td>@permiso.ColaboradorEmail</td>
+                                <td style="text-align:center;">
+                                     <input type="checkbox" checked="@permiso.PuedeVer" 
+                                         @onchange='(ChangeEventArgs e) => ActualizarPermiso(index, "ver", (bool)e.Value!)' />
+                                </td>
+                                <td style="text-align:center;">
+                                     <input type="checkbox" checked="@permiso.PuedeEditar" 
+                                         @onchange='(ChangeEventArgs e) => ActualizarPermiso(index, "editar", (bool)e.Value!)' />
+                                </td>
+                                <td style="text-align:center;">
+                                     <input type="checkbox" checked="@permiso.PuedeAprobar" 
+                                         @onchange='(ChangeEventArgs e) => ActualizarPermiso(index, "aprobar", (bool)e.Value!)' />
+                                </td>
+                                <td>
+                                    <button class="btn btn-danger btn-sm" @onclick="() => EliminarPermiso(index)">Eliminar</button>
+                                </td>
+                            </tr>
+                        }
+
+                        @foreach (var (nuevoPermiso, index) in nuevosPermisos.Select((p, i) => (p, i)))
+                        {
+                            <tr style="background:var(--surface-muted);">
+                                <td>
+                                    <select class="form-control" @bind="nuevoPermiso.ColaboradorId">
+                                        <option value="">Selecciona colaborador</option>
+                                        @foreach (var colab in colaboradores)
+                                        {
+                                            <option value="@colab.Id">@colab.Nombre @colab.Apellido</option>
+                                        }
+                                    </select>
+                                </td>
+                                <td>
+                                    @(colaboradores.FirstOrDefault(c => c.Id == nuevoPermiso.ColaboradorId)?.Email ?? "—")
+                                </td>
+                                <td style="text-align:center;">
+                                    <input type="checkbox" checked="@nuevoPermiso.PuedeVer" 
+                                           @onchange="(ChangeEventArgs e) => nuevoPermiso.PuedeVer = (bool)e.Value!" />
+                                </td>
+                                <td style="text-align:center;">
+                                    <input type="checkbox" checked="@nuevoPermiso.PuedeEditar" 
+                                           @onchange="(ChangeEventArgs e) => nuevoPermiso.PuedeEditar = (bool)e.Value!" />
+                                </td>
+                                <td style="text-align:center;">
+                                    <input type="checkbox" checked="@nuevoPermiso.PuedeAprobar" 
+                                           @onchange="(ChangeEventArgs e) => nuevoPermiso.PuedeAprobar = (bool)e.Value!" />
+                                </td>
+                                <td>
+                                    <button class="btn btn-secondary btn-sm" @onclick="() => CancelarFila(index)">Cancelar</button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <div style="display:flex; gap:1rem; margin-top:1rem;">
+                <button class="btn btn-primary" @onclick="GuardarPermisos" disabled="@(!tieneCambios)">
+                    Guardar cambios
+                </button>
+                <button class="btn btn-secondary" @onclick="Cancelar" disabled="@(!tieneCambios)">
+                    Cancelar
+                </button>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    private List<ListadoMaestroDto> listados = [];
+    private List<ListadoMaestroPermisoDto> permisos = [];
+    private List<ListadoMaestroPermisoUpdateDto> nuevosPermisos = [];
+    private List<ColaboradorDto> colaboradores = [];
+    private int? selectedListadoId;
+    private bool loading;
+    private bool tieneCambios;
+    private Toast? toast;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarListados();
+        await CargarColaboradores();
+    }
+
+    private async Task CargarListados()
+    {
+        try
+        {
+            listados = await ControlDocumentalApi.GetListadosMaestrosAsync();
+        }
+        catch (Exception ex)
+        {
+            await (toast?.Show($"Error al cargar listados: {ex.Message}", "error") ?? Task.CompletedTask);
+        }
+    }
+
+    private async Task CargarColaboradores()
+    {
+        try
+        {
+            colaboradores = await ColaboradorApi.GetAllAsync();
+        }
+        catch (Exception ex)
+        {
+            await (toast?.Show($"Error al cargar colaboradores: {ex.Message}", "error") ?? Task.CompletedTask);
+        }
+    }
+
+    private async Task OnSelectedListadoChanged()
+    {
+        if (!selectedListadoId.HasValue)
+            return;
+
+        loading = true;
+        try
+        {
+            permisos = await ControlDocumentalApi.GetListadoPermisosAsync(selectedListadoId.Value);
+            nuevosPermisos = [];
+            tieneCambios = false;
+        }
+        catch (Exception ex)
+        {
+            await (toast?.Show($"Error al cargar permisos: {ex.Message}", "error") ?? Task.CompletedTask);
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private void AgregarFila()
+    {
+        nuevosPermisos.Add(new ListadoMaestroPermisoUpdateDto
+        {
+            ColaboradorId = 0,
+            PuedeVer = false,
+            PuedeEditar = false,
+            PuedeAprobar = false
+        });
+        tieneCambios = true;
+    }
+
+    private void CancelarFila(int index)
+    {
+        if (index >= 0 && index < nuevosPermisos.Count)
+        {
+            nuevosPermisos.RemoveAt(index);
+            tieneCambios = nuevosPermisos.Any();
+        }
+    }
+
+    private void ActualizarPermiso(int index, string tipo, bool valor)
+    {
+        if (index >= 0 && index < permisos.Count)
+        {
+            switch (tipo)
+            {
+                case "ver":
+                    permisos[index].PuedeVer = valor;
+                    break;
+                case "editar":
+                    permisos[index].PuedeEditar = valor;
+                    break;
+                case "aprobar":
+                    permisos[index].PuedeAprobar = valor;
+                    break;
+            }
+            tieneCambios = true;
+        }
+    }
+
+    private void EliminarPermiso(int index)
+    {
+        if (index >= 0 && index < permisos.Count)
+        {
+            permisos.RemoveAt(index);
+            tieneCambios = true;
+        }
+    }
+
+    private async Task GuardarPermisos()
+    {
+        if (!selectedListadoId.HasValue)
+            return;
+
+        loading = true;
+        try
+        {
+            // Combinar permisos existentes modificados con nuevos
+            var todosLosPermisos = permisos
+                .Cast<ListadoMaestroPermisoUpdateDto>()
+                .Select(p => new ListadoMaestroPermisoUpdateDto
+                {
+                    ColaboradorId = p.ColaboradorId,
+                    PuedeVer = p.PuedeVer,
+                    PuedeEditar = p.PuedeEditar,
+                    PuedeAprobar = p.PuedeAprobar
+                })
+                .Concat(nuevosPermisos.Where(p => p.ColaboradorId > 0))
+                .ToList();
+
+            var response = await ControlDocumentalApi.UpdateListadoPermisosAsync(selectedListadoId.Value, todosLosPermisos);
+            
+            if (response.IsSuccessStatusCode)
+            {
+                await (toast?.Show("Permisos guardados correctamente.", "success") ?? Task.CompletedTask);
+                await OnSelectedListadoChanged();
+            }
+            else
+            {
+                var content = await response.Content.ReadAsStringAsync();
+                await (toast?.Show($"Error al guardar: {content}", "error") ?? Task.CompletedTask);
+            }
+        }
+        catch (Exception ex)
+        {
+            await (toast?.Show($"Error al guardar permisos: {ex.Message}", "error") ?? Task.CompletedTask);
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private async Task Cancelar()
+    {
+        nuevosPermisos = [];
+        tieneCambios = false;
+        await OnSelectedListadoChanged();
+    }
+}

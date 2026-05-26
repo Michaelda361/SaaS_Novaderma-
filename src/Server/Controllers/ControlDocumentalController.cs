@@ -20,7 +20,8 @@ public class ControlDocumentalController(
     [HttpGet("listados-maestros")]
     public async Task<IActionResult> GetListadosMaestros()
     {
-        var listados = await service.GetListadosAsync();
+        var email = currentUser.GetEmail();
+        var listados = await service.GetListadosParaUsuarioAsync(email);
         return Ok(listados);
     }
 
@@ -920,10 +921,147 @@ public class ControlDocumentalController(
         }
     }
 
+    [HttpGet("solicitudes/pendientes")]
+    public async Task<IActionResult> GetSolicitudesPendientes()
+    {
+        var email = currentUser.GetEmail();
+        var solicitudes = await service.GetSolicitudesCambioPendientesAsync(email);
+        return Ok(solicitudes);
+    }
+
+    [HttpGet("solicitudes/pendientes/count")]
+    public async Task<IActionResult> CountSolicitudesPendientes()
+    {
+        try
+        {
+            var email = currentUser.GetEmail();
+            var count = await service.CountSolicitudesCambioPendientesAsync(email);
+            return Ok(count);
+        }
+        catch
+        {
+            return Ok(0);
+        }
+    }
+
+    [HttpPost("solicitudes/{solicitudId:int}/aprobar")]
+    public async Task<IActionResult> AprobarSolicitudCambio(int solicitudId)
+    {
+        try
+        {
+            var email = currentUser.GetEmail();
+            await service.AprobarSolicitudCambioAsync(solicitudId, email);
+            return NoContent();
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return UnprocessableEntity(ex.Message);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(ex.Message);
+        }
+    }
+
+    [HttpPost("solicitudes/{solicitudId:int}/rechazar")]
+    public async Task<IActionResult> RechazarSolicitudCambio(int solicitudId, [FromBody] RechazarSolicitudCambioDto dto)
+    {
+        if (!ModelState.IsValid)
+        {
+            return BadRequest(ModelState);
+        }
+
+        try
+        {
+            var email = currentUser.GetEmail();
+            await service.RechazarSolicitudCambioAsync(solicitudId, dto.MotivoRechazo, email);
+            return NoContent();
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return UnprocessableEntity(ex.Message);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(ex.Message);
+        }
+    }
+
     [HttpGet("documentos/{id:int}/auditoria")]
     public async Task<IActionResult> GetHistorial(int id)
     {
         var historial = await service.GetHistorialAsync(id);
         return Ok(historial);
+    }
+
+    [HttpGet("documentos/{documentoId:int}/solicitudes")]
+    public async Task<IActionResult> GetSolicitudesPorDocumento(int documentoId)
+    {
+        var email = currentUser.GetEmail();
+        var solicitudes = await service.GetSolicitudesCambioPorDocumentoAsync(documentoId, email);
+        return Ok(solicitudes);
+    }
+
+    // ────── Endpoints de Permisos ──────
+
+    [HttpGet("listados-maestros/{listadoId:int}/permisos")]
+    public async Task<IActionResult> GetListadoPermisos(int listadoId)
+    {
+        try
+        {
+            var permisos = await service.GetListadoPermisosAsync(listadoId);
+            return Ok(permisos);
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, ex.Message);
+        }
+    }
+
+    [HttpGet("listados-maestros/{listadoId:int}/permisos/actual")]
+    public async Task<IActionResult> GetListadoPermisosActual(int listadoId)
+    {
+        try
+        {
+            var email = currentUser.GetEmail();
+            var permiso = await service.GetListadoPermisosActualUsuarioAsync(listadoId, email);
+            return permiso is null ? NotFound() : Ok(permiso);
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, ex.Message);
+        }
+    }
+
+    [HttpPost("listados-maestros/{listadoId:int}/permisos")]
+    public async Task<IActionResult> UpdateListadoPermisos(int listadoId, [FromBody] List<ListadoMaestroPermisoUpdateDto>? permisos)
+    {
+        try
+        {
+            var email = currentUser.GetEmail();
+            permisos = permisos ?? new List<ListadoMaestroPermisoUpdateDto>();
+            await service.UpdateListadoPermisosAsync(listadoId, permisos, email);
+            return Ok(new { mensaje = "Permisos actualizados correctamente." });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Forbid();
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(ex.Message);
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, ex.Message);
+        }
     }
 }

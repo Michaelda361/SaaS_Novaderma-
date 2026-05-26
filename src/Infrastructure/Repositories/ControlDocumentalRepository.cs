@@ -101,6 +101,69 @@ public class ControlDocumentalRepository(AppDbContext context) : IControlDocumen
         return documento;
     }
 
+    public async Task<bool> ExisteSolicitudCambioPendienteAsync(int documentoControlId, int colaboradorId) =>
+        await context.SolicitudesCambioDocumentoControl
+            .AnyAsync(s => s.DocumentoControlId == documentoControlId
+                && s.SolicitanteId == colaboradorId
+                && s.EstadoPropuesta == Domain.Enums.EstadoPropuesta.PendienteRevision);
+
+    public async Task<SolicitudCambioDocumentoControl> CreateSolicitudCambioAsync(SolicitudCambioDocumentoControl solicitud)
+    {
+        context.SolicitudesCambioDocumentoControl.Add(solicitud);
+        await context.SaveChangesAsync();
+        return solicitud;
+    }
+
+    public async Task<SolicitudCambioDocumentoControl> UpdateSolicitudCambioAsync(SolicitudCambioDocumentoControl solicitud)
+    {
+        context.SolicitudesCambioDocumentoControl.Update(solicitud);
+        await context.SaveChangesAsync();
+        return solicitud;
+    }
+
+    public async Task<SolicitudCambioDocumentoControl?> GetSolicitudCambioByIdAsync(int id) =>
+        await context.SolicitudesCambioDocumentoControl
+            .Include(s => s.DocumentoControl)
+            .Include(s => s.Solicitante)
+            .Include(s => s.Editor)
+            .Include(s => s.Aprobador)
+            .FirstOrDefaultAsync(s => s.Id == id);
+
+    public async Task<IEnumerable<SolicitudCambioDocumentoControl>> GetSolicitudesPorDocumentoAsync(int documentoId) =>
+        await context.SolicitudesCambioDocumentoControl
+            .Include(s => s.DocumentoControl)
+            .Include(s => s.Solicitante)
+            .Include(s => s.Editor)
+            .Include(s => s.Aprobador)
+            .Where(s => s.DocumentoControlId == documentoId)
+            .OrderByDescending(s => s.FechaCreacion)
+            .ToListAsync();
+
+    public async Task<IEnumerable<SolicitudCambioDocumentoControl>> GetSolicitudesCambioPendientesAsync() =>
+        await context.SolicitudesCambioDocumentoControl
+            .Include(s => s.DocumentoControl)
+            .Include(s => s.Solicitante)
+            .Include(s => s.Aprobador)
+            .Where(s => s.EstadoPropuesta == Domain.Enums.EstadoPropuesta.PendienteRevision)
+            .OrderByDescending(s => s.FechaCreacion)
+            .ToListAsync();
+
+    public async Task<IEnumerable<SolicitudCambioDocumentoControl>> GetSolicitudesCambioPendientesPorAreaAsync(int areaId) =>
+        await context.SolicitudesCambioDocumentoControl
+            .Include(s => s.DocumentoControl)
+            .Include(s => s.Solicitante)
+            .Include(s => s.Aprobador)
+            .Where(s => s.EstadoPropuesta == Domain.Enums.EstadoPropuesta.PendienteRevision
+                && s.DocumentoControl.AreaId == areaId)
+            .OrderByDescending(s => s.FechaCreacion)
+            .ToListAsync();
+
+    public async Task<int> CountSolicitudesCambioPendientesPorAreaAsync(int areaId) =>
+        await context.SolicitudesCambioDocumentoControl
+            .Where(s => s.EstadoPropuesta == Domain.Enums.EstadoPropuesta.PendienteRevision
+                && s.DocumentoControl.AreaId == areaId)
+            .CountAsync();
+
     public async Task<ListadoMaestro?> GetListadoByNombreAsync(string nombre) =>
         await context.ListadosMaestros
             .Include(l => l.Campos)
@@ -147,4 +210,37 @@ public class ControlDocumentalRepository(AppDbContext context) : IControlDocumen
         await context.SaveChangesAsync();
         return true;
     }
+
+    public async Task<IEnumerable<ListadoMaestroPermiso>> GetPermisosPorListadoAsync(int listadoId) =>
+        await context.ListadoMaestroPermisos
+            .Include(p => p.Colaborador)
+            .Where(p => p.ListadoMaestroId == listadoId)
+            .OrderBy(p => p.Colaborador.Nombre)
+            .ThenBy(p => p.Colaborador.Apellido)
+            .AsNoTracking()
+            .ToListAsync();
+
+    public async Task<IEnumerable<ListadoMaestroPermiso>> CreatePermisosAsync(IEnumerable<ListadoMaestroPermiso> permisos)
+    {
+        context.ListadoMaestroPermisos.AddRange(permisos);
+        await context.SaveChangesAsync();
+        return permisos;
+    }
+
+    public async Task DeletePermisosPorListadoAsync(int listadoId)
+    {
+        var permisos = await context.ListadoMaestroPermisos
+            .Where(p => p.ListadoMaestroId == listadoId)
+            .ToListAsync();
+        context.ListadoMaestroPermisos.RemoveRange(permisos);
+        await context.SaveChangesAsync();
+    }
+
+    public async Task<IEnumerable<ListadoMaestroPermiso>> GetPermisosPorColaboradorAsync(int colaboradorId) =>
+        await context.ListadoMaestroPermisos
+            .Include(p => p.Colaborador)
+            .Where(p => p.ColaboradorId == colaboradorId)
+            .OrderBy(p => p.ListadoMaestroId)
+            .AsNoTracking()
+            .ToListAsync();
 }

@@ -3,11 +3,16 @@
 @attribute [Authorize]
 @using System.Net
 @using System.Net.Http.Headers
+@using System.Text.Json
 @using Microsoft.AspNetCore.Components.Forms
+@using TalentManagement.Shared.DTOs.ControlDocumental
+@using TalentManagement.Shared.DTOs.Colaboradores
 @inject ControlDocumentalApiService ControlDocumentalApi
+@inject ColaboradorApiService ColaboradorApi
 @inject AreaApiService AreaApi
 @inject AuthInfoService AuthInfo
 @inject IJSRuntime JS
+@inject NavigationManager Navigation
 
 <Toast @ref="toast" />
 
@@ -28,6 +33,15 @@
             <button class="btn btn-ghost" @onclick="ToggleImportInstructions">
                 Importar listado
             </button>
+            @if (AuthInfo.EsAdmin)
+            {
+                <button class="btn btn-ghost" @onclick="AbrirPermisos">
+                    🔒 Gestionar permisos
+                </button>
+            }
+            <button class="btn btn-ghost" @onclick="TogglePendingRequests">
+                📝 Solicitudes pendientes (@pendingSolicitudes.Count)
+            </button>
             <button class="btn btn-danger" @onclick="EliminarListadoSeleccionado" disabled="@(!selectedListadoId.HasValue)">
                 🗑️ Eliminar listado
             </button>
@@ -35,9 +49,12 @@
         <button class="btn btn-ghost" @onclick="ExportListado" disabled="@(!selectedListadoId.HasValue)">
             ⬇️ Exportar listado
         </button>
-        <button class="btn btn-primary" @onclick="AbrirNuevoDocumento" disabled="@(!selectedListadoId.HasValue)">
-            + Nuevo documento
-        </button>
+        @if (AuthInfo.EsAdmin || AuthInfo.EsJefe)
+        {
+            <button class="btn btn-primary" @onclick="AbrirNuevoDocumento" disabled="@(!selectedListadoId.HasValue)">
+                + Nuevo documento
+            </button>
+        }
     </div>
 </div>
 
@@ -81,6 +98,85 @@
         <input type="text" class="form-control" placeholder="Estado" @bind="filterEstado" @bind:after="Filtrar" />
     </div>
 </div>
+
+@if (AuthInfo.EsAdmin || AuthInfo.EsJefe)
+{
+    <div class="card" style="margin-bottom:1rem;">
+        <div class="section-header" style="display:flex; justify-content:space-between; align-items:center; gap:1rem; margin-bottom:1rem;">
+            <div>
+                <h3 style="margin:0;">Solicitudes de cambio pendientes (@pendingSolicitudes.Count)</h3>
+                <p style="margin:0.25rem 0 0; color:var(--text-muted);">Revisa y resuelve los cambios solicitados por colaboradores.</p>
+            </div>
+            <button class="btn btn-secondary" @onclick="TogglePendingRequests">
+                @(showPendingRequests ? "Ocultar" : "Mostrar")
+            </button>
+        </div>
+
+        @if (!showPendingRequests)
+        {
+            <div class="empty-state">
+                <div class="empty-state-icon">👁️</div>
+                <h3>Panel de solicitudes oculto</h3>
+                <p>Pulsa "Mostrar" para revisar las solicitudes de cambio pendientes.</p>
+            </div>
+        }
+        else if (loadingSolicitudes)
+        {
+            <div class="loading"><div class="spinner"></div> Cargando solicitudes...</div>
+        }
+        else if (!pendingSolicitudes.Any())
+        {
+            <div class="empty-state">
+                <div class="empty-state-icon">✅</div>
+                <h3>No hay solicitudes pendientes</h3>
+                <p>Las solicitudes de cambio aparecerán aquí cuando los colaboradores las envíen.</p>
+            </div>
+        }
+        else
+        {
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Documento</th>
+                            <th>Código</th>
+                            <th>Solicitante</th>
+                            <th>Fecha</th>
+                            <th>Comentario</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var solicitud in pendingSolicitudes)
+                        {
+                            <tr>
+                                <td>@solicitud.DocumentoControlNombre</td>
+                                <td>@solicitud.DocumentoControlCodigo</td>
+                                <td>@solicitud.SolicitanteNombre</td>
+                                <td>@solicitud.FechaCreacion.ToLocalTime():g</td>
+                                <td>@solicitud.ComentarioSolicitud</td>
+                                <td>
+                                    <div class="flex gap-1">
+                                        <button class="btn btn-success btn-sm" @onclick="() => AprobarSolicitud(solicitud.Id)">Aprobar</button>
+                                        <button class="btn btn-danger btn-sm" @onclick="() => AbrirRechazarSolicitud(solicitud)">Rechazar</button>
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td colspan="6" style="padding:0; border:none;">
+                                    <details style="padding:0.75rem 1rem; background:var(--surface-muted); border-top:1px solid var(--surface-border);">
+                                        <summary style="cursor:pointer; font-weight:600;">Ver datos propuestos</summary>
+                                        <pre style="white-space:pre-wrap; word-break:break-word; margin-top:0.75rem;">@GetFormattedJson(solicitud.DatosPropuestos)</pre>
+                                    </details>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+}
 
 <div class="card">
     @if (loading)
@@ -284,6 +380,12 @@
                         <label>Observaciones</label>
                         <InputTextArea class="form-control" @bind-Value="form.Observaciones" Rows="3" />
                     </div>
+                    @if (editing && AuthInfo.EsSoloColaborador)
+                    {
+                        <div class="alert alert-info" style="margin-bottom:1rem;">
+                            Esta actualización se registrará como una solicitud de cambio pendiente. Un jefe o administrador deberá aprobarla antes de que se aplique al documento.
+                        </div>
+                    }
                     <div class="modal-footer">
                         <button type="button" class="btn btn-ghost" @onclick="CerrarModal">Cancelar</button>
                         <button type="submit" class="btn btn-primary" disabled="@guardando">@(guardando ? (editing ? "Actualizando..." : "Guardando...") : (editing ? (AuthInfo.EsSoloColaborador ? "Actualizar" : "Guardar") : "Guardar"))</button>
@@ -380,6 +482,101 @@
                         <button type="submit" class="btn btn-primary" disabled="@guardandoListado">@(guardandoListado ? "Guardando..." : (editingListado ? "Guardar cambios" : "Crear listado"))</button>
                     </div>
                 </EditForm>
+            </div>
+        </div>
+    </div>
+}
+
+@if (showPermisosModal)
+{
+    <div class="modal-backdrop" @onclick="CerrarPermisosModal">
+        <div class="modal large" @onclick:stopPropagation>
+            <div class="modal-header">
+                <span class="modal-title">Permisos de acceso</span>
+                <button class="btn btn-ghost btn-sm btn-icon" @onclick="CerrarPermisosModal">✕</button>
+            </div>
+            <div class="modal-body">
+                @if (permisosLoading)
+                {
+                    <div class="loading"><div class="spinner"></div> Cargando permisos...</div>
+                }
+                else
+                {
+                    <div class="section-header" style="display:flex; justify-content:space-between; align-items:center; gap:1rem; margin-bottom:1rem;">
+                        <div>
+                            <h3 style="margin:0;">Permisos del listado</h3>
+                            <p style="margin:0.25rem 0 0; color:var(--text-muted);">Define quién puede ver, editar y aprobar cambios en este listado.</p>
+                        </div>
+                        <button class="btn btn-primary" @onclick="AgregarPermiso">+ Agregar colaborador</button>
+                    </div>
+
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Colaborador</th>
+                                    <th>Email</th>
+                                    <th style="text-align:center;">Ver</th>
+                                    <th style="text-align:center;">Editar</th>
+                                    <th style="text-align:center;">Aprobar</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var (permiso, index) in listadoPermisos.Select((p, i) => (p, i)))
+                                {
+                                    <tr>
+                                        <td>@permiso.ColaboradorNombre</td>
+                                        <td>@permiso.ColaboradorEmail</td>
+                                        <td style="text-align:center;">
+                                            <input type="checkbox" checked="@permiso.PuedeVer" @onchange="(ChangeEventArgs e) => { permiso.PuedeVer = (bool)e.Value!; MarcarCambioPermisos(); }" />
+                                        </td>
+                                        <td style="text-align:center;">
+                                            <input type="checkbox" checked="@permiso.PuedeEditar" @onchange="(ChangeEventArgs e) => { permiso.PuedeEditar = (bool)e.Value!; MarcarCambioPermisos(); }" />
+                                        </td>
+                                        <td style="text-align:center;">
+                                            <input type="checkbox" checked="@permiso.PuedeAprobar" @onchange="(ChangeEventArgs e) => { permiso.PuedeAprobar = (bool)e.Value!; MarcarCambioPermisos(); }" />
+                                        </td>
+                                        <td>
+                                            <button class="btn btn-danger btn-sm" @onclick="() => EliminarPermiso(index)">Eliminar</button>
+                                        </td>
+                                    </tr>
+                                }
+                                @foreach (var (nuevoPermiso, index) in nuevosPermisosListado.Select((p, i) => (p, i)))
+                                {
+                                    <tr style="background:var(--surface-muted);">
+                                        <td>
+                                            <select class="form-control" value="@nuevoPermiso.ColaboradorId" @onchange="@( (ChangeEventArgs e) => { if (int.TryParse(e.Value?.ToString(), out var value)) { nuevoPermiso.ColaboradorId = value; } MarcarCambioPermisos(); } )">
+                                                <option value="0">Selecciona colaborador</option>
+                                                @foreach (var colab in colaboradores)
+                                                {
+                                                    <option value="@colab.Id">@colab.Nombre @colab.Apellido</option>
+                                                }
+                                            </select>
+                                        </td>
+                                        <td>@(colaboradores.FirstOrDefault(c => c.Id == nuevoPermiso.ColaboradorId)?.Email ?? "—")</td>
+                                        <td style="text-align:center;">
+                                            <input type="checkbox" checked="@nuevoPermiso.PuedeVer" @onchange="(ChangeEventArgs e) => { nuevoPermiso.PuedeVer = (bool)e.Value!; MarcarCambioPermisos(); }" />
+                                        </td>
+                                        <td style="text-align:center;">
+                                            <input type="checkbox" checked="@nuevoPermiso.PuedeEditar" @onchange="(ChangeEventArgs e) => { nuevoPermiso.PuedeEditar = (bool)e.Value!; MarcarCambioPermisos(); }" />
+                                        </td>
+                                        <td style="text-align:center;">
+                                            <input type="checkbox" checked="@nuevoPermiso.PuedeAprobar" @onchange="(ChangeEventArgs e) => { nuevoPermiso.PuedeAprobar = (bool)e.Value!; MarcarCambioPermisos(); }" />
+                                        </td>
+                                        <td>
+                                            <button class="btn btn-secondary btn-sm" @onclick="() => EliminarPermisoNuevo(index)">Cancelar</button>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-ghost" @onclick="CerrarPermisosModal">Cerrar</button>
+                <button class="btn btn-primary" @onclick="GuardarPermisosListado" disabled="@(permisosGuardando || !tieneCambiosPermisos)">@(permisosGuardando ? "Guardando..." : "Guardar cambios")</button>
             </div>
         </div>
     </div>
@@ -528,6 +725,32 @@
     </div>
 }
 
+@if (showRejectModal)
+{
+    <div class="modal-backdrop" @onclick="() => showRejectModal = false">
+        <div class="modal" @onclick:stopPropagation>
+            <div class="modal-header">
+                <span class="modal-title">Rechazar solicitud de cambio</span>
+                <button class="btn btn-ghost btn-sm btn-icon" @onclick="() => showRejectModal = false">✕</button>
+            </div>
+            <div class="modal-body">
+                <EditForm Model="rechazoForm" OnValidSubmit="RechazarSolicitud">
+                    <DataAnnotationsValidator />
+                    <div class="form-group">
+                        <label>Motivo de rechazo *</label>
+                        <InputTextArea class="form-control" @bind-Value="rechazoForm.MotivoRechazo" Rows="4" />
+                        <ValidationMessage For="() => rechazoForm.MotivoRechazo" />
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-ghost" @onclick="() => showRejectModal = false">Cancelar</button>
+                        <button type="submit" class="btn btn-danger" disabled="@processingSolicitud">Rechazar</button>
+                    </div>
+                </EditForm>
+            </div>
+        </div>
+    </div>
+}
+
 <OneDriveBrowser Visible="showOneDriveBrowser"
                  OnSeleccionado="OnArchivoOneDriveSeleccionado"
                  OnCancelado="() => showOneDriveBrowser = false" />
@@ -539,6 +762,10 @@
     private bool showModal = false;
     private bool showListadoModal = false;
     private bool showAuditModal = false;
+    private bool showPermisosModal = false;
+    private bool permisosLoading = false;
+    private bool permisosGuardando = false;
+    private bool tieneCambiosPermisos = false;
     private bool guardando = false;
     private bool guardandoListado = false;
     private bool showOneDriveBrowser = false;
@@ -561,9 +788,137 @@
     private List<ListadoMaestroDto> listados = [];
     private List<DocumentoControlDto> documentos = [];
     private List<AreaDto> areas = [];
+    private List<ListadoMaestroPermisoDto> listadoPermisos = [];
+    private List<ListadoMaestroPermisoUpdateDto> nuevosPermisosListado = [];
+    private List<ColaboradorDto> colaboradores = [];
+    private List<SolicitudCambioDocumentoControlDto> documentoSolicitudes = [];
+    private List<SolicitudCambioDocumentoControlDto> pendingSolicitudes = [];
+    private bool loadingSolicitudes = false;
+    private bool showPendingRequests = true;
+    private bool showRejectModal = false;
+    private SolicitudCambioDocumentoControlDto? solicitudSeleccionada = null;
+    private RechazarSolicitudCambioDto rechazoForm = new();
+    private bool processingSolicitud = false;
     private List<AuditLogDto> historial = [];
     private DocumentoControlDetalleDto? auditDocumentDetail;
     private List<DocumentVersionSnapshot> versionesAnteriores = [];
+
+    private async Task AbrirPermisos()
+    {
+        if (!selectedListadoId.HasValue)
+            return;
+
+        permisosLoading = true;
+        try
+        {
+            listadoPermisos = await ControlDocumentalApi.GetListadoPermisosAsync(selectedListadoId.Value);
+            nuevosPermisosListado = [];
+            tieneCambiosPermisos = false;
+            showPermisosModal = true;
+        }
+        catch (Exception ex)
+        {
+            await toast.Show($"Error al cargar permisos: {ex.Message}", "error");
+        }
+        finally
+        {
+            permisosLoading = false;
+        }
+    }
+
+    private void CerrarPermisosModal()
+    {
+        showPermisosModal = false;
+        tieneCambiosPermisos = false;
+    }
+
+    private async Task GuardarPermisosListado()
+    {
+        if (!selectedListadoId.HasValue)
+            return;
+
+        permisosGuardando = true;
+        try
+        {
+            var todosLosPermisos = listadoPermisos
+                .Select(p => new ListadoMaestroPermisoUpdateDto
+                {
+                    ColaboradorId = p.ColaboradorId,
+                    PuedeVer = p.PuedeVer,
+                    PuedeEditar = p.PuedeEditar,
+                    PuedeAprobar = p.PuedeAprobar
+                })
+                .Concat(nuevosPermisosListado.Where(p => p.ColaboradorId > 0))
+                .GroupBy(p => p.ColaboradorId)
+                .Select(g => g.Last())
+                .ToList();
+
+            var response = await ControlDocumentalApi.UpdateListadoPermisosAsync(selectedListadoId.Value, todosLosPermisos);
+            if (response.IsSuccessStatusCode)
+            {
+                await toast.Show("Permisos guardados correctamente.", "success");
+                showPermisosModal = false;
+                await AbrirPermisos();
+            }
+            else
+            {
+                var content = await response.Content.ReadAsStringAsync();
+                await toast.Show($"Error al guardar permisos: {content}", "error");
+            }
+        }
+        catch (Exception ex)
+        {
+            await toast.Show($"Error al guardar permisos: {ex.Message}", "error");
+        }
+        finally
+        {
+            permisosGuardando = false;
+        }
+    }
+
+    private void AgregarPermiso()
+    {
+        nuevosPermisosListado.Add(new ListadoMaestroPermisoUpdateDto
+        {
+            ColaboradorId = 0,
+            PuedeVer = false,
+            PuedeEditar = false,
+            PuedeAprobar = false
+        });
+        tieneCambiosPermisos = true;
+    }
+
+    private void EliminarPermiso(int index)
+    {
+        if (index >= 0 && index < listadoPermisos.Count)
+        {
+            listadoPermisos.RemoveAt(index);
+            tieneCambiosPermisos = true;
+        }
+    }
+
+    private void EliminarPermisoNuevo(int index)
+    {
+        if (index >= 0 && index < nuevosPermisosListado.Count)
+        {
+            nuevosPermisosListado.RemoveAt(index);
+            tieneCambiosPermisos = nuevosPermisosListado.Any();
+        }
+    }
+
+    private void MarcarCambioPermisos()
+    {
+        tieneCambiosPermisos = true;
+    }
+
+    private async Task VerAuditoria(int id)
+    {
+        auditDocumentDetail = await ControlDocumentalApi.GetDocumentoAsync(id);
+        historial = await ControlDocumentalApi.GetHistorialAsync(id);
+        documentoSolicitudes = await ControlDocumentalApi.GetSolicitudesPorDocumentoAsync(id);
+        versionesAnteriores = BuildVersionHistory(auditDocumentDetail, historial);
+        showAuditModal = true;
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -571,6 +926,7 @@
         {
             await AuthInfo.LoadAsync();
             areas = await AreaApi.GetAllAsync() ?? [];
+            colaboradores = await ColaboradorApi.GetAllAsync() ?? [];
             listados = await ControlDocumentalApi.GetListadosMaestrosAsync() ?? [];
             selectedListadoId = listados.FirstOrDefault()?.Id;
             if (selectedListadoId.HasValue)
@@ -586,6 +942,11 @@
         finally
         {
             loading = false;
+        }
+
+        if (AuthInfo.EsAdmin || AuthInfo.EsJefe)
+        {
+            await LoadPendingSolicitudesAsync();
         }
     }
 
@@ -607,6 +968,120 @@
             string.IsNullOrWhiteSpace(filterProceso) ? null : filterProceso,
             string.IsNullOrWhiteSpace(filterEstado) ? null : filterEstado);
         loading = false;
+    }
+
+    private async Task LoadPendingSolicitudesAsync()
+    {
+        loadingSolicitudes = true;
+        try
+        {
+            pendingSolicitudes = await ControlDocumentalApi.GetSolicitudesPendientesAsync() ?? [];
+        }
+        catch (Exception ex)
+        {
+            await toast.Show($"No se pudieron cargar las solicitudes de cambio: {ex.Message}", "error");
+            pendingSolicitudes = [];
+        }
+        finally
+        {
+            loadingSolicitudes = false;
+        }
+    }
+
+    private async Task AprobarSolicitud(int solicitudId)
+    {
+        processingSolicitud = true;
+        try
+        {
+            var response = await ControlDocumentalApi.AprobarSolicitudCambioAsync(solicitudId);
+            if (response.StatusCode == HttpStatusCode.Forbidden)
+            {
+                await toast.Show("No tienes permisos para aprobar esta solicitud.", "warning");
+                return;
+            }
+
+            if (response.IsSuccessStatusCode)
+            {
+                await toast.Show("Solicitud aprobada correctamente.", "success");
+                await LoadPendingSolicitudesAsync();
+                await Filtrar();
+                return;
+            }
+
+            var message = await response.Content.ReadAsStringAsync();
+            await toast.Show(string.IsNullOrWhiteSpace(message) ? "No se pudo aprobar la solicitud." : message, "error");
+        }
+        catch (Exception ex)
+        {
+            await toast.Show($"Error al aprobar la solicitud: {ex.Message}", "error");
+        }
+        finally
+        {
+            processingSolicitud = false;
+        }
+    }
+
+    private void AbrirRechazarSolicitud(SolicitudCambioDocumentoControlDto solicitud)
+    {
+        solicitudSeleccionada = solicitud;
+        rechazoForm = new RechazarSolicitudCambioDto();
+        showRejectModal = true;
+    }
+
+    private async Task RechazarSolicitud()
+    {
+        if (solicitudSeleccionada is null)
+        {
+            return;
+        }
+
+        processingSolicitud = true;
+        try
+        {
+            var response = await ControlDocumentalApi.RechazarSolicitudCambioAsync(solicitudSeleccionada.Id, rechazoForm);
+            if (response.StatusCode == HttpStatusCode.Forbidden)
+            {
+                await toast.Show("No tienes permisos para rechazar esta solicitud.", "warning");
+                return;
+            }
+
+            if (response.IsSuccessStatusCode)
+            {
+                await toast.Show("Solicitud rechazada correctamente.", "success");
+                showRejectModal = false;
+                await LoadPendingSolicitudesAsync();
+                return;
+            }
+
+            var message = await response.Content.ReadAsStringAsync();
+            await toast.Show(string.IsNullOrWhiteSpace(message) ? "No se pudo rechazar la solicitud." : message, "error");
+        }
+        catch (Exception ex)
+        {
+            await toast.Show($"Error al rechazar la solicitud: {ex.Message}", "error");
+        }
+        finally
+        {
+            processingSolicitud = false;
+        }
+    }
+
+    private void TogglePendingRequests() => showPendingRequests = !showPendingRequests;
+
+    private string GetFormattedJson(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+            return "No hay datos propuestos.";
+
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            return JsonSerializer.Serialize(document.RootElement, new JsonSerializerOptions { WriteIndented = true });
+        }
+        catch
+        {
+            return json;
+        }
     }
 
     private async Task OnSelectedListadoChanged()
@@ -719,7 +1194,9 @@
                     return;
                 }
 
-                await toast.Show("Documento actualizado correctamente.");
+                await toast.Show(AuthInfo.EsSoloColaborador
+                    ? "Solicitud de cambio enviada para revisión."
+                    : "Documento actualizado correctamente.");
             }
             else
             {
@@ -864,14 +1341,6 @@
         {
             guardandoListado = false;
         }
-    }
-
-    private async Task VerAuditoria(int id)
-    {
-        auditDocumentDetail = await ControlDocumentalApi.GetDocumentoAsync(id);
-        historial = await ControlDocumentalApi.GetHistorialAsync(id);
-        versionesAnteriores = BuildVersionHistory(auditDocumentDetail, historial);
-        showAuditModal = true;
     }
 
     private static readonly System.Text.Json.JsonSerializerOptions JsonOptions = new()

@@ -100,4 +100,60 @@ public class ControlDocumentalApiService(HttpClient http)
         await using var stream = await response.Content.ReadAsStreamAsync();
         return await System.Text.Json.JsonSerializer.DeserializeAsync<List<AuditLogDto>>(stream, JsonOptions) ?? [];
     }
+
+    public async Task<List<SolicitudCambioDocumentoControlDto>> GetSolicitudesPendientesAsync()
+    {
+        var response = await http.GetAsync($"{Base}/solicitudes/pendientes");
+        if (!response.IsSuccessStatusCode) return [];
+        await using var stream = await response.Content.ReadAsStreamAsync();
+        return await System.Text.Json.JsonSerializer.DeserializeAsync<List<SolicitudCambioDocumentoControlDto>>(stream, JsonOptions) ?? [];
+    }
+
+    public async Task<List<SolicitudCambioDocumentoControlDto>> GetSolicitudesPorDocumentoAsync(int documentoId)
+    {
+        var response = await http.GetAsync($"{Base}/documentos/{documentoId}/solicitudes");
+        if (!response.IsSuccessStatusCode) return [];
+        await using var stream = await response.Content.ReadAsStreamAsync();
+        return await System.Text.Json.JsonSerializer.DeserializeAsync<List<SolicitudCambioDocumentoControlDto>>(stream, JsonOptions) ?? [];
+    }
+
+    public async Task<int> CountSolicitudesPendientesAsync()
+    {
+        var response = await http.GetAsync($"{Base}/solicitudes/pendientes/count");
+        if (!response.IsSuccessStatusCode) return 0;
+        return await response.Content.ReadFromJsonAsync<int>(JsonOptions);
+    }
+
+    public async Task<HttpResponseMessage> AprobarSolicitudCambioAsync(int solicitudId)
+    {
+        return await http.PostAsync($"{Base}/solicitudes/{solicitudId}/aprobar", null);
+    }
+
+    public async Task<HttpResponseMessage> RechazarSolicitudCambioAsync(int solicitudId, RechazarSolicitudCambioDto dto)
+    {
+        return await http.PostAsJsonAsync($"{Base}/solicitudes/{solicitudId}/rechazar", dto);
+    }
+
+    // ────── Métodos de Permisos ──────
+
+    public async Task<List<ListadoMaestroPermisoDto>> GetListadoPermisosAsync(int listadoId)
+    {
+        var response = await http.GetAsync($"{Base}/listados-maestros/{listadoId}/permisos");
+        if (!response.IsSuccessStatusCode) return [];
+        await using var stream = await response.Content.ReadAsStreamAsync();
+        return await System.Text.Json.JsonSerializer.DeserializeAsync<List<ListadoMaestroPermisoDto>>(stream, JsonOptions) ?? [];
+    }
+
+    public async Task<ListadoMaestroPermisoDto?> GetListadoPermisosActualAsync(int listadoId)
+    {
+        var response = await http.GetAsync($"{Base}/listados-maestros/{listadoId}/permisos/actual");
+        if (!response.IsSuccessStatusCode) return null;
+        await using var stream = await response.Content.ReadAsStreamAsync();
+        return await System.Text.Json.JsonSerializer.DeserializeAsync<ListadoMaestroPermisoDto>(stream, JsonOptions);
+    }
+
+    public async Task<HttpResponseMessage> UpdateListadoPermisosAsync(int listadoId, List<ListadoMaestroPermisoUpdateDto> permisos)
+    {
+        return await http.PostAsJsonAsync($"{Base}/listados-maestros/{listadoId}/permisos", permisos);
+    }
 }

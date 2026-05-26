@@ -8,4 +8,5 @@ public class ListadoMaestro : BaseEntity
     public string? Descripcion { get; set; }
     public ICollection<DocumentoControl> Documentos { get; set; } = [];
     public ICollection<DocumentoControlCampoDefinicion> Campos { get; set; } = [];
+    public ICollection<ListadoMaestroPermiso> Permisos { get; set; } = [];
 }

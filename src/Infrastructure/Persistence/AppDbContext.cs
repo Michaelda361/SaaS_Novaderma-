@@ -26,7 +26,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<VersionDocumento> VersionesDocumento => Set<VersionDocumento>();
     public DbSet<PropuestaModificacion> PropuestasModificacion => Set<PropuestaModificacion>();
     public DbSet<FlujoAprobacionDoc> FlujosAprobacionDoc => Set<FlujoAprobacionDoc>();
+    public DbSet<SolicitudCambioDocumentoControl> SolicitudesCambioDocumentoControl => Set<SolicitudCambioDocumentoControl>();
     public DbSet<ListadoMaestro> ListadosMaestros => Set<ListadoMaestro>();
+    public DbSet<ListadoMaestroPermiso> ListadoMaestroPermisos => Set<ListadoMaestroPermiso>();
     public DbSet<DocumentoControl> DocumentosControl => Set<DocumentoControl>();
     public DbSet<DocumentoControlCampoDefinicion> DocumentoControlCampoDefiniciones => Set<DocumentoControlCampoDefinicion>();
 
@@ -120,11 +122,53 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .WithMany(l => l.Campos)
             .HasForeignKey(c => c.ListadoMaestroId)
             .OnDelete(DeleteBehavior.Cascade);
+        modelBuilder.Entity<ListadoMaestroPermiso>()
+            .HasOne(p => p.ListadoMaestro)
+            .WithMany(l => l.Permisos)
+            .HasForeignKey(p => p.ListadoMaestroId)
+            .OnDelete(DeleteBehavior.Cascade);
+        modelBuilder.Entity<ListadoMaestroPermiso>()
+            .HasOne(p => p.Colaborador)
+            .WithMany()
+            .HasForeignKey(p => p.ColaboradorId)
+            .OnDelete(DeleteBehavior.Restrict);
+        modelBuilder.Entity<ListadoMaestroPermiso>()
+            .HasIndex(p => new { p.ListadoMaestroId, p.ColaboradorId })
+            .IsUnique();
         modelBuilder.Entity<DocumentoControl>()
             .HasOne(d => d.Area)
             .WithMany()
             .HasForeignKey(d => d.AreaId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<SolicitudCambioDocumentoControl>()
+            .Property(s => s.EstadoPropuesta).HasConversion<string>();
+
+        modelBuilder.Entity<SolicitudCambioDocumentoControl>()
+            .HasOne(s => s.DocumentoControl)
+            .WithMany()
+            .HasForeignKey(s => s.DocumentoControlId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<SolicitudCambioDocumentoControl>()
+            .HasOne(s => s.Solicitante)
+            .WithMany()
+            .HasForeignKey(s => s.SolicitanteId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<SolicitudCambioDocumentoControl>()
+            .HasOne(s => s.Editor)
+            .WithMany()
+            .HasForeignKey(s => s.EditorId)
+            .OnDelete(DeleteBehavior.Restrict)
+            .IsRequired(false);
+
+        modelBuilder.Entity<SolicitudCambioDocumentoControl>()
+            .HasOne(s => s.Aprobador)
+            .WithMany()
+            .HasForeignKey(s => s.AprobadorId)
+            .OnDelete(DeleteBehavior.Restrict)
+            .IsRequired(false);
 
         // FK sin cascade para evitar ciclos con Colaborador
         modelBuilder.Entity<PropuestaModificacion>()

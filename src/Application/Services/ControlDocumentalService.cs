@@ -1,6 +1,7 @@
 using System.Text.Json;
 using TalentManagement.Application.Interfaces;
 using TalentManagement.Domain.Entities;
+using TalentManagement.Domain.Enums;
 using TalentManagement.Shared.DTOs.ControlDocumental;
 using TalentManagement.Shared.DTOs.Documentos;
 
@@ -23,6 +24,25 @@ public class ControlDocumentalService(
             Nombre = l.Nombre,
             Descripcion = l.Descripcion
         }).ToList();
+    }
+
+    public async Task<List<ListadoMaestroDto>> GetListadosParaUsuarioAsync(string usuarioEmail)
+    {
+        var colaborador = await TryResolverColaboradorAsync(usuarioEmail);
+        if (colaborador is null)
+            return new List<ListadoMaestroDto>();
+
+        if (colaborador.Rol == Domain.Enums.RolUsuario.Admin || colaborador.Rol == Domain.Enums.RolUsuario.Jefe)
+            return await GetListadosAsync();
+
+        var permisos = await repository.GetPermisosPorColaboradorAsync(colaborador.Id);
+        var listadoIds = permisos.Where(p => p.PuedeVer).Select(p => p.ListadoMaestroId).ToHashSet();
+
+        var listados = await repository.GetListadosAsync();
+        return listados
+            .Where(l => listadoIds.Contains(l.Id))
+            .Select(MapToListadoDto)
+            .ToList();
     }
 
     public async Task<ListadoMaestroDto?> GetListadoAsync(int id)
@@ -340,6 +360,10 @@ public class ControlDocumentalService(
     public async Task<DocumentoControlDto> CreateDocumentoAsync(
         CreateDocumentoControlDto dto, string usuarioEmail)
     {
+        var creador = await TryResolverColaboradorAsync(usuarioEmail);
+        if (creador is null || (creador.Rol != RolUsuario.Admin && creador.Rol != RolUsuario.Jefe))
+            throw new UnauthorizedAccessException("No tiene permisos para crear documentos.");
+
         var listado = await repository.GetListadoByIdAsync(dto.ListadoMaestroId)
             ?? throw new KeyNotFoundException("Listado maestro no encontrado");
 
@@ -386,12 +410,22 @@ public class ControlDocumentalService(
         var existing = await repository.GetDocumentoByIdAsync(id);
         if (existing is null) return null;
 
-        // Si el usuario intenta cambiar el ListadoMaestro del documento, requiere permisos de gestión (Jefe/Admin)
-        if (dto.ListadoMaestroId != existing.ListadoMaestroId)
+        var editor = await TryResolverColaboradorAsync(usuarioEmail);
+        if (editor is null)
+            throw new UnauthorizedAccessException("No tiene permisos para actualizar este documento.");
+
+        // Verificar permisos basados en ListadoMaestroPermiso
+        var tienePermisoEditar = editor.Rol == RolUsuario.Admin || 
+                                editor.Rol == RolUsuario.Jefe ||
+                                await ValidarPermisoAsync(existing.ListadoMaestroId, editor.Id, "editar");
+
+        if (!tienePermisoEditar)
+            throw new UnauthorizedAccessException("No tienes permisos para editar documentos de este listado maestro.");
+
+        if (dto.ListadoMaestroId != existing.ListadoMaestroId &&
+            editor.Rol != RolUsuario.Admin && editor.Rol != RolUsuario.Jefe)
         {
-            var editor = await TryResolverColaboradorAsync(usuarioEmail);
-            if (editor is null || (editor.Rol != Domain.Enums.RolUsuario.Admin && editor.Rol != Domain.Enums.RolUsuario.Jefe))
-                throw new UnauthorizedAccessException("No tiene permisos para reasignar el listado maestro del documento.");
+            throw new UnauthorizedAccessException("No tiene permisos para reasignar el listado maestro del documento.");
         }
 
         await ValidateCamposPersonalizados(dto.ListadoMaestroId, dto.CamposPersonalizados);
@@ -427,6 +461,190 @@ public class ControlDocumentalService(
 
         return MapToDto(updated);
     }
+
+    public async Task<List<SolicitudCambioDocumentoControlDto>> GetSolicitudesCambioPendientesAsync(string usuarioEmail)
+    {
+        var colaborador = await TryResolverColaboradorAsync(usuarioEmail);
+        if (colaborador is null)
+            return new List<SolicitudCambioDocumentoControlDto>();
+
+        IEnumerable<SolicitudCambioDocumentoControl> solicitudes;
+        if (colaborador.Rol == RolUsuario.Admin)
+        {
+            solicitudes = await repository.GetSolicitudesCambioPendientesAsync();
+        }
+        else
+        {
+            var (esJefe, areaId) = await EsJefeDeAreaAsync(colaborador.Id);
+            if (!esJefe)
+                return new List<SolicitudCambioDocumentoControlDto>();
+
+            solicitudes = await repository.GetSolicitudesCambioPendientesPorAreaAsync(areaId);
+        }
+
+        return solicitudes.Select(MapToSolicitudCambioDto).ToList();
+    }
+
+    public async Task<List<SolicitudCambioDocumentoControlDto>> GetSolicitudesCambioPorDocumentoAsync(int documentoId, string usuarioEmail)
+    {
+        var colaborador = await TryResolverColaboradorAsync(usuarioEmail);
+        if (colaborador is null)
+            return new List<SolicitudCambioDocumentoControlDto>();
+
+        var solicitudes = await repository.GetSolicitudesPorDocumentoAsync(documentoId);
+        if (colaborador.Rol == RolUsuario.Admin || colaborador.Rol == RolUsuario.Jefe)
+        {
+            return solicitudes.Select(MapToSolicitudCambioDto).ToList();
+        }
+
+        return solicitudes
+            .Where(s => s.SolicitanteId == colaborador.Id || s.EditorId == colaborador.Id || s.AprobadorId == colaborador.Id)
+            .Select(MapToSolicitudCambioDto)
+            .ToList();
+    }
+
+    public async Task<int> CountSolicitudesCambioPendientesAsync(string usuarioEmail)
+    {
+        var colaborador = await TryResolverColaboradorAsync(usuarioEmail);
+        if (colaborador is null)
+            return 0;
+
+        if (colaborador.Rol == RolUsuario.Admin)
+            return (await repository.GetSolicitudesCambioPendientesAsync()).Count();
+
+        var (esJefe, areaId) = await EsJefeDeAreaAsync(colaborador.Id);
+        if (!esJefe)
+            return 0;
+
+        return await repository.CountSolicitudesCambioPendientesPorAreaAsync(areaId);
+    }
+
+    public async Task AprobarSolicitudCambioAsync(int solicitudId, string usuarioEmail)
+    {
+        var aprobador = await TryResolverColaboradorAsync(usuarioEmail);
+        if (aprobador is null)
+            throw new UnauthorizedAccessException("No tiene permisos para aprobar solicitudes.");
+
+        var solicitud = await repository.GetSolicitudCambioByIdAsync(solicitudId)
+            ?? throw new KeyNotFoundException("Solicitud de cambio no encontrada.");
+
+        if (solicitud.EstadoPropuesta != EstadoPropuesta.PendienteRevision)
+            throw new InvalidOperationException("La solicitud ya fue resuelta.");
+
+        // Verificar permisos basados en ListadoMaestroPermiso o rol
+        var tienePermisoAprobar = aprobador.Rol == RolUsuario.Admin || 
+                                 await ValidarPermisoAsync(solicitud.DocumentoControl.ListadoMaestroId, aprobador.Id, "aprobar");
+
+        if (!tienePermisoAprobar)
+        {
+            var (esJefe, areaId) = await EsJefeDeAreaAsync(aprobador.Id);
+            if (!esJefe || (aprobador.Rol == RolUsuario.Jefe && solicitud.DocumentoControl.AreaId != areaId))
+                throw new UnauthorizedAccessException("No tienes permisos para aprobar esta solicitud.");
+        }
+
+        var documento = await repository.GetDocumentoByIdAsync(solicitud.DocumentoControlId)
+            ?? throw new KeyNotFoundException("Documento no encontrado.");
+
+        var propuesta = JsonSerializer.Deserialize<UpdateDocumentoControlDto>(solicitud.DatosPropuestos);
+        if (propuesta is null)
+            throw new InvalidOperationException("Los datos de la solicitud son inválidos.");
+
+        await ValidateCamposPersonalizados(propuesta.ListadoMaestroId, propuesta.CamposPersonalizados);
+
+        var original = CloneForDiff(documento);
+
+        documento.ListadoMaestroId = propuesta.ListadoMaestroId;
+        documento.Codigo = propuesta.Codigo.Trim();
+        documento.Nombre = propuesta.Nombre.Trim();
+        documento.ProcesoResponsable = propuesta.ProcesoResponsable.Trim();
+        documento.Version = string.IsNullOrWhiteSpace(propuesta.Version) ? documento.Version : propuesta.Version.Trim();
+        documento.FechaDocumento = propuesta.FechaDocumento;
+        documento.OneDriveUrl = propuesta.OneDriveUrl.Trim();
+        documento.OneDriveItemId = propuesta.OneDriveItemId?.Trim();
+        documento.ArchivoNombre = propuesta.ArchivoNombre?.Trim();
+        documento.Uso = propuesta.Uso?.Trim();
+        documento.TiempoRetencion = propuesta.TiempoRetencion?.Trim();
+        documento.Proteccion = propuesta.Proteccion?.Trim();
+        documento.Recuperacion = propuesta.Recuperacion?.Trim();
+        documento.DisposicionFinal = propuesta.DisposicionFinal?.Trim();
+        documento.Estado = propuesta.Estado.Trim();
+        documento.Observaciones = propuesta.Observaciones?.Trim();
+        documento.ComentarioCambio = solicitud.ComentarioSolicitud;
+        documento.AreaId = propuesta.AreaId;
+        documento.DatosPersonalizados = propuesta.CamposPersonalizados is null
+            ? documento.DatosPersonalizados
+            : JsonSerializer.Serialize(propuesta.CamposPersonalizados);
+
+        var updated = await repository.UpdateDocumentoAsync(documento);
+        var cambios = BuildDiff(original, updated);
+
+        solicitud.EstadoPropuesta = EstadoPropuesta.Aprobada;
+        solicitud.AprobadorId = aprobador.Id;
+        solicitud.FechaResolucion = DateTime.UtcNow;
+
+        await repository.UpdateSolicitudCambioAsync(solicitud);
+
+        var log = await BuildAuditLogAsync(updated.Id, updated.Nombre, "SolicitudCambioAprobada", solicitud.ComentarioSolicitud, usuarioEmail, updated, cambios);
+        await auditRepository.CreateAsync(log);
+    }
+
+    public async Task RechazarSolicitudCambioAsync(int solicitudId, string motivo, string usuarioEmail)
+    {
+        var aprobador = await TryResolverColaboradorAsync(usuarioEmail);
+        if (aprobador is null)
+            throw new UnauthorizedAccessException("No tiene permisos para rechazar solicitudes.");
+
+        var solicitud = await repository.GetSolicitudCambioByIdAsync(solicitudId)
+            ?? throw new KeyNotFoundException("Solicitud de cambio no encontrada.");
+
+        if (solicitud.EstadoPropuesta != EstadoPropuesta.PendienteRevision)
+            throw new InvalidOperationException("La solicitud ya fue resuelta.");
+
+        var (esJefe, areaId) = await EsJefeDeAreaAsync(aprobador.Id);
+        if (aprobador.Rol != RolUsuario.Admin && !esJefe)
+            throw new UnauthorizedAccessException("No tienes permisos para rechazar esta solicitud.");
+
+        if (aprobador.Rol == RolUsuario.Jefe && solicitud.DocumentoControl.AreaId != areaId)
+            throw new UnauthorizedAccessException("No tienes permisos para rechazar esta solicitud.");
+
+        solicitud.EstadoPropuesta = EstadoPropuesta.Rechazada;
+        solicitud.AprobadorId = aprobador.Id;
+        solicitud.ComentarioResolucion = motivo?.Trim();
+        solicitud.FechaResolucion = DateTime.UtcNow;
+
+        await repository.UpdateSolicitudCambioAsync(solicitud);
+
+        var documento = await repository.GetDocumentoByIdAsync(solicitud.DocumentoControlId);
+        var log = await BuildAuditLogAsync(solicitud.DocumentoControlId, documento?.Nombre ?? "—", "SolicitudCambioRechazada", motivo, usuarioEmail, documento ?? new DocumentoControl { Id = solicitud.DocumentoControlId, Nombre = "—" }, null);
+        await auditRepository.CreateAsync(log);
+    }
+
+    private async Task<(bool EsJefe, int AreaId)> EsJefeDeAreaAsync(int colaboradorId)
+    {
+        var areas = await areaRepository.GetAllAsync();
+        var area = areas.FirstOrDefault(a => a.JefeId == colaboradorId);
+        return area is not null ? (true, area.Id) : (false, 0);
+    }
+
+    private static SolicitudCambioDocumentoControlDto MapToSolicitudCambioDto(SolicitudCambioDocumentoControl solicitud) => new()
+    {
+        Id = solicitud.Id,
+        DocumentoControlId = solicitud.DocumentoControlId,
+        DocumentoControlNombre = solicitud.DocumentoControl?.Nombre ?? string.Empty,
+        DocumentoControlCodigo = solicitud.DocumentoControl?.Codigo ?? string.Empty,
+        SolicitanteId = solicitud.SolicitanteId,
+        SolicitanteNombre = solicitud.Solicitante?.Nombre + " " + solicitud.Solicitante?.Apellido,
+        EstadoPropuesta = solicitud.EstadoPropuesta.ToString(),
+        ComentarioSolicitud = solicitud.ComentarioSolicitud,
+        ComentarioResolucion = solicitud.ComentarioResolucion,
+        FechaCreacion = solicitud.FechaCreacion,
+        FechaEdicion = solicitud.FechaEdicion,
+        FechaResolucion = solicitud.FechaResolucion,
+        DatosPropuestos = solicitud.DatosPropuestos,
+        AprobadorId = solicitud.AprobadorId,
+        AprobadorNombre = solicitud.Aprobador?.Nombre + " " + solicitud.Aprobador?.Apellido,
+        EditorNombre = solicitud.Editor?.Nombre + " " + solicitud.Editor?.Apellido
+    };
 
     public async Task<List<AuditLogDto>> GetHistorialAsync(int documentoId)
     {
@@ -756,4 +974,98 @@ public class ControlDocumentalService(
 
         return JsonSerializer.Deserialize<List<string>>(definicion.OpcionesJson) ?? new List<string>();
     }
+
+    // ────── Métodos de Permisos ──────
+
+    public async Task<List<ListadoMaestroPermisoDto>> GetListadoPermisosAsync(int listadoId)
+    {
+        var permisos = await repository.GetPermisosPorListadoAsync(listadoId);
+        return permisos.Select(MapToPermisoDto).ToList();
+    }
+
+    public async Task<ListadoMaestroPermisoDto?> GetListadoPermisosActualUsuarioAsync(int listadoId, string usuarioEmail)
+    {
+        var colaborador = await TryResolverColaboradorAsync(usuarioEmail);
+        if (colaborador is null)
+            return null;
+
+        var permisos = await repository.GetPermisosPorListadoAsync(listadoId);
+        var permiso = permisos.FirstOrDefault(p => p.ColaboradorId == colaborador.Id);
+        
+        return permiso is null ? null : MapToPermisoDto(permiso);
+    }
+
+    public async Task UpdateListadoPermisosAsync(int listadoId, IEnumerable<ListadoMaestroPermisoUpdateDto> permisos, string usuarioEmail)
+    {
+        var administrador = await TryResolverColaboradorAsync(usuarioEmail);
+        if (administrador is null || administrador.Rol != RolUsuario.Admin)
+            throw new UnauthorizedAccessException("Solo administradores pueden configurar permisos.");
+
+        var listado = await repository.GetListadoByIdAsync(listadoId);
+        if (listado is null)
+            throw new KeyNotFoundException("Listado maestro no encontrado.");
+
+        // Eliminar permisos antiguos
+        await repository.DeletePermisosPorListadoAsync(listadoId);
+
+        // Crear nuevos permisos
+        var nuevosPermisos = new List<ListadoMaestroPermiso>();
+        foreach (var permisoDto in permisos)
+        {
+            var colaborador = await colaboradorRepository.GetByIdAsync(permisoDto.ColaboradorId);
+            if (colaborador is null)
+                continue;
+
+            nuevosPermisos.Add(new ListadoMaestroPermiso
+            {
+                ListadoMaestroId = listadoId,
+                ColaboradorId = permisoDto.ColaboradorId,
+                PuedeVer = permisoDto.PuedeVer,
+                PuedeEditar = permisoDto.PuedeEditar,
+                PuedeAprobar = permisoDto.PuedeAprobar
+            });
+        }
+
+        if (nuevosPermisos.Any())
+        {
+            await repository.CreatePermisosAsync(nuevosPermisos);
+        }
+
+        var log = await BuildAuditLogAsync(
+            listadoId,
+            listado.Nombre,
+            "PermisosActualizados",
+            $"Se actualizaron permisos para {nuevosPermisos.Count} colaborador(es)",
+            usuarioEmail,
+            new DocumentoControl { Id = 0, Nombre = listado.Nombre },
+            null);
+        await auditRepository.CreateAsync(log);
+    }
+
+    private async Task<bool> ValidarPermisoAsync(int listadoId, int colaboradorId, string tipoPermiso)
+    {
+        var permisos = await repository.GetPermisosPorListadoAsync(listadoId);
+        var permiso = permisos.FirstOrDefault(p => p.ColaboradorId == colaboradorId);
+
+        if (permiso is null)
+            return false;
+
+        return tipoPermiso switch
+        {
+            "ver" => permiso.PuedeVer,
+            "editar" => permiso.PuedeEditar || permiso.PuedeAprobar,
+            "aprobar" => permiso.PuedeAprobar,
+            _ => false
+        };
+    }
+
+    private static ListadoMaestroPermisoDto MapToPermisoDto(ListadoMaestroPermiso permiso) => new()
+    {
+        ColaboradorId = permiso.ColaboradorId,
+        ColaboradorNombre = permiso.Colaborador?.Nombre + " " + permiso.Colaborador?.Apellido,
+        ColaboradorEmail = permiso.Colaborador?.Email ?? string.Empty,
+        PuedeVer = permiso.PuedeVer,
+        PuedeEditar = permiso.PuedeEditar,
+        PuedeAprobar = permiso.PuedeAprobar
+    };
 }
