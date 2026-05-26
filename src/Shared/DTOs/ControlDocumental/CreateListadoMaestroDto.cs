@@ -27,4 +27,17 @@ public class TemplateDocumentoDto
 
     public string Version { get; set; } = "1.0";
     public string Estado { get; set; } = "Borrador";
+    public DateTime? FechaDocumento { get; set; }
+    public string? OneDriveUrl { get; set; }
+    public string? OneDriveItemId { get; set; }
+    public string? ArchivoNombre { get; set; }
+    public string? Uso { get; set; }
+    public string? TiempoRetencion { get; set; }
+    public string? Proteccion { get; set; }
+    public string? Recuperacion { get; set; }
+    public string? DisposicionFinal { get; set; }
+    public string? Observaciones { get; set; }
+    public string? ComentarioCambio { get; set; }
+    public string? Area { get; set; }
+    public Dictionary<string, string?> CamposPersonalizados { get; set; } = new();
 }

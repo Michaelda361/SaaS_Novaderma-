@@ -14,12 +14,15 @@ public interface IControlDocumentalRepository
         string? proceso,
         string? estado);
     Task<DocumentoControl?> GetDocumentoByIdAsync(int id);
+    Task<DocumentoControl?> GetDocumentoByCodigoAsync(int listadoId, string codigo);
     Task<DocumentoControl> CreateDocumentoAsync(DocumentoControl documento);
     Task<DocumentoControl> UpdateDocumentoAsync(DocumentoControl documento);
+    Task<ListadoMaestro?> GetListadoByNombreAsync(string nombre);
     Task<ListadoMaestro> CreateListadoAsync(ListadoMaestro listado);
     Task<ListadoMaestro> UpdateListadoAsync(ListadoMaestro listado);
     Task<IEnumerable<DocumentoControlCampoDefinicion>> GetCamposPorListadoAsync(int listadoId);
     Task<DocumentoControlCampoDefinicion> CreateCampoAsync(DocumentoControlCampoDefinicion campo);
     Task<DocumentoControlCampoDefinicion> UpdateCampoAsync(DocumentoControlCampoDefinicion campo);
     Task DeleteCampoAsync(DocumentoControlCampoDefinicion campo);
+    Task<bool> DeleteListadoAsync(int id);
 }

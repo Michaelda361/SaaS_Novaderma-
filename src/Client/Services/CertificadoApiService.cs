@@ -1,4 +1,5 @@
-﻿using System.Net.Http.Json;
+﻿using System.Net;
+using System.Net.Http.Json;
 using TalentManagement.Shared.DTOs.Certificados;
 
 namespace TalentManagement.Client.Services;
@@ -39,6 +40,15 @@ public class CertificadoApiService(HttpClient http)
     public async Task<(byte[]? bytes, string fileName)> DescargarPdfAsync(int id)
     {
         var r = await http.GetAsync($"{Base}/{id}/pdf");
+        if (!r.IsSuccessStatusCode && r.StatusCode == HttpStatusCode.NotFound)
+        {
+            var regen = await http.PostAsync($"{Base}/{id}/regenerar-pdf", null);
+            if (regen.IsSuccessStatusCode)
+            {
+                r = await http.GetAsync($"{Base}/{id}/pdf");
+            }
+        }
+
         if (!r.IsSuccessStatusCode) return (null, "");
         var bytes = await r.Content.ReadAsByteArrayAsync();
         var name = r.Content.Headers.ContentDisposition?.FileNameStar ?? $"certificado_{id}.pdf";

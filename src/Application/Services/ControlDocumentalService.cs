@@ -9,7 +9,8 @@ namespace TalentManagement.Application.Services;
 public class ControlDocumentalService(
     IControlDocumentalRepository repository,
     IAuditLogRepository auditRepository,
-    IColaboradorRepository colaboradorRepository) : IControlDocumentalService
+    IColaboradorRepository colaboradorRepository,
+    IAreaRepository areaRepository) : IControlDocumentalService
 {
     private const string EntidadTipo = "ControlDocumental";
 
@@ -59,25 +60,55 @@ public class ControlDocumentalService(
 
         var created = await repository.CreateListadoAsync(listado);
 
+        if (dto.Campos is not null && dto.Campos.Any())
+        {
+            foreach (var campoDto in dto.Campos)
+            {
+                var campo = MapToCampoDefinicion(campoDto, created.Id);
+                await repository.CreateCampoAsync(campo);
+            }
+
+            var creadosClaves = dto.Campos.Select(c => c.CampoClave).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var predeterminados = GenerateDefaultCampoDefiniciones(created.Id);
+            var maxOrden = dto.Campos.Max(c => c.Orden);
+            foreach (var pred in predeterminados)
+            {
+                if (!creadosClaves.Contains(pred.CampoClave))
+                {
+                    pred.Orden = ++maxOrden;
+                    await repository.CreateCampoAsync(pred);
+                }
+            }
+        }
+        else
+        {
+            var predeterminados = GenerateDefaultCampoDefiniciones(created.Id);
+            foreach (var campo in predeterminados)
+            {
+                await repository.CreateCampoAsync(campo);
+            }
+        }
+
         if (dto.Documentos != null && dto.Documentos.Any())
         {
+            var areas = await areaRepository.GetAllAsync();
+            var areasByName = areas.ToDictionary(a => a.Nombre.Trim(), a => a.Id, StringComparer.OrdinalIgnoreCase);
+            int? GetAreaId(string? areaName)
+            {
+                if (string.IsNullOrWhiteSpace(areaName)) return null;
+                return areasByName.TryGetValue(areaName.Trim(), out var id) ? id : null;
+            }
+
             foreach (var docDto in dto.Documentos)
             {
                 var doc = new DocumentoControl
                 {
                     ListadoMaestroId = created.Id,
-                    Codigo = docDto.Codigo.Trim(),
-                    Nombre = docDto.Nombre.Trim(),
-                    ProcesoResponsable = docDto.ProcesoResponsable.Trim(),
-                    Version = string.IsNullOrWhiteSpace(docDto.Version) ? "1.0" : docDto.Version.Trim(),
-                    FechaDocumento = DateTime.Today,
-                    OneDriveUrl = "https://onedrive.live.com/placeholder",
-                    Estado = string.IsNullOrWhiteSpace(docDto.Estado) ? "Borrador" : docDto.Estado.Trim(),
                     Activo = true
                 };
+                MapTemplateToDocumento(docDto, doc, GetAreaId(docDto.Area));
 
                 var createdDoc = await repository.CreateDocumentoAsync(doc);
-                
                 var log = await BuildAuditLogAsync(
                     createdDoc.Id,
                     createdDoc.Nombre,
@@ -115,32 +146,7 @@ public class ControlDocumentalService(
 
         if (dto.Documentos is not null && dto.Documentos.Any())
         {
-            foreach (var docDto in dto.Documentos)
-            {
-                var doc = new DocumentoControl
-                {
-                    ListadoMaestroId = updated.Id,
-                    Codigo = docDto.Codigo.Trim(),
-                    Nombre = docDto.Nombre.Trim(),
-                    ProcesoResponsable = docDto.ProcesoResponsable.Trim(),
-                    Version = string.IsNullOrWhiteSpace(docDto.Version) ? "1.0" : docDto.Version.Trim(),
-                    FechaDocumento = DateTime.Today,
-                    OneDriveUrl = "https://onedrive.live.com/placeholder",
-                    Estado = string.IsNullOrWhiteSpace(docDto.Estado) ? "Borrador" : docDto.Estado.Trim(),
-                    Activo = true
-                };
-
-                var createdDoc = await repository.CreateDocumentoAsync(doc);
-                var log = await BuildAuditLogAsync(
-                    createdDoc.Id,
-                    createdDoc.Nombre,
-                    "Creado",
-                    "Documento inicializado con plantilla base",
-                    usuarioEmail,
-                    createdDoc,
-                    null);
-                await auditRepository.CreateAsync(log);
-            }
+            await SyncImportDocumentsAsync(updated.Id, dto.Documentos, usuarioEmail);
         }
 
         if ((existing.Campos is null || !existing.Campos.Any()) && (dto.Campos is null || !dto.Campos.Any()))
@@ -165,6 +171,7 @@ public class ControlDocumentalService(
                         ? null
                         : JsonSerializer.Serialize(campoDto.Opciones.Split(',').Select(o => o.Trim()).Where(o => !string.IsNullOrWhiteSpace(o)).ToList());
                     existente.Orden = campoDto.Orden;
+                    existente.EsPredeterminado = campoDto.EsPredeterminado;
                     await repository.UpdateCampoAsync(existente);
                 }
                 else
@@ -181,6 +188,18 @@ public class ControlDocumentalService(
                     await repository.DeleteCampoAsync(existente);
                 }
             }
+
+            var predeterminados = GenerateDefaultCampoDefiniciones(updated.Id);
+            var updatedExistentes = (await repository.GetCamposPorListadoAsync(updated.Id))?.ToDictionary(c => c.CampoClave, StringComparer.OrdinalIgnoreCase) ?? new Dictionary<string, DocumentoControlCampoDefinicion>(StringComparer.OrdinalIgnoreCase);
+            var maxOrden = dto.Campos.Max(c => c.Orden);
+            foreach (var pred in predeterminados)
+            {
+                if (!updatedExistentes.ContainsKey(pred.CampoClave))
+                {
+                    pred.Orden = ++maxOrden;
+                    await repository.CreateCampoAsync(pred);
+                }
+            }
         }
 
         return new ListadoMaestroDto
@@ -189,6 +208,133 @@ public class ControlDocumentalService(
             Nombre = updated.Nombre,
             Descripcion = updated.Descripcion
         };
+    }
+
+    public async Task<ListadoMaestroDto> ImportListadoAsync(CreateListadoMaestroDto dto, string usuarioEmail)
+    {
+        var existing = await repository.GetListadoByNombreAsync(dto.Nombre.Trim());
+        if (existing is null)
+        {
+            return await CreateListadoAsync(dto, usuarioEmail);
+        }
+
+        var updated = await UpdateListadoAsync(existing.Id, dto, usuarioEmail);
+        return updated ?? await CreateListadoAsync(dto, usuarioEmail);
+    }
+
+    private async Task SyncImportDocumentsAsync(int listadoId, IEnumerable<TemplateDocumentoDto> documentos, string usuarioEmail)
+    {
+        var areas = await areaRepository.GetAllAsync();
+        var areasByName = areas.ToDictionary(a => a.Nombre.Trim(), a => a.Id, StringComparer.OrdinalIgnoreCase);
+        int? GetAreaId(string? areaName)
+        {
+            if (string.IsNullOrWhiteSpace(areaName)) return null;
+            return areasByName.TryGetValue(areaName.Trim(), out var id) ? id : null;
+        }
+
+        foreach (var docDto in documentos)
+        {
+            var codigo = docDto.Codigo.Trim();
+            var existingDoc = await repository.GetDocumentoByCodigoAsync(listadoId, codigo);
+
+            if (existingDoc is not null)
+            {
+                MapTemplateToDocumento(docDto, existingDoc, GetAreaId(docDto.Area));
+                existingDoc.Activo = true;
+
+                await repository.UpdateDocumentoAsync(existingDoc);
+                var log = await BuildAuditLogAsync(existingDoc.Id, existingDoc.Nombre, "Actualizado", docDto.ComentarioCambio, usuarioEmail, existingDoc, null);
+                await auditRepository.CreateAsync(log);
+            }
+            else
+            {
+                var newDoc = new DocumentoControl
+                {
+                    ListadoMaestroId = listadoId,
+                    Activo = true
+                };
+                MapTemplateToDocumento(docDto, newDoc, GetAreaId(docDto.Area));
+
+                var createdDoc = await repository.CreateDocumentoAsync(newDoc);
+                var log = await BuildAuditLogAsync(createdDoc.Id, createdDoc.Nombre, "Creado", docDto.ComentarioCambio, usuarioEmail, createdDoc, null);
+                await auditRepository.CreateAsync(log);
+            }
+        }
+    }
+
+    private static string NormalizeFieldName(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return string.Empty;
+
+        return name.Trim().ToLowerInvariant()
+            .Replace("á", "a")
+            .Replace("é", "e")
+            .Replace("í", "i")
+            .Replace("ó", "o")
+            .Replace("ú", "u")
+            .Replace("ü", "u")
+            .Replace("ñ", "n")
+            .Replace("ç", "c")
+            .Replace(" ", string.Empty)
+            .Replace("'", string.Empty)
+            .Replace("\"", string.Empty);
+    }
+
+    private static string? GetValoresPersonalizados(Dictionary<string, string?>? campos, params string[] clavesCandidatas)
+    {
+        if (campos is null || !campos.Any()) return null;
+        foreach (var clave in clavesCandidatas)
+        {
+            if (campos.TryGetValue(clave, out var val))
+            {
+                return val;
+            }
+        }
+        foreach (var candidate in clavesCandidatas)
+        {
+            var match = campos.Keys.FirstOrDefault(k => k.Contains(candidate, StringComparison.OrdinalIgnoreCase));
+            if (match != null)
+            {
+                return campos[match];
+            }
+        }
+        return null;
+    }
+
+    private static void MapTemplateToDocumento(TemplateDocumentoDto src, DocumentoControl dest, int? areaId)
+    {
+        dest.Codigo = src.Codigo.Trim();
+        dest.Nombre = src.Nombre.Trim();
+        dest.ProcesoResponsable = src.ProcesoResponsable.Trim();
+        dest.Version = string.IsNullOrWhiteSpace(src.Version) ? "1.0" : src.Version.Trim();
+        dest.FechaDocumento = src.FechaDocumento ?? DateTime.Today;
+        dest.OneDriveUrl = string.IsNullOrWhiteSpace(src.OneDriveUrl)
+            ? "https://onedrive.live.com/placeholder"
+            : src.OneDriveUrl.Trim();
+        dest.OneDriveItemId = src.OneDriveItemId?.Trim();
+        dest.ArchivoNombre = src.ArchivoNombre?.Trim();
+        dest.Uso = (src.Uso ?? GetValoresPersonalizados(src.CamposPersonalizados, "uso"))?.Trim();
+        dest.TiempoRetencion = (src.TiempoRetencion ?? GetValoresPersonalizados(src.CamposPersonalizados, "tiemporetencion", "tiempoderetencion", "retencion"))?.Trim();
+        dest.Proteccion = (src.Proteccion ?? GetValoresPersonalizados(src.CamposPersonalizados, "proteccion"))?.Trim();
+        dest.Recuperacion = (src.Recuperacion ?? GetValoresPersonalizados(src.CamposPersonalizados, "recuperacion"))?.Trim();
+        dest.DisposicionFinal = (src.DisposicionFinal ?? GetValoresPersonalizados(src.CamposPersonalizados, "disposicionfinal", "disposicion"))?.Trim();
+        dest.Estado = string.IsNullOrWhiteSpace(src.Estado) ? "Borrador" : src.Estado.Trim();
+        dest.Observaciones = (src.Observaciones ?? GetValoresPersonalizados(src.CamposPersonalizados, "observaciones"))?.Trim();
+        dest.ComentarioCambio = src.ComentarioCambio?.Trim();
+        dest.AreaId = areaId;
+        dest.DatosPersonalizados = src.CamposPersonalizados is not null && src.CamposPersonalizados.Any()
+            ? JsonSerializer.Serialize(src.CamposPersonalizados)
+            : null;
+    }
+
+    public async Task<bool> DeleteListadoAsync(int id, string usuarioEmail)
+    {
+        var editor = await TryResolverColaboradorAsync(usuarioEmail);
+        if (editor is null || (editor.Rol != Domain.Enums.RolUsuario.Admin && editor.Rol != Domain.Enums.RolUsuario.Jefe))
+            throw new UnauthorizedAccessException("No tiene permisos para eliminar listados maestros.");
+
+        return await repository.DeleteListadoAsync(id);
     }
 
     public async Task<DocumentoControlDto> CreateDocumentoAsync(
@@ -412,7 +558,18 @@ public class ControlDocumentalService(
         OneDriveUrl = d.OneDriveUrl,
         Estado = d.Estado,
         AreaId = d.AreaId,
-        AreaNombre = d.Area?.Nombre
+        AreaNombre = d.Area?.Nombre,
+        Uso = d.Uso,
+        TiempoRetencion = d.TiempoRetencion,
+        Proteccion = d.Proteccion,
+        Recuperacion = d.Recuperacion,
+        DisposicionFinal = d.DisposicionFinal,
+        Observaciones = d.Observaciones,
+        ComentarioCambio = d.ComentarioCambio,
+        ArchivoNombre = d.ArchivoNombre,
+        CamposPersonalizados = string.IsNullOrWhiteSpace(d.DatosPersonalizados)
+            ? new Dictionary<string, string?>()
+            : JsonSerializer.Deserialize<Dictionary<string, string?>>(d.DatosPersonalizados) ?? new Dictionary<string, string?>()
     };
 
     private static DocumentoControlDetalleDto MapToDetalleDto(DocumentoControl d) => new()
@@ -550,6 +707,16 @@ public class ControlDocumentalService(
             Requerido = true,
             EsPredeterminado = true,
             Orden = 7
+        },
+        new DocumentoControlCampoDefinicion
+        {
+            ListadoMaestroId = listadoId,
+            CampoClave = "Area",
+            Nombre = "Área",
+            Tipo = "Texto",
+            Requerido = false,
+            EsPredeterminado = true,
+            Orden = 8
         }
     };
 

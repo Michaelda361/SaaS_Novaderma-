@@ -70,12 +70,27 @@ public class ControlDocumentalApiService(HttpClient http)
         return await http.PutAsJsonAsync($"{Base}/listados-maestros/{id}", dto);
     }
 
+    public async Task<HttpResponseMessage> DeleteListadoMaestroAsync(int id)
+    {
+        return await http.DeleteAsync($"{Base}/listados-maestros/{id}");
+    }
+
     public async Task<ListadoMaestroDto?> GetListadoMaestroAsync(int id)
     {
         var response = await http.GetAsync($"{Base}/listados-maestros/{id}");
         if (!response.IsSuccessStatusCode) return null;
         await using var stream = await response.Content.ReadAsStreamAsync();
         return await System.Text.Json.JsonSerializer.DeserializeAsync<ListadoMaestroDto>(stream, JsonOptions);
+    }
+
+    public async Task<HttpResponseMessage> ExportListadoAsync(int listadoId)
+    {
+        return await http.GetAsync($"{Base}/listados-maestros/{listadoId}/export");
+    }
+
+    public async Task<HttpResponseMessage> ImportListadoAsync(MultipartFormDataContent content)
+    {
+        return await http.PostAsync($"{Base}/listados-maestros/import", content);
     }
 
     public async Task<List<AuditLogDto>> GetHistorialAsync(int documentoId)

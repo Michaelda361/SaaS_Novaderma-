@@ -1,5 +1,8 @@
 namespace TalentManagement.Shared.DTOs.ControlDocumental;
 
+using System;
+using System.Collections.Generic;
+
 public class DocumentoControlDto
 {
     public int Id { get; set; }
@@ -14,4 +17,14 @@ public class DocumentoControlDto
     public string Estado { get; set; } = string.Empty;
     public int? AreaId { get; set; }
     public string? AreaNombre { get; set; }
+
+    public string? Uso { get; set; }
+    public string? TiempoRetencion { get; set; }
+    public string? Proteccion { get; set; }
+    public string? Recuperacion { get; set; }
+    public string? DisposicionFinal { get; set; }
+    public string? Observaciones { get; set; }
+    public string? ComentarioCambio { get; set; }
+    public string? ArchivoNombre { get; set; }
+    public Dictionary<string, string?>? CamposPersonalizados { get; set; } = new Dictionary<string, string?>();
 }

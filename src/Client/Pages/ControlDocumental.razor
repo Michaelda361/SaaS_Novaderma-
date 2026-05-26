@@ -2,9 +2,12 @@
 @attribute [PageTitle("Control Documental")]
 @attribute [Authorize]
 @using System.Net
+@using System.Net.Http.Headers
+@using Microsoft.AspNetCore.Components.Forms
 @inject ControlDocumentalApiService ControlDocumentalApi
 @inject AreaApiService AreaApi
 @inject AuthInfoService AuthInfo
+@inject IJSRuntime JS
 
 <Toast @ref="toast" />
 
@@ -16,18 +19,45 @@
     <div class="page-actions">
         @if (AuthInfo.EsAdmin || AuthInfo.EsJefe)
         {
-            <button class="btn btn-secondary" @onclick="AbrirNuevoListado">
+            <button class="btn btn-ghost" @onclick="AbrirNuevoListado">
                 + Nuevo listado maestro
             </button>
-            <button class="btn btn-secondary" @onclick="AbrirEditarListado" disabled="@(!selectedListadoId.HasValue)">
+            <button class="btn btn-ghost" @onclick="AbrirEditarListado" disabled="@(!selectedListadoId.HasValue)">
                 ✏️ Editar listado
             </button>
+            <button class="btn btn-ghost" @onclick="ToggleImportInstructions">
+                Importar listado
+            </button>
+            <button class="btn btn-danger" @onclick="EliminarListadoSeleccionado" disabled="@(!selectedListadoId.HasValue)">
+                🗑️ Eliminar listado
+            </button>
         }
+        <button class="btn btn-ghost" @onclick="ExportListado" disabled="@(!selectedListadoId.HasValue)">
+            ⬇️ Exportar listado
+        </button>
         <button class="btn btn-primary" @onclick="AbrirNuevoDocumento" disabled="@(!selectedListadoId.HasValue)">
             + Nuevo documento
         </button>
     </div>
 </div>
+
+@if (showImportInstructions)
+{
+    <div class="card" style="margin-bottom:1rem; padding:1rem; background:#f8f9fa; border:1px solid #dde1e6;">
+        <h3>Manual de importación</h3>
+        <p>El archivo <strong>.xlsx</strong> puede tener cualquier nombre de hoja. El sistema detecta los datos por encabezados.</p>
+        <ul>
+            <li>Hoja de metadatos: filas con <strong>Nombre</strong> y <strong>Descripción</strong>.</li>
+            <li>Hoja de campos: columnas <strong>CampoClave</strong>, <strong>Nombre</strong>, <strong>Tipo</strong>, <strong>Requerido</strong>, <strong>Opciones</strong>, <strong>Orden</strong>.</li>
+            <li>Hoja de documentos: columnas <strong>Codigo</strong>, <strong>Nombre</strong>, <strong>ProcesoResponsable</strong> o <strong>Lugar de archivo</strong>, <strong>Version</strong>, <strong>Estado</strong>.</li>
+        </ul>
+        <p>Si falta el nombre del listado, se usará el nombre del archivo. Las columnas adicionales se ignoran.</p>
+        <label class="btn btn-secondary" style="position:relative; overflow:hidden; cursor:pointer;">
+            Seleccionar archivo
+            <InputFile OnChange="OnArchivoListadoSeleccionado" accept=".xlsx" style="position:absolute; top:0; left:0; width:100%; height:100%; opacity:0; cursor:pointer;" />
+        </label>
+    </div>
+}
 
 <div class="card" style="margin-bottom:1rem;">
     <div class="filter-bar">
@@ -76,16 +106,13 @@
     else
     {
         <div class="table-wrapper">
-            <table class="table">
+            <table>
                 <thead>
                     <tr>
-                        <th>Código</th>
-                        <th>Nombre</th>
-                        <th>Proceso</th>
-                        <th>Versión</th>
-                        <th>Fecha</th>
-                        <th>Estado</th>
-                        <th>Área</th>
+                        @foreach (var campo in listadoCampos.OrderBy(c => c.Orden))
+                        {
+                            <th>@campo.Nombre</th>
+                        }
                         <th>Acciones</th>
                     </tr>
                 </thead>
@@ -93,16 +120,30 @@
                     @foreach (var item in documentos)
                     {
                         <tr>
-                            <td>@item.Codigo</td>
-                            <td>@item.Nombre</td>
-                            <td>@item.ProcesoResponsable</td>
-                            <td>@item.Version</td>
-                            <td>@item.FechaDocumento.ToString("yyyy-MM-dd")</td>
-                            <td><span class="badge @GetEstadoClass(item.Estado)">@item.Estado</span></td>
-                            <td>@(item.AreaNombre ?? "—")</td>
-                                <td style="display:flex;gap:.25rem;flex-wrap:wrap;">
-                                <button class="btn btn-sm btn-secondary" @onclick="() => EditarDocumento(item.Id)">@(AuthInfo.EsSoloColaborador ? "Actualizar" : "Editar")</button>
-                                <button class="btn btn-sm btn-info" @onclick="() => VerAuditoria(item.Id)">Auditoría</button>
+                            @foreach (var campo in listadoCampos.OrderBy(c => c.Orden))
+                            {
+                                <td>
+                                    @if (campo.CampoClave == "OneDriveUrl")
+                                    {
+                                        <a href="@item.OneDriveUrl" target="_blank" rel="noopener noreferrer" style="color: var(--color-primary); text-decoration: underline; display: inline-flex; align-items: center; gap: 0.25rem;">
+                                            🔗 @(string.IsNullOrWhiteSpace(item.ArchivoNombre) ? "Ver archivo" : item.ArchivoNombre)
+                                        </a>
+                                    }
+                                    else if (campo.CampoClave == "Estado")
+                                    {
+                                        <span class="badge @GetEstadoClass(item.Estado)">@item.Estado</span>
+                                    }
+                                    else
+                                    {
+                                        @GetValorDynamic(item, campo.CampoClave)
+                                    }
+                                </td>
+                            }
+                            <td>
+                                <div class="flex gap-1">
+                                    <button class="btn btn-ghost btn-sm" @onclick="() => EditarDocumento(item.Id)">✏️ @(AuthInfo.EsSoloColaborador ? "Actualizar" : "Editar")</button>
+                                    <button class="btn btn-ghost btn-sm" @onclick="() => VerAuditoria(item.Id)">🕘 Auditoría</button>
+                                </div>
                             </td>
                         </tr>
                     }
@@ -114,11 +155,11 @@
 
 @if (showModal)
 {
-    <div class="modal-overlay" @onclick="CerrarModal">
+    <div class="modal-backdrop" @onclick="CerrarModal">
         <div class="modal" @onclick:stopPropagation>
-                <div class="modal-header">
-                <h3>@(editing ? (AuthInfo.EsSoloColaborador ? "Actualizar documento" : "Editar documento") : "Nuevo documento")</h3>
-                <button class="modal-close" @onclick="CerrarModal">×</button>
+            <div class="modal-header">
+                <span class="modal-title">@(editing ? (AuthInfo.EsSoloColaborador ? "Actualizar documento" : "Editar documento") : "Nuevo documento")</span>
+                <button class="btn btn-ghost btn-sm btn-icon" @onclick="CerrarModal">✕</button>
             </div>
             <div class="modal-body">
                 <EditForm Model="form" OnValidSubmit="GuardarDocumento">
@@ -168,7 +209,7 @@
                         <label>@GetCampoLabel("OneDriveUrl", "Archivo OneDrive") *</label>
                         <div class="one-drive-row">
                             <InputText class="form-control" @bind-Value="form.OneDriveUrl" placeholder="URL de OneDrive" />
-                            <button type="button" class="btn btn-secondary" @onclick="() => showOneDriveBrowser = true">Buscar OneDrive</button>
+                            <button type="button" class="btn btn-ghost" @onclick="() => showOneDriveBrowser = true">Buscar OneDrive</button>
                         </div>
                         <ValidationMessage For="() => form.OneDriveUrl" />
                         @if (!string.IsNullOrWhiteSpace(form.ArchivoNombre))
@@ -210,25 +251,25 @@
                                     <label>@campo.Nombre@if (campo.Requerido) { <span class="text-danger">*</span> }</label>
                                     @if (campo.Tipo == "Lista")
                                     {
-                                        <InputSelect class="form-control" @bind-Value="form.CamposPersonalizados[campo.CampoClave]">
+                                        <select class="form-control" value="@form.CamposPersonalizados[campo.CampoClave]" @onchange="@(e => form.CamposPersonalizados[campo.CampoClave] = e.Value?.ToString())">
                                             <option value="">Selecciona...</option>
                                             @foreach (var opcion in campo.Opciones?.Split(',').Select(o => o.Trim()).Where(o => !string.IsNullOrWhiteSpace(o)) ?? Enumerable.Empty<string>())
                                             {
                                                 <option value="@opcion">@opcion</option>
                                             }
-                                        </InputSelect>
+                                        </select>
                                     }
                                     else if (campo.Tipo == "Fecha")
                                     {
-                                        <InputText type="date" class="form-control" @bind-Value="form.CamposPersonalizados[campo.CampoClave]" />
+                                        <input type="date" class="form-control" value="@form.CamposPersonalizados[campo.CampoClave]" @onchange="@(e => form.CamposPersonalizados[campo.CampoClave] = e.Value?.ToString())" />
                                     }
                                     else if (campo.Tipo == "Numero")
                                     {
-                                        <InputText type="number" class="form-control" @bind-Value="form.CamposPersonalizados[campo.CampoClave]" />
+                                        <input type="number" class="form-control" value="@form.CamposPersonalizados[campo.CampoClave]" @onchange="@(e => form.CamposPersonalizados[campo.CampoClave] = e.Value?.ToString())" />
                                     }
                                     else
                                     {
-                                        <InputText class="form-control" @bind-Value="form.CamposPersonalizados[campo.CampoClave]" />
+                                        <input type="text" class="form-control" value="@form.CamposPersonalizados[campo.CampoClave]" @onchange="@(e => form.CamposPersonalizados[campo.CampoClave] = e.Value?.ToString())" />
                                     }
                                 </div>
                             }
@@ -244,7 +285,7 @@
                         <InputTextArea class="form-control" @bind-Value="form.Observaciones" Rows="3" />
                     </div>
                     <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" @onclick="CerrarModal">Cancelar</button>
+                        <button type="button" class="btn btn-ghost" @onclick="CerrarModal">Cancelar</button>
                         <button type="submit" class="btn btn-primary" disabled="@guardando">@(guardando ? (editing ? "Actualizando..." : "Guardando...") : (editing ? (AuthInfo.EsSoloColaborador ? "Actualizar" : "Guardar") : "Guardar"))</button>
                     </div>
                 </EditForm>
@@ -255,11 +296,11 @@
 
 @if (showListadoModal)
 {
-    <div class="modal-overlay" @onclick="CerrarListadoModal">
+    <div class="modal-backdrop" @onclick="CerrarListadoModal">
         <div class="modal" @onclick:stopPropagation>
             <div class="modal-header">
-                <h3>@(editingListado ? "Editar listado maestro" : "Nuevo listado maestro")</h3>
-                <button class="modal-close" @onclick="CerrarListadoModal">×</button>
+                <span class="modal-title">@(editingListado ? "Editar listado maestro" : "Nuevo listado maestro")</span>
+                <button class="btn btn-ghost btn-sm btn-icon" @onclick="CerrarListadoModal">✕</button>
             </div>
             <div class="modal-body">
                 <EditForm Model="listadoForm" OnValidSubmit="CrearListado">
@@ -278,17 +319,17 @@
                         <div class="template-documents">
                             @if (!listadoForm.Campos.Any())
                             {
-                                <div class="text-muted mb-2">No hay campos configurados. Agrega uno para definir los parámetros del listado.</div>
+                                <div class="text-muted" style="margin-bottom:.5rem;">No hay campos configurados. Agrega uno para definir los parámetros del listado.</div>
                             }
                             @foreach (var campo in listadoForm.Campos.OrderBy(c => c.Orden))
                             {
-                                <div class="template-document mb-3 p-3 border rounded">
-                                    <div class="d-flex justify-content-between align-items-start mb-2">
+                                <div class="template-document">
+                                    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:.5rem;">
                                         <div>
                                             <strong>@campo.CampoClave</strong>
                                             @if (campo.EsPredeterminado)
                                             {
-                                                <span class="badge badge-secondary ml-2">Predeterminado</span>
+                                                <span class="badge badge-gray" style="margin-left:.5rem">Predeterminado</span>
                                             }
                                         </div>
                                         @if (!campo.EsPredeterminado)
@@ -296,12 +337,12 @@
                                             <button type="button" class="btn btn-sm btn-danger" @onclick="() => EliminarCampoPlantilla(campo.CampoClave)">Eliminar</button>
                                         }
                                     </div>
-                                    <div class="row gx-2">
-                                        <div class="col-12 col-md-5 mb-2">
+                                    <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(120px, 1fr));gap:.5rem;margin-bottom:.5rem;">
+                                        <div>
                                             <label>Etiqueta</label>
                                             <InputText class="form-control" @bind-Value="campo.Nombre" />
                                         </div>
-                                        <div class="col-12 col-md-3 mb-2">
+                                        <div>
                                             <label>Tipo</label>
                                             <InputSelect class="form-control" @bind-Value="campo.Tipo">
                                                 <option value="Texto">Texto</option>
@@ -310,32 +351,32 @@
                                                 <option value="Lista">Lista</option>
                                             </InputSelect>
                                         </div>
-                                        <div class="col-12 col-md-2 mb-2">
+                                        <div>
                                             <label>Requerido</label>
-                                            <div class="form-check">
-                                                <InputCheckbox class="form-check-input" @bind-Value="campo.Requerido" />
-                                                <label class="form-check-label">Sí</label>
+                                            <div style="display:flex;align-items:center;gap:.25rem;height:38px;">
+                                                <InputCheckbox @bind-Value="campo.Requerido" style="width:auto;" />
+                                                <span>Sí</span>
                                             </div>
                                         </div>
-                                        <div class="col-12 col-md-2 mb-2">
+                                        <div>
                                             <label>Orden</label>
                                             <InputNumber class="form-control" @bind-Value="campo.Orden" />
                                         </div>
                                     </div>
                                     @if (campo.Tipo == "Lista")
                                     {
-                                        <div class="mb-2">
+                                        <div style="margin-bottom:.5rem;">
                                             <label>Opciones (separadas por coma)</label>
                                             <InputText class="form-control" @bind-Value="campo.Opciones" />
                                         </div>
                                     }
                                 </div>
                             }
-                            <button type="button" class="btn btn-outline-primary btn-sm" @onclick="AgregarCampoPlantilla">Agregar campo personalizado</button>
+                            <button type="button" class="btn btn-ghost btn-sm" @onclick="AgregarCampoPlantilla">Agregar campo personalizado</button>
                         </div>
                     </div>
                     <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" @onclick="CerrarListadoModal">Cancelar</button>
+                        <button type="button" class="btn btn-ghost" @onclick="CerrarListadoModal">Cancelar</button>
                         <button type="submit" class="btn btn-primary" disabled="@guardandoListado">@(guardandoListado ? "Guardando..." : (editingListado ? "Guardar cambios" : "Crear listado"))</button>
                     </div>
                 </EditForm>
@@ -346,11 +387,11 @@
 
 @if (showAuditModal)
 {
-    <div class="modal-overlay" @onclick="CerrarAuditoriaModal">
+    <div class="modal-backdrop" @onclick="CerrarAuditoriaModal">
         <div class="modal large" @onclick:stopPropagation>
             <div class="modal-header">
-                <h3>Historial de auditoría</h3>
-                <button class="modal-close" @onclick="CerrarAuditoriaModal">×</button>
+                <span class="modal-title">Historial de auditoría</span>
+                <button class="btn btn-ghost btn-sm btn-icon" @onclick="CerrarAuditoriaModal">✕</button>
             </div>
             <div class="modal-body">
                 @if (historial is null || !historial.Any())
@@ -373,61 +414,50 @@
                     }
                     else
                     {
-                        <div class="table-responsive mb-4">
-                            <table class="table table-bordered table-striped">
-                                <thead class="table-light">
+                        <div class="table-wrapper" style="margin-bottom:1.5rem;">
+                            <table>
+                                <thead>
                                     <tr>
-                                        <th colspan="18">Versión actual</th>
+                                        <th colspan="@(listadoCampos.Count + 1)" style="text-align:center;font-weight:700;background:var(--surface-hover);">Versión actual</th>
                                     </tr>
                                     <tr>
                                         <th>Listado maestro</th>
-                                        <th>Código</th>
-                                        <th>Nombre</th>
-                                        <th>Proceso responsable</th>
-                                        <th>Versión</th>
-                                        <th>Fecha documento</th>
-                                        <th>Ubicación</th>
-                                        <th>OneDrive URL</th>
-                                        <th>OneDrive Item ID</th>
-                                        <th>Archivo</th>
-                                        <th>Uso</th>
-                                        <th>Tiempo retención</th>
-                                        <th>Protección</th>
-                                        <th>Recuperación</th>
-                                        <th>Disposición final</th>
-                                        <th>Estado</th>
-                                        <th>Área</th>
-                                        <th>Observaciones</th>
-                                        <th>Comentario</th>
+                                        @foreach (var campo in listadoCampos.OrderBy(c => c.Orden))
+                                        {
+                                            <th>@campo.Nombre</th>
+                                        }
                                     </tr>
                                 </thead>
                                 <tbody>
                                     <tr>
                                         <td>@GetSnapshotValue(BuildSnapshot(auditDocumentDetail), "Listado maestro")</td>
-                                        <td>@GetSnapshotValue(BuildSnapshot(auditDocumentDetail), "Código")</td>
-                                        <td>@GetSnapshotValue(BuildSnapshot(auditDocumentDetail), "Nombre")</td>
-                                        <td>@GetSnapshotValue(BuildSnapshot(auditDocumentDetail), "Proceso responsable")</td>
-                                        <td>@GetSnapshotValue(BuildSnapshot(auditDocumentDetail), "Versión")</td>
-                                        <td>@GetSnapshotValue(BuildSnapshot(auditDocumentDetail), "Fecha documento")</td>
-                                        <td>@GetSnapshotValue(BuildSnapshot(auditDocumentDetail), "Ubicación")</td>
-                                        <td>@GetSnapshotValue(BuildSnapshot(auditDocumentDetail), "OneDrive URL")</td>
-                                        <td>@GetSnapshotValue(BuildSnapshot(auditDocumentDetail), "OneDrive Item ID")</td>
-                                        <td>@GetSnapshotValue(BuildSnapshot(auditDocumentDetail), "Archivo")</td>
-                                        <td>@GetSnapshotValue(BuildSnapshot(auditDocumentDetail), "Uso")</td>
-                                        <td>@GetSnapshotValue(BuildSnapshot(auditDocumentDetail), "Tiempo de retención")</td>
-                                        <td>@GetSnapshotValue(BuildSnapshot(auditDocumentDetail), "Protección")</td>
-                                        <td>@GetSnapshotValue(BuildSnapshot(auditDocumentDetail), "Recuperación")</td>
-                                        <td>@GetSnapshotValue(BuildSnapshot(auditDocumentDetail), "Disposición final")</td>
-                                        <td>@GetSnapshotValue(BuildSnapshot(auditDocumentDetail), "Estado")</td>
-                                        <td>@GetSnapshotValue(BuildSnapshot(auditDocumentDetail), "Área")</td>
-                                        <td>@GetSnapshotValue(BuildSnapshot(auditDocumentDetail), "Observaciones")</td>
-                                        <td>@GetSnapshotValue(BuildSnapshot(auditDocumentDetail), "Comentario de cambio")</td>
+                                        @foreach (var campo in listadoCampos.OrderBy(c => c.Orden))
+                                        {
+                                            <td>
+                                                @if (campo.CampoClave == "OneDriveUrl")
+                                                {
+                                                    <a href="@GetSnapshotValue(BuildSnapshot(auditDocumentDetail), "OneDrive URL")" target="_blank" rel="noopener noreferrer" style="color: var(--color-primary); text-decoration: underline;">
+                                                        🔗 @(string.IsNullOrWhiteSpace(GetSnapshotValue(BuildSnapshot(auditDocumentDetail), "Archivo")) ? "Ver archivo" : GetSnapshotValue(BuildSnapshot(auditDocumentDetail), "Archivo"))
+                                                    </a>
+                                                }
+                                                else if (campo.CampoClave == "Estado")
+                                                {
+                                                    <span class="badge @GetEstadoClass(GetSnapshotValue(BuildSnapshot(auditDocumentDetail), "Estado") ?? "")">
+                                                        @GetSnapshotValue(BuildSnapshot(auditDocumentDetail), "Estado")
+                                                    </span>
+                                                }
+                                                else
+                                                {
+                                                    @GetSnapshotValueForCampo(BuildSnapshot(auditDocumentDetail), campo.CampoClave)
+                                                }
+                                            </td>
+                                        }
                                     </tr>
                                 </tbody>
                             </table>
                         </div>
 
-                        <div class="mb-3">
+                        <div style="margin-bottom:.75rem;">
                             <h4>Versiones anteriores</h4>
                         </div>
 
@@ -441,30 +471,17 @@
                         }
                         else
                         {
-                            <div class="table-responsive">
-                                <table class="table table-striped table-hover">
-                                    <thead class="table-light">
+                            <div class="table-wrapper">
+                                <table>
+                                    <thead>
                                         <tr>
                                             <th>Fecha / Usuario</th>
                                             <th>Acción</th>
                                             <th>Listado maestro</th>
-                                            <th>Código</th>
-                                            <th>Nombre</th>
-                                            <th>Proceso responsable</th>
-                                            <th>Versión</th>
-                                            <th>Fecha documento</th>
-                                            <th>Ubicación</th>
-                                            <th>OneDrive Item ID</th>
-                                            <th>Archivo</th>
-                                            <th>Uso</th>
-                                            <th>Tiempo retención</th>
-                                            <th>Protección</th>
-                                            <th>Recuperación</th>
-                                            <th>Disposición final</th>
-                                            <th>Estado</th>
-                                            <th>Área</th>
-                                            <th>Observaciones</th>
-                                            <th>Comentario</th>
+                                            @foreach (var campo in listadoCampos.OrderBy(c => c.Orden))
+                                            {
+                                                <th>@campo.Nombre</th>
+                                            }
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -474,23 +491,27 @@
                                                 <td>@version.Descripcion</td>
                                                 <td>@version.Titulo</td>
                                                 <td>@GetSnapshotValue(version.Campos, "Listado maestro")</td>
-                                                <td>@GetSnapshotValue(version.Campos, "Código")</td>
-                                                <td>@GetSnapshotValue(version.Campos, "Nombre")</td>
-                                                <td>@GetSnapshotValue(version.Campos, "Proceso responsable")</td>
-                                                <td>@GetSnapshotValue(version.Campos, "Versión")</td>
-                                                <td>@GetSnapshotValue(version.Campos, "Fecha documento")</td>
-                                                <td>@GetSnapshotValue(version.Campos, "Ubicación")</td>
-                                                <td>@GetSnapshotValue(version.Campos, "OneDrive Item ID")</td>
-                                                <td>@GetSnapshotValue(version.Campos, "Archivo")</td>
-                                                <td>@GetSnapshotValue(version.Campos, "Uso")</td>
-                                                <td>@GetSnapshotValue(version.Campos, "Tiempo de retención")</td>
-                                                <td>@GetSnapshotValue(version.Campos, "Protección")</td>
-                                                <td>@GetSnapshotValue(version.Campos, "Recuperación")</td>
-                                                <td>@GetSnapshotValue(version.Campos, "Disposición final")</td>
-                                                <td>@GetSnapshotValue(version.Campos, "Estado")</td>
-                                                <td>@GetSnapshotValue(version.Campos, "Área")</td>
-                                                <td>@GetSnapshotValue(version.Campos, "Observaciones")</td>
-                                                <td>@GetSnapshotValue(version.Campos, "Comentario de cambio")</td>
+                                                @foreach (var campo in listadoCampos.OrderBy(c => c.Orden))
+                                                {
+                                                    <td>
+                                                        @if (campo.CampoClave == "OneDriveUrl")
+                                                        {
+                                                            <a href="@GetSnapshotValue(version.Campos, "OneDrive URL")" target="_blank" rel="noopener noreferrer" style="color: var(--color-primary); text-decoration: underline;">
+                                                                🔗 @(string.IsNullOrWhiteSpace(GetSnapshotValue(version.Campos, "Archivo")) ? "Ver archivo" : GetSnapshotValue(version.Campos, "Archivo"))
+                                                            </a>
+                                                        }
+                                                        else if (campo.CampoClave == "Estado")
+                                                        {
+                                                            <span class="badge @GetEstadoClass(GetSnapshotValue(version.Campos, "Estado") ?? "")">
+                                                                @GetSnapshotValue(version.Campos, "Estado")
+                                                            </span>
+                                                        }
+                                                        else
+                                                        {
+                                                            @GetSnapshotValueForCampo(version.Campos, campo.CampoClave)
+                                                        }
+                                                    </td>
+                                                }
                                             </tr>
                                         }
                                     </tbody>
@@ -501,7 +522,7 @@
                 }
             </div>
             <div class="modal-footer">
-                <button class="btn btn-secondary" @onclick="CerrarAuditoriaModal">Cerrar</button>
+                <button class="btn btn-ghost" @onclick="CerrarAuditoriaModal">Cerrar</button>
             </div>
         </div>
     </div>
@@ -534,6 +555,8 @@
     private CreateListadoMaestroDto listadoForm = new();
     private int? editingId;
     private List<DocumentoControlCampoDto> listadoCampos = [];
+    private bool importingListado = false;
+    private bool showImportInstructions = false;
 
     private List<ListadoMaestroDto> listados = [];
     private List<DocumentoControlDto> documentos = [];
@@ -851,6 +874,136 @@
         showAuditModal = true;
     }
 
+    private static readonly System.Text.Json.JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true
+    };
+
+    private async Task ExportListado()
+    {
+        if (!selectedListadoId.HasValue)
+            return;
+
+        var response = await ControlDocumentalApi.ExportListadoAsync(selectedListadoId.Value);
+        if (!response.IsSuccessStatusCode)
+        {
+            await toast.Show("No se pudo exportar el listado.", "error");
+            return;
+        }
+
+        var bytes = await response.Content.ReadAsByteArrayAsync();
+        var fileName = response.Content.Headers.ContentDisposition?.FileNameStar
+            ?? response.Content.Headers.ContentDisposition?.FileName
+            ?? $"listado-{selectedListadoId.Value}.xlsx";
+        fileName = fileName.Trim('"');
+
+        await JS.InvokeVoidAsync("descargarArchivo", Convert.ToBase64String(bytes), fileName, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    }
+
+    private async Task OnArchivoListadoSeleccionado(InputFileChangeEventArgs e)
+    {
+        importingListado = true;
+
+        try
+        {
+            var file = e.File;
+            if (file is null)
+            {
+                return;
+            }
+
+            await using var stream = file.OpenReadStream(maxAllowedSize: 10_485_760);
+            using var content = new MultipartFormDataContent();
+            using var streamContent = new StreamContent(stream);
+            streamContent.Headers.ContentType = new MediaTypeHeaderValue("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+            content.Add(streamContent, "file", file.Name);
+
+            var response = await ControlDocumentalApi.ImportListadoAsync(content);
+            if (!response.IsSuccessStatusCode)
+            {
+                var error = await response.Content.ReadAsStringAsync();
+                await toast.Show($"Error importando listado: {error}", "error");
+                return;
+            }
+
+            var created = await response.Content.ReadFromJsonAsync<ListadoMaestroDto>(JsonOptions);
+            if (created is not null)
+            {
+                listados = await ControlDocumentalApi.GetListadosMaestrosAsync() ?? [];
+                selectedListadoId = created.Id;
+                await toast.Show("Listado importado correctamente.");
+                await LoadListadoCamposAsync(created.Id);
+                await Filtrar();
+            }
+        }
+        catch (Exception ex)
+        {
+            await toast.Show($"Error importando listado: {ex.Message}", "error");
+        }
+        finally
+        {
+            importingListado = false;
+        }
+    }
+
+    private async Task EliminarListadoSeleccionado()
+    {
+        if (!selectedListadoId.HasValue)
+        {
+            return;
+        }
+
+        var confirm = await JS.InvokeAsync<bool>("confirm", "¿Estás seguro de que deseas eliminar este listado maestro? Esta acción ocultará el listado y sus documentos.");
+        if (!confirm)
+        {
+            return;
+        }
+
+        var response = await ControlDocumentalApi.DeleteListadoMaestroAsync(selectedListadoId.Value);
+        if (response.StatusCode == HttpStatusCode.Forbidden)
+        {
+            await toast.Show("No tiene permisos para eliminar este listado maestro.", "warning");
+            return;
+        }
+
+        if (response.StatusCode == HttpStatusCode.NotFound)
+        {
+            await toast.Show("Listado maestro no encontrado.", "error");
+            return;
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            await toast.Show("No se pudo eliminar el listado maestro.", "error");
+            return;
+        }
+
+        var removed = listados.FirstOrDefault(l => l.Id == selectedListadoId.Value);
+        if (removed is not null)
+        {
+            listados.Remove(removed);
+        }
+
+        selectedListadoId = listados.FirstOrDefault()?.Id;
+        if (selectedListadoId.HasValue)
+        {
+            await LoadListadoCamposAsync(selectedListadoId.Value);
+        }
+        else
+        {
+            listadoCampos = GetDefaultCampoPlantilla();
+            documentos = [];
+        }
+
+        await Filtrar();
+        await toast.Show("Listado maestro eliminado correctamente.");
+    }
+
+    private void ToggleImportInstructions()
+    {
+        showImportInstructions = !showImportInstructions;
+    }
+
     private List<DocumentVersionSnapshot> BuildVersionHistory(
         DocumentoControlDetalleDto? detalle,
         List<AuditLogDto> logs)
@@ -1134,6 +1287,15 @@
             Requerido = true,
             EsPredeterminado = true,
             Orden = 7
+        },
+        new DocumentoControlCampoDto
+        {
+            CampoClave = "Area",
+            Nombre = "Área",
+            Tipo = "Texto",
+            Requerido = false,
+            EsPredeterminado = true,
+            Orden = 8
         }
     };
 
@@ -1146,11 +1308,156 @@
         return Task.CompletedTask;
     }
 
+    private string GetValorDynamic(DocumentoControlDto item, string campoClave)
+    {
+        if (item == null) return string.Empty;
+
+        var keyNorm = campoClave.Trim().ToLowerInvariant()
+            .Replace("á", "a")
+            .Replace("é", "e")
+            .Replace("í", "i")
+            .Replace("ó", "o")
+            .Replace("ú", "u")
+            .Replace("ü", "u")
+            .Replace("ñ", "n")
+            .Replace("ç", "c")
+            .Replace(" ", string.Empty);
+
+        switch (keyNorm)
+        {
+            case "codigo":
+                return item.Codigo;
+            case "nombre":
+                return item.Nombre;
+            case "procesoresponsable":
+            case "proceso":
+            case "lugardearchivo":
+            case "responsable":
+                return item.ProcesoResponsable;
+            case "version":
+                return item.Version;
+            case "fechadocumento":
+            case "fecha":
+            case "fechadedocumento":
+                return item.FechaDocumento.ToString("yyyy-MM-dd");
+            case "onedriveurl":
+            case "url":
+                return item.OneDriveUrl;
+            case "estado":
+                return item.Estado;
+            case "area":
+            case "areaid":
+            case "areanombre":
+                return item.AreaNombre ?? "—";
+            case "uso":
+                return item.Uso ?? GetValorCamposPersonalizados(item.CamposPersonalizados, "uso") ?? "—";
+            case "tiemporetencion":
+            case "retencion":
+            case "tiempoderetencion":
+                return item.TiempoRetencion ?? GetValorCamposPersonalizados(item.CamposPersonalizados, "tiemporetencion", "tiempoderetencion", "retencion") ?? "—";
+            case "proteccion":
+                return item.Proteccion ?? GetValorCamposPersonalizados(item.CamposPersonalizados, "proteccion") ?? "—";
+            case "recuperacion":
+                return item.Recuperacion ?? GetValorCamposPersonalizados(item.CamposPersonalizados, "recuperacion") ?? "—";
+            case "disposicionfinal":
+            case "disposicion":
+                return item.DisposicionFinal ?? GetValorCamposPersonalizados(item.CamposPersonalizados, "disposicionfinal", "disposicion") ?? "—";
+            case "observaciones":
+                return item.Observaciones ?? GetValorCamposPersonalizados(item.CamposPersonalizados, "observaciones") ?? "—";
+            case "comentariocambio":
+            case "cambio":
+                return item.ComentarioCambio ?? GetValorCamposPersonalizados(item.CamposPersonalizados, "comentariocambio", "cambio") ?? "—";
+            default:
+                return GetValorCamposPersonalizados(item.CamposPersonalizados, campoClave) ?? "—";
+        }
+    }
+
+    private string? GetValorCamposPersonalizados(Dictionary<string, string?>? campos, params string[] clavesCandidatas)
+    {
+        if (campos == null || !campos.Any()) return null;
+        foreach (var clave in clavesCandidatas)
+        {
+            if (campos.TryGetValue(clave, out var val))
+            {
+                return val;
+            }
+            var keyMatch = campos.Keys.FirstOrDefault(k => string.Equals(k, clave, StringComparison.OrdinalIgnoreCase));
+            if (keyMatch != null)
+            {
+                return campos[keyMatch];
+            }
+        }
+        foreach (var clave in clavesCandidatas)
+        {
+            var keyNorm = clave.ToLowerInvariant();
+            var match = campos.Keys.FirstOrDefault(k => k.ToLowerInvariant().Contains(keyNorm));
+            if (match != null)
+            {
+                return campos[match];
+            }
+        }
+        return null;
+    }
+
+    private string GetSnapshotValueForCampo(Dictionary<string, string?> campos, string campoClave)
+    {
+        if (campos == null) return string.Empty;
+
+        var label = campoClave switch
+        {
+            "Codigo" => "Código",
+            "Nombre" => "Nombre",
+            "ProcesoResponsable" => "Proceso responsable",
+            "Version" => "Versión",
+            "FechaDocumento" => "Fecha documento",
+            "OneDriveUrl" => "OneDrive URL",
+            "OneDriveItemId" => "OneDrive Item ID",
+            "ArchivoNombre" => "Archivo",
+            "Uso" => "Uso",
+            "TiempoRetencion" => "Tiempo de retención",
+            "Proteccion" => "Protección",
+            "Recuperacion" => "Recuperación",
+            "DisposicionFinal" => "Disposición final",
+            "Estado" => "Estado",
+            "Area" => "Área",
+            "Observaciones" => "Observaciones",
+            "ComentarioCambio" => "Comentario de cambio",
+            _ => campoClave
+        };
+
+        if (campos.TryGetValue(label, out var valor))
+            return valor ?? string.Empty;
+
+        var normalizedLabel = NormalizeStringForComparison(label);
+        foreach (var key in campos.Keys)
+        {
+            if (NormalizeStringForComparison(key) == normalizedLabel)
+                return campos[key] ?? string.Empty;
+        }
+
+        return string.Empty;
+    }
+
+    private string NormalizeStringForComparison(string str)
+    {
+        if (string.IsNullOrWhiteSpace(str)) return string.Empty;
+        return str.Trim().ToLowerInvariant()
+            .Replace("á", "a")
+            .Replace("é", "e")
+            .Replace("í", "i")
+            .Replace("ó", "o")
+            .Replace("ú", "u")
+            .Replace("ü", "u")
+            .Replace("ñ", "n")
+            .Replace("ç", "c")
+            .Replace(" ", string.Empty);
+    }
+
     private string GetEstadoClass(string estado) => estado switch
     {
         "Publicado" => "badge-success",
-        "Aprobado" => "badge-primary",
+        "Aprobado" => "badge-info",
         "Revision" => "badge-warning",
-        _ => "badge-secondary"
+        _ => "badge-gray"
     };
 }

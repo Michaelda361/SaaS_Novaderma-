@@ -1,4 +1,4 @@
-﻿/* =============================================
+/* =============================================
    CARDS
    ============================================= */
 
@@ -2430,5 +2430,57 @@ input.input-error {
     position: fixed;
     inset: 0;
     z-index: 499;
+}
+
+/* =============================================
+   CONTROL DOCUMENTAL UI UNIFICATION ADDS
+   ============================================= */
+
+/* Page header title & sub aliases */
+.page-title {
+    font-size: 1.125rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+}
+.page-subtitle {
+    font-size: 0.8125rem;
+    color: var(--text-muted);
+    margin-top: 0.125rem;
+}
+
+/* Page actions flex layout */
+.page-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+/* OneDrive row layout */
+.one-drive-row {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+/* Large modal layout adjustment for wide tables */
+.modal.large {
+    max-width: min(95%, 1200px);
+}
+
+/* Form row/grid support */
+.form-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+/* Template document card styling */
+.template-document {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1rem;
+    margin-bottom: 1rem;
 }
 

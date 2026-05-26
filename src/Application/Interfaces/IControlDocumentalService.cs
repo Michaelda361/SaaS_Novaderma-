@@ -18,7 +18,9 @@ public interface IControlDocumentalService
     Task<DocumentoControlDto?> UpdateDocumentoAsync(int id, UpdateDocumentoControlDto dto, string usuarioEmail);
     Task<ListadoMaestroDto> CreateListadoAsync(CreateListadoMaestroDto dto, string usuarioEmail);
     Task<ListadoMaestroDto?> UpdateListadoAsync(int id, CreateListadoMaestroDto dto, string usuarioEmail);
+    Task<bool> DeleteListadoAsync(int id, string usuarioEmail);
     Task<ListadoMaestroDto?> GetListadoAsync(int id);
+    Task<ListadoMaestroDto> ImportListadoAsync(CreateListadoMaestroDto dto, string usuarioEmail);
     Task<List<AuditLogDto>> GetHistorialAsync(int documentoId);
 }
 

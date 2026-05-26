@@ -46,7 +46,8 @@ public class ControlDocumentalRepository(AppDbContext context) : IControlDocumen
 
     public async Task DeleteCampoAsync(DocumentoControlCampoDefinicion campo)
     {
-        context.DocumentoControlCampoDefiniciones.Remove(campo);
+        campo.Activo = false;
+        context.DocumentoControlCampoDefiniciones.Update(campo);
         await context.SaveChangesAsync();
     }
 
@@ -80,6 +81,12 @@ public class ControlDocumentalRepository(AppDbContext context) : IControlDocumen
             .Include(d => d.Area)
             .FirstOrDefaultAsync(d => d.Id == id);
 
+    public async Task<DocumentoControl?> GetDocumentoByCodigoAsync(int listadoId, string codigo) =>
+        await context.DocumentosControl
+            .Include(d => d.ListadoMaestro)
+            .Include(d => d.Area)
+            .FirstOrDefaultAsync(d => d.ListadoMaestroId == listadoId && d.Codigo == codigo);
+
     public async Task<DocumentoControl> CreateDocumentoAsync(DocumentoControl documento)
     {
         context.DocumentosControl.Add(documento);
@@ -94,6 +101,11 @@ public class ControlDocumentalRepository(AppDbContext context) : IControlDocumen
         return documento;
     }
 
+    public async Task<ListadoMaestro?> GetListadoByNombreAsync(string nombre) =>
+        await context.ListadosMaestros
+            .Include(l => l.Campos)
+            .FirstOrDefaultAsync(l => l.Nombre == nombre);
+
     public async Task<ListadoMaestro> CreateListadoAsync(ListadoMaestro listado)
     {
         context.ListadosMaestros.Add(listado);
@@ -106,5 +118,33 @@ public class ControlDocumentalRepository(AppDbContext context) : IControlDocumen
         context.ListadosMaestros.Update(listado);
         await context.SaveChangesAsync();
         return listado;
+    }
+
+    public async Task<bool> DeleteListadoAsync(int id)
+    {
+        var listado = await context.ListadosMaestros
+            .Include(l => l.Documentos)
+            .Include(l => l.Campos)
+            .FirstOrDefaultAsync(l => l.Id == id);
+
+        if (listado is null)
+        {
+            return false;
+        }
+
+        listado.Activo = false;
+
+        foreach (var documento in listado.Documentos)
+        {
+            documento.Activo = false;
+        }
+
+        foreach (var campo in listado.Campos)
+        {
+            campo.Activo = false;
+        }
+
+        await context.SaveChangesAsync();
+        return true;
     }
 }

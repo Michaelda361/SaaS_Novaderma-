@@ -56,15 +56,14 @@
                             @if (c.EstaVencido) { <span class="badge badge-danger">Vencido</span> }
                             else if (c.VenceProximamente) { <span class="badge badge-warning">Próximo a vencer</span> }
                             else { <span class="badge badge-success">Vigente</span> }
-                            @if (c.TipoArchivoCertificado == "application/vnd.openxmlformats-officedocument.presentationml.presentation")
-                            {
-                                <button class="btn btn-primary btn-sm" @onclick="@(() => DescargarPptx(cert.Id))">⬇ PPTX</button>
-                            }
-                            else if (c.TienePdf)
+                            @if (c.TienePdf || c.CapacitacionId.HasValue)
                             {
                                 <button class="btn btn-primary btn-sm" @onclick="@(() => DescargarPdf(cert.Id))">⬇ PDF</button>
                             }
-                            @if (!c.TienePdf && c.CapacitacionId.HasValue) { <button class="btn btn-ghost btn-sm" @onclick="@(() => RegenerarPdf(cert.Id))" title="Generar PDF desde plantilla">🔄 Generar PDF</button> }
+                            @if (!c.TienePdf && c.CapacitacionId.HasValue)
+                            {
+                                <button class="btn btn-ghost btn-sm" @onclick="@(() => RegenerarPdf(cert.Id))" title="Generar PDF desde plantilla">🔄 Generar PDF</button>
+                            }
                             @if (!string.IsNullOrEmpty(c.UrlDocumento)) { <a href="@c.UrlDocumento" target="_blank" class="btn btn-ghost btn-sm">📄 Ver</a> }
                         </div>
                     </div>
@@ -97,7 +96,7 @@ else
                     <td class="text-sm">@c.FechaEmision.ToString("dd/MM/yyyy")</td>
                     <td class="text-sm">@(c.FechaVencimiento?.ToString("dd/MM/yyyy") ?? "Sin vencimiento")</td>
                     <td>@if(c.EstaVencido){<span class="badge badge-danger">Vencido</span>}else if(c.VenceProximamente){<span class="badge badge-warning">Próximo</span>}else{<span class="badge badge-success">Vigente</span>}</td>
-                    <td><div class="flex gap-2">@if(c.TienePdf){<button class="btn btn-primary btn-sm btn-icon" @onclick="@(() => DescargarPdf(cert.Id))">⬇ PDF</button>}@if(!string.IsNullOrEmpty(c.UrlDocumento)){<a href="@c.UrlDocumento" target="_blank" class="btn btn-ghost btn-sm btn-icon">📄</a>}<button class="btn btn-ghost btn-sm btn-icon" @onclick="@(() => AbrirEditar(cert))">✏️</button><button class="btn btn-danger btn-sm btn-icon" @onclick="@(() => PedirConfirmacion(cert))">🗑️</button></div></td>
+                    <td><div class="flex gap-2">@if(c.TienePdf || c.CapacitacionId.HasValue){<button class="btn btn-primary btn-sm btn-icon" @onclick="@(() => DescargarPdf(cert.Id))">⬇ PDF</button>}@if(!string.IsNullOrEmpty(c.UrlDocumento)){<a href="@c.UrlDocumento" target="_blank" class="btn btn-ghost btn-sm btn-icon">📄</a>}<button class="btn btn-ghost btn-sm btn-icon" @onclick="@(() => AbrirEditar(cert))">✏️</button><button class="btn btn-danger btn-sm btn-icon" @onclick="@(() => PedirConfirmacion(cert))">🗑️</button></div></td>
                 </tr>
             }
             </tbody></table></div>
