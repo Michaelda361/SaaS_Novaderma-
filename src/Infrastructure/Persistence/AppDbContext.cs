@@ -141,6 +141,15 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .HasForeignKey(d => d.AreaId)
             .OnDelete(DeleteBehavior.Restrict);
 
+        // Evitar advertencias de EF Core por filtros globales en entidades relacionadas
+        modelBuilder.Entity<ListadoMaestroPermiso>().HasQueryFilter(p => true);
+        modelBuilder.Entity<SolicitudCambioDocumentoControl>().HasQueryFilter(s => true);
+        modelBuilder.Entity<VersionDocumento>().HasQueryFilter(v => true);
+        modelBuilder.Entity<FlujoAprobacionDoc>().HasQueryFilter(f => true);
+        modelBuilder.Entity<PropuestaModificacion>().HasQueryFilter(p => true);
+        modelBuilder.Entity<RespuestaCuestionario>().HasQueryFilter(r => true);
+        modelBuilder.Entity<RespuestaPregunta>().HasQueryFilter(r => true);
+
         modelBuilder.Entity<SolicitudCambioDocumentoControl>()
             .Property(s => s.EstadoPropuesta).HasConversion<string>();
 

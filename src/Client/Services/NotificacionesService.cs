@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.SignalR.Client;
 using TalentManagement.Shared.DTOs.PlantillasDocumento;
+using TalentManagement.Shared.DTOs.ControlDocumental;
 
 namespace TalentManagement.Client.Services;
 
@@ -32,6 +33,7 @@ public class NotificacionesService : IAsyncDisposable
 
     public event Action? OnCambio;
     public event Action<SolicitudDocumentoDto>? OnNuevaSolicitud;
+    public event Action<SolicitudCambioDocumentoControlDto>? OnNuevaSolicitudCambio;
     public event Action<SolicitudDocumentoDto>? OnSolicitudResuelta;
     public event Action<TalentManagement.Shared.DTOs.Cuestionarios.CuestionarioRespondidoDto>? OnCuestionarioRespondido;
     public event Action<TalentManagement.Shared.DTOs.Cuestionarios.CertificadoEmitidoDto>? OnCertificadoEmitido;
@@ -131,6 +133,26 @@ public class NotificacionesService : IAsyncDisposable
                 Url: "cartas/admin",
                 Fecha: DateTime.Now));
             OnNuevaSolicitud?.Invoke(s);
+        });
+
+        _hub.On<SolicitudCambioDocumentoControlDto>("NuevaSolicitudCambio", s =>
+        {
+            try
+            {
+                Console.WriteLine($"[Hub] NuevaSolicitudCambio recibida: {s.SolicitanteNombre}");
+                AgregarNotificacion(new NotificacionItem(
+                    Id: Guid.NewGuid().ToString(),
+                    Titulo: "Nueva solicitud de cambio",
+                    Cuerpo: $"{s.SolicitanteNombre} solicitó un cambio en '{s.DocumentoControlNombre}'",
+                    Tipo: "solicitud_cambio_nueva",
+                    Url: "control-documental",
+                    Fecha: DateTime.Now));
+                OnNuevaSolicitudCambio?.Invoke(s);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Hub] Error procesando NuevaSolicitudCambio: {ex.Message}");
+            }
         });
 
         _hub.On<SolicitudDocumentoDto>("SolicitudResuelta", s =>

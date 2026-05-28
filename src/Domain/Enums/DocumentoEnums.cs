@@ -20,6 +20,8 @@ public enum EstadoDocumento
 public enum EstadoPropuesta
 {
     PendienteRevision,
+    EnEdicion,
+    PendienteAprobacion,
     Aprobada,
     Rechazada
 }

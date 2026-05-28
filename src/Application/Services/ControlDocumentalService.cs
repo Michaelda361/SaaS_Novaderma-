@@ -462,6 +462,40 @@ public class ControlDocumentalService(
         return MapToDto(updated);
     }
 
+    public async Task<SolicitudCambioDocumentoControlDto> CreateSolicitudCambioAsync(int documentoId, UpdateDocumentoControlDto propuesta, string usuarioEmail)
+    {
+        var solicitante = await TryResolverColaboradorAsync(usuarioEmail)
+            ?? throw new UnauthorizedAccessException("No tiene permisos para enviar solicitudes de cambio.");
+
+        var documento = await repository.GetDocumentoByIdAsync(documentoId)
+            ?? throw new KeyNotFoundException("Documento no encontrado.");
+
+        if (solicitante.Rol == RolUsuario.Admin || solicitante.Rol == RolUsuario.Jefe)
+            throw new InvalidOperationException("Los usuarios con permisos de administración deben actualizar el documento directamente.");
+
+        if (await repository.ExisteSolicitudCambioPendienteAsync(documentoId, solicitante.Id))
+            throw new InvalidOperationException("Ya existe una solicitud de cambio pendiente para este documento.");
+
+        await ValidateCamposPersonalizados(propuesta.ListadoMaestroId, propuesta.CamposPersonalizados);
+
+        var solicitud = new SolicitudCambioDocumentoControl
+        {
+            DocumentoControlId = documentoId,
+            SolicitanteId = solicitante.Id,
+            ComentarioSolicitud = propuesta.ComentarioCambio?.Trim() ?? string.Empty,
+            DatosPropuestos = JsonSerializer.Serialize(propuesta),
+            EstadoPropuesta = EstadoPropuesta.PendienteRevision,
+            FechaCreacion = DateTime.UtcNow
+        };
+
+        var created = await repository.CreateSolicitudCambioAsync(solicitud);
+
+        var log = await BuildAuditLogAsync(documento.Id, documento.Nombre, "SolicitudCambioCreada", created.ComentarioSolicitud, usuarioEmail, documento, null);
+        await auditRepository.CreateAsync(log);
+
+        return MapToSolicitudCambioDto(created);
+    }
+
     public async Task<List<SolicitudCambioDocumentoControlDto>> GetSolicitudesCambioPendientesAsync(string usuarioEmail)
     {
         var colaborador = await TryResolverColaboradorAsync(usuarioEmail);

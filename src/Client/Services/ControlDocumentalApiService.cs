@@ -60,6 +60,11 @@ public class ControlDocumentalApiService(HttpClient http)
         return await http.PutAsJsonAsync($"{Base}/documentos/{id}", dto);
     }
 
+    public async Task<HttpResponseMessage> CreateSolicitudCambioAsync(int documentoId, UpdateDocumentoControlDto dto)
+    {
+        return await http.PostAsJsonAsync($"{Base}/documentos/{documentoId}/solicitudes", dto);
+    }
+
     public async Task<HttpResponseMessage> CreateListadoMaestroAsync(CreateListadoMaestroDto dto)
     {
         return await http.PostAsJsonAsync($"{Base}/listados-maestros", dto);

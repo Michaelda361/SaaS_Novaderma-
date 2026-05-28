@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Identity.Web;
 using Scalar.AspNetCore;
 using TalentManagement.Infrastructure;
@@ -96,6 +97,7 @@ if (esModoDev)
     using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider
         .GetRequiredService<TalentManagement.Infrastructure.Persistence.AppDbContext>();
+    db.Database.Migrate();
     await TalentManagement.Infrastructure.Persistence.DbSeeder.SeedAsync(db);
 }
 

@@ -13,6 +13,7 @@
 @inject AuthInfoService AuthInfo
 @inject IJSRuntime JS
 @inject NavigationManager Navigation
+@inject NotificacionesService Notificaciones
 
 <Toast @ref="toast" />
 
@@ -102,77 +103,100 @@
 @if (AuthInfo.EsAdmin || AuthInfo.EsJefe)
 {
     <div class="card" style="margin-bottom:1rem;">
-        <div class="section-header" style="display:flex; justify-content:space-between; align-items:center; gap:1rem; margin-bottom:1rem;">
-            <div>
-                <h3 style="margin:0;">Solicitudes de cambio pendientes (@pendingSolicitudes.Count)</h3>
-                <p style="margin:0.25rem 0 0; color:var(--text-muted);">Revisa y resuelve los cambios solicitados por colaboradores.</p>
+        <!-- Accordion Header -->
+        <div class="accordion-header" 
+             style="display:flex; justify-content:space-between; align-items:center; gap:1rem; padding:1rem; cursor:pointer; user-select:none; border-radius:4px; transition:background-color 0.2s ease;" 
+             @onclick="TogglePendingRequests" 
+             @onkeydown="HandleAccordionKeyDown">
+            <div style="flex:1;">
+                <h3 style="margin:0;">📝 Solicitudes de cambio</h3>
+                <p style="margin:0.25rem 0 0; color:var(--text-muted); font-size:0.9rem;">
+                    @{
+                        var estados = pendingSolicitudes.GroupBy(s => s.EstadoPropuesta).ToList();
+                        var totalCount = pendingSolicitudes.Count;
+                    }
+                    @if (showPendingRequests)
+                    {
+                        <span>@totalCount pendiente@(totalCount != 1 ? "s" : "")</span>
+                    }
+                    else
+                    {
+                        <span>@totalCount solicitud@(totalCount != 1 ? "es" : "") - @string.Join(", ", estados.Select(g => $"{g.Count()} {g.Key}").OrderByDescending(x => x))</span>
+                    }
+                </p>
             </div>
-            <button class="btn btn-secondary" @onclick="TogglePendingRequests">
-                @(showPendingRequests ? "Ocultar" : "Mostrar")
-            </button>
+            <div style="display:flex; align-items:center; gap:0.5rem; min-width:auto;">
+                <span style="font-size:1.2rem; transition: transform 0.2s ease; transform: @(showPendingRequests ? "rotate(0deg)" : "rotate(-90deg)");">▼</span>
+                <button class="btn btn-secondary" @onclick:stopPropagation @onclick="TogglePendingRequests">
+                    @(showPendingRequests ? "Ocultar" : "Mostrar")
+                </button>
+            </div>
         </div>
 
-        @if (!showPendingRequests)
+        <!-- Accordion Content -->
+        @if (showPendingRequests)
         {
-            <div class="empty-state">
-                <div class="empty-state-icon">👁️</div>
-                <h3>Panel de solicitudes oculto</h3>
-                <p>Pulsa "Mostrar" para revisar las solicitudes de cambio pendientes.</p>
-            </div>
-        }
-        else if (loadingSolicitudes)
-        {
-            <div class="loading"><div class="spinner"></div> Cargando solicitudes...</div>
-        }
-        else if (!pendingSolicitudes.Any())
-        {
-            <div class="empty-state">
-                <div class="empty-state-icon">✅</div>
-                <h3>No hay solicitudes pendientes</h3>
-                <p>Las solicitudes de cambio aparecerán aquí cuando los colaboradores las envíen.</p>
-            </div>
-        }
-        else
-        {
-            <div class="table-wrapper">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Documento</th>
-                            <th>Código</th>
-                            <th>Solicitante</th>
-                            <th>Fecha</th>
-                            <th>Comentario</th>
-                            <th>Acciones</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var solicitud in pendingSolicitudes)
-                        {
-                            <tr>
-                                <td>@solicitud.DocumentoControlNombre</td>
-                                <td>@solicitud.DocumentoControlCodigo</td>
-                                <td>@solicitud.SolicitanteNombre</td>
-                                <td>@solicitud.FechaCreacion.ToLocalTime():g</td>
-                                <td>@solicitud.ComentarioSolicitud</td>
-                                <td>
-                                    <div class="flex gap-1">
-                                        <button class="btn btn-success btn-sm" @onclick="() => AprobarSolicitud(solicitud.Id)">Aprobar</button>
-                                        <button class="btn btn-danger btn-sm" @onclick="() => AbrirRechazarSolicitud(solicitud)">Rechazar</button>
-                                    </div>
-                                </td>
-                            </tr>
-                            <tr>
-                                <td colspan="6" style="padding:0; border:none;">
-                                    <details style="padding:0.75rem 1rem; background:var(--surface-muted); border-top:1px solid var(--surface-border);">
-                                        <summary style="cursor:pointer; font-weight:600;">Ver datos propuestos</summary>
-                                        <pre style="white-space:pre-wrap; word-break:break-word; margin-top:0.75rem;">@GetFormattedJson(solicitud.DatosPropuestos)</pre>
-                                    </details>
-                                </td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
+            <div id="accordion-content-solicitudes" style="border-top:1px solid var(--surface-border); padding:1rem;">
+                @if (loadingSolicitudes)
+                {
+                    <div class="loading"><div class="spinner"></div> Cargando solicitudes...</div>
+                }
+                else if (!pendingSolicitudes.Any())
+                {
+                    <div class="empty-state">
+                        <div class="empty-state-icon">✅</div>
+                        <h3>No hay solicitudes pendientes</h3>
+                        <p>Las solicitudes de cambio aparecerán aquí cuando los colaboradores las envíen.</p>
+                    </div>
+                }
+                else
+                {
+                    <!-- Filtros de solicitudes -->
+                    <div class="filter-bar" style="margin-bottom:1rem;">
+                        <input type="text" class="form-control" placeholder="Filtrar por documento, solicitante..." style="flex:1;" />
+                    </div>
+
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Documento</th>
+                                    <th>Código</th>
+                                    <th>Solicitante</th>
+                                    <th>Fecha</th>
+                                    <th>Comentario</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var solicitud in pendingSolicitudes)
+                                {
+                                    <tr>
+                                        <td>@solicitud.DocumentoControlNombre</td>
+                                        <td>@solicitud.DocumentoControlCodigo</td>
+                                        <td>@solicitud.SolicitanteNombre</td>
+                                        <td>@solicitud.FechaCreacion.ToLocalTime():g</td>
+                                        <td>@solicitud.ComentarioSolicitud</td>
+                                        <td>
+                                            <div class="flex gap-1">
+                                                <button class="btn btn-success btn-sm" @onclick="() => AprobarSolicitud(solicitud.Id)">Aprobar</button>
+                                                <button class="btn btn-danger btn-sm" @onclick="() => AbrirRechazarSolicitud(solicitud)">Rechazar</button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td colspan="6" style="padding:0; border:none;">
+                                            <details style="padding:0.75rem 1rem; background:var(--surface-muted); border-top:1px solid var(--surface-border);">
+                                                <summary style="cursor:pointer; font-weight:600;">Ver datos propuestos</summary>
+                                                <pre style="white-space:pre-wrap; word-break:break-word; margin-top:0.75rem;">@GetFormattedJson(solicitud.DatosPropuestos)</pre>
+                                            </details>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
             </div>
         }
     </div>
@@ -751,6 +775,54 @@
     </div>
 }
 
+@if (showSolicitudCambioModal)
+{
+    <div class="modal-backdrop" @onclick="CerrarSolicitudCambioModal">
+        <div class="modal" @onclick:stopPropagation>
+            <div class="modal-header">
+                <span class="modal-title">Solicitar cambio en documento</span>
+                <button class="btn btn-ghost btn-sm btn-icon" @onclick="CerrarSolicitudCambioModal">✕</button>
+            </div>
+            <div class="modal-body">
+                @if (documentoParaSolicitud is null)
+                {
+                    <div class="loading"><div class="spinner"></div> Cargando documento...</div>
+                }
+                else
+                {
+                    <div class="form-group" style="margin-bottom:1.5rem; padding:1rem; background:var(--surface-muted); border-radius:4px; border-left:4px solid var(--color-primary);">
+                        <h4 style="margin:0 0 0.5rem 0;">Documento: <strong>@documentoParaSolicitud.Nombre</strong></h4>
+                        <p style="margin:0; font-size:0.9rem; color:var(--text-muted);">
+                            Código: @documentoParaSolicitud.Codigo
+                        </p>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Motivo o descripción de cambio *</label>
+                        <InputTextArea class="form-control" @bind-Value="solicitudMotivo" Rows="4" placeholder="Describe qué cambios necesitas y por qué..." />
+                        <small class="text-muted">Sé claro y detallado para que el revisor entienda tu solicitud.</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Observaciones adicionales (opcional)</label>
+                        <InputTextArea class="form-control" @bind-Value="solicitudObservaciones" Rows="3" placeholder="Información adicional que consideres importante..." />
+                    </div>
+
+                    <div class="alert alert-info" style="margin-top:1.5rem;">
+                        <strong>ℹ️ Nota:</strong> Tu solicitud será revisada por un administrador o jefe. Ellos editarán el documento según tu solicitud y lo enviarán a aprobación.
+                    </div>
+                }
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-ghost" @onclick="CerrarSolicitudCambioModal" disabled="@guardandoSolicitudCambio">Cancelar</button>
+                <button type="button" class="btn btn-primary" @onclick="EnviarSolicitudCambio" disabled="@(guardandoSolicitudCambio || string.IsNullOrWhiteSpace(solicitudMotivo) || documentoParaSolicitud is null)">
+                    @(guardandoSolicitudCambio ? "Enviando..." : "Enviar solicitud")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
 <OneDriveBrowser Visible="showOneDriveBrowser"
                  OnSeleccionado="OnArchivoOneDriveSeleccionado"
                  OnCancelado="() => showOneDriveBrowser = false" />
@@ -794,11 +866,17 @@
     private List<SolicitudCambioDocumentoControlDto> documentoSolicitudes = [];
     private List<SolicitudCambioDocumentoControlDto> pendingSolicitudes = [];
     private bool loadingSolicitudes = false;
-    private bool showPendingRequests = true;
+    private bool showPendingRequests = false;
     private bool showRejectModal = false;
     private SolicitudCambioDocumentoControlDto? solicitudSeleccionada = null;
     private RechazarSolicitudCambioDto rechazoForm = new();
     private bool processingSolicitud = false;
+    
+    private bool showSolicitudCambioModal = false;
+    private DocumentoControlDetalleDto? documentoParaSolicitud = null;
+    private string solicitudMotivo = string.Empty;
+    private string solicitudObservaciones = string.Empty;
+    private bool guardandoSolicitudCambio = false;
     private List<AuditLogDto> historial = [];
     private DocumentoControlDetalleDto? auditDocumentDetail;
     private List<DocumentVersionSnapshot> versionesAnteriores = [];
@@ -947,6 +1025,9 @@
         if (AuthInfo.EsAdmin || AuthInfo.EsJefe)
         {
             await LoadPendingSolicitudesAsync();
+            // Unirse al grupo de admins para notificaciones en tiempo real
+            await Notificaciones.UnirseGrupoAdminAsync();
+            Notificaciones.OnNuevaSolicitudCambio += OnNuevaSolicitudCambio;
         }
     }
 
@@ -988,6 +1069,16 @@
         }
     }
 
+    public void Dispose()
+    {
+        try
+        {
+            Notificaciones.OnNuevaSolicitudCambio -= OnNuevaSolicitudCambio;
+            _ = Notificaciones.SalirGrupoAdminAsync();
+        }
+        catch { }
+    }
+
     private async Task AprobarSolicitud(int solicitudId)
     {
         processingSolicitud = true;
@@ -1019,6 +1110,17 @@
         {
             processingSolicitud = false;
         }
+    }
+
+    private void OnNuevaSolicitudCambio(SolicitudCambioDocumentoControlDto s)
+    {
+        // Insertar al inicio y actualizar UI
+        pendingSolicitudes.Insert(0, s);
+        InvokeAsync(async () =>
+        {
+            StateHasChanged();
+            await toast.Show($"📥 Nueva solicitud de {s.SolicitanteNombre} — {s.DocumentoControlNombre}");
+        });
     }
 
     private void AbrirRechazarSolicitud(SolicitudCambioDocumentoControlDto solicitud)
@@ -1067,6 +1169,97 @@
     }
 
     private void TogglePendingRequests() => showPendingRequests = !showPendingRequests;
+
+    private Task HandleAccordionKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" || e.Key == " ")
+        {
+            TogglePendingRequests();
+        }
+        return Task.CompletedTask;
+    }
+
+    private void CerrarSolicitudCambioModal()
+    {
+        showSolicitudCambioModal = false;
+        documentoParaSolicitud = null;
+        solicitudMotivo = string.Empty;
+        solicitudObservaciones = string.Empty;
+    }
+
+    private async Task EnviarSolicitudCambio()
+    {
+        if (documentoParaSolicitud is null || string.IsNullOrWhiteSpace(solicitudMotivo))
+        {
+            await toast.Show("Por favor completa el motivo de la solicitud.", "warning");
+            return;
+        }
+
+        guardandoSolicitudCambio = true;
+        try
+        {
+            // Crear un DTO con los datos actuales del documento como "propuesta"
+            // El motivo va en el campo ComentarioCambio
+            var updateDto = new UpdateDocumentoControlDto
+            {
+                ListadoMaestroId = documentoParaSolicitud.ListadoMaestroId,
+                Codigo = documentoParaSolicitud.Codigo,
+                Nombre = documentoParaSolicitud.Nombre,
+                ProcesoResponsable = documentoParaSolicitud.ProcesoResponsable,
+                Version = documentoParaSolicitud.Version,
+                FechaDocumento = documentoParaSolicitud.FechaDocumento,
+                OneDriveUrl = documentoParaSolicitud.OneDriveUrl,
+                OneDriveItemId = documentoParaSolicitud.OneDriveItemId,
+                ArchivoNombre = documentoParaSolicitud.ArchivoNombre,
+                Uso = documentoParaSolicitud.Uso,
+                TiempoRetencion = documentoParaSolicitud.TiempoRetencion,
+                Proteccion = documentoParaSolicitud.Proteccion,
+                Recuperacion = documentoParaSolicitud.Recuperacion,
+                DisposicionFinal = documentoParaSolicitud.DisposicionFinal,
+                Estado = documentoParaSolicitud.Estado,
+                Observaciones = documentoParaSolicitud.Observaciones,
+                ComentarioCambio = solicitudMotivo + (string.IsNullOrWhiteSpace(solicitudObservaciones) ? "" : $"\n\nObservaciones adicionales: {solicitudObservaciones}"),
+                AreaId = documentoParaSolicitud.AreaId,
+                CamposPersonalizados = documentoParaSolicitud.CamposPersonalizados ?? new Dictionary<string, string?>()
+            };
+
+            // Enviar la solicitud - el servidor retornará 201 (Created) indicando que creó una solicitud de cambio
+            var response = await ControlDocumentalApi.UpdateDocumentoAsync(documentoParaSolicitud.Id, updateDto);
+
+            if (response.StatusCode == HttpStatusCode.Forbidden)
+            {
+                await toast.Show("No tienes permisos para enviar solicitudes de cambio.", "warning");
+                return;
+            }
+
+            if (response.StatusCode == HttpStatusCode.Created)
+            {
+                await toast.Show("Solicitud de cambio enviada correctamente. Un administrador o jefe la revisará y editará el documento según tu solicitud.", "success");
+                CerrarSolicitudCambioModal();
+                await Filtrar();
+                return;
+            }
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var message = await response.Content.ReadAsStringAsync();
+                await toast.Show(string.IsNullOrWhiteSpace(message) ? "No se pudo enviar la solicitud." : message, "error");
+                return;
+            }
+
+            await toast.Show("Solicitud enviada correctamente.", "success");
+            CerrarSolicitudCambioModal();
+            await Filtrar();
+        }
+        catch (Exception ex)
+        {
+            await toast.Show($"Error al enviar la solicitud: {ex.Message}", "error");
+        }
+        finally
+        {
+            guardandoSolicitudCambio = false;
+        }
+    }
 
     private string GetFormattedJson(string? json)
     {
@@ -1124,6 +1317,17 @@
 
         await LoadListadoCamposAsync(detail.ListadoMaestroId);
 
+        // Si el usuario es solo colaborador (sin permisos de edición), abrir modal de solicitud de cambio
+        if (AuthInfo.EsSoloColaborador)
+        {
+            documentoParaSolicitud = detail;
+            solicitudMotivo = string.Empty;
+            solicitudObservaciones = string.Empty;
+            showSolicitudCambioModal = true;
+            return;
+        }
+
+        // Si tiene permisos de edición, abrir modal de edición normal
         editing = true;
         editingId = id;
         form = new CreateDocumentoControlDto
@@ -1181,7 +1385,9 @@
                     AreaId = form.AreaId,
                     CamposPersonalizados = form.CamposPersonalizados
                 };
+
                 var response = await ControlDocumentalApi.UpdateDocumentoAsync(editingId.Value, updateDto);
+
                 if (response.StatusCode == HttpStatusCode.Forbidden)
                 {
                     await toast.Show("No tiene permisos para reasignar el listado maestro o actualizar este documento.", "warning");
@@ -1190,13 +1396,22 @@
 
                 if (!response.IsSuccessStatusCode)
                 {
-                    await toast.Show("No se pudo actualizar el documento.", "error");
+                    var message = await response.Content.ReadAsStringAsync();
+                    await toast.Show(string.IsNullOrWhiteSpace(message)
+                        ? "No se pudo procesar la solicitud."
+                        : message,
+                        "error");
                     return;
                 }
 
-                await toast.Show(AuthInfo.EsSoloColaborador
-                    ? "Solicitud de cambio enviada para revisión."
-                    : "Documento actualizado correctamente.");
+                if (response.StatusCode == HttpStatusCode.Created)
+                {
+                    await toast.Show("Solicitud de cambio enviada para revisión.", "success");
+                }
+                else
+                {
+                    await toast.Show("Documento actualizado correctamente.", "success");
+                }
             }
             else
             {

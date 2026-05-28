@@ -4,6 +4,7 @@ using ClosedXML.Excel;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using TalentManagement.Application.Interfaces;
 using TalentManagement.Server.Services;
 using TalentManagement.Shared.DTOs.ControlDocumental;
@@ -15,6 +16,7 @@ namespace TalentManagement.Server.Controllers;
 [Route("api/v1/control-documental")]
 public class ControlDocumentalController(
     IControlDocumentalService service,
+    IHubContext<TalentManagement.Server.Hubs.NotificacionesHub> hub,
     CurrentUserService currentUser) : ControllerBase
 {
     [HttpGet("listados-maestros")]
@@ -917,7 +919,67 @@ public class ControlDocumentalController(
         }
         catch (UnauthorizedAccessException)
         {
+            try
+            {
+                var email = currentUser.GetEmail();
+                var created = await service.CreateSolicitudCambioAsync(id, dto, email);
+                return CreatedAtAction(nameof(GetSolicitudesPorDocumento), new { documentoId = id }, created);
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return Forbid();
+            }
+            catch (InvalidOperationException ex)
+            {
+                return UnprocessableEntity(ex.Message);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(ex.Message);
+            }
+        }
+    }
+
+    [HttpPost("documentos/{documentoId:int}/solicitudes")]
+    public async Task<IActionResult> CreateSolicitudCambio(int documentoId, [FromBody] UpdateDocumentoControlDto dto)
+    {
+        if (!ModelState.IsValid)
+        {
+            return BadRequest(ModelState);
+        }
+
+        try
+        {
+            var email = currentUser.GetEmail();
+            var created = await service.CreateSolicitudCambioAsync(documentoId, dto, email);
+
+            // Notify admins in real-time about the new control-documental solicitud
+            try
+            {
+                await hub.Clients.Group("admins").SendAsync("NuevaSolicitudCambio", created);
+            }
+            catch
+            {
+                // Swallow errors - notification is best-effort
+            }
+
+            return CreatedAtAction(nameof(GetSolicitudesPorDocumento), new { documentoId }, created);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(ex.Message);
+        }
+        catch (UnauthorizedAccessException)
+        {
             return Forbid();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return UnprocessableEntity(ex.Message);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(ex.Message);
         }
     }
 
@@ -1051,7 +1113,7 @@ public class ControlDocumentalController(
             await service.UpdateListadoPermisosAsync(listadoId, permisos, email);
             return Ok(new { mensaje = "Permisos actualizados correctamente." });
         }
-        catch (UnauthorizedAccessException ex)
+        catch (UnauthorizedAccessException)
         {
             return Forbid();
         }
