@@ -1,5 +1,6 @@
 using TalentManagement.Application.Interfaces;
 using TalentManagement.Domain.Entities;
+using TalentManagement.Shared.DTOs.Certificados;
 using TalentManagement.Shared.DTOs.Cuestionarios;
 
 namespace TalentManagement.Application.Services;
@@ -10,6 +11,8 @@ public class CuestionarioService(
     ICapacitacionRepository capacitacionRepository,
     ICertificadoRepository certificadoRepository,
     IInscripcionRepository inscripcionRepository,
+    CertificadoService certificadoService,
+    ICertificatePdfGenerator certificatePdfGenerator,
     ICertificadoPdfService certificadoPdfService)
 {
     public async Task<CuestionarioDto?> GetByCapacitacionAsync(int capacitacionId)
@@ -201,34 +204,61 @@ public class CuestionarioService(
                         {
                             // Generar PDF si hay plantilla DOCX
                             byte[]? pdfBytes = null;
-                            if (capacitacion.ArchivoDocxCertificado is { Length: > 0 })
+                            try
                             {
-                                try
+                                var variables = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
                                 {
-                                    var vars = new Dictionary<string, string>
-                                    {
-                                        ["{{nombre_completo}}"] = colEntity is not null ? $"{colEntity.Nombre} {colEntity.Apellido}" : "",
-                                        ["{{cargo}}"]           = colEntity?.Cargo?.Nombre ?? "",
-                                        ["{{area}}"]            = colEntity?.Area?.Nombre ?? "",
-                                        ["{{capacitacion}}"]    = capacitacion.Nombre,
-                                        ["{{fecha_emision}}"]   = DateTime.Today.ToString("dd/MM/yyyy"),
-                                        ["{{puntaje}}"]         = $"{puntaje:0.#}%"
-                                    };
-                                    var mimeType = capacitacion.TipoArchivoCertificado ?? "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-                                    pdfBytes = certificadoPdfService.GenerarPdf(capacitacion.ArchivoDocxCertificado, vars, mimeType);
+                                    ["{{nombre_completo}}"] = colEntity is not null ? $"{colEntity.Nombre} {colEntity.Apellido}" : string.Empty,
+                                    ["{{cargo}}"] = colEntity?.Cargo?.Nombre ?? string.Empty,
+                                    ["{{area}}"] = colEntity?.Area?.Nombre ?? string.Empty,
+                                    ["{{capacitacion}}"] = capacitacion.Nombre,
+                                    ["{{fecha_emision}}"] = DateTime.Today.ToString("dd/MM/yyyy"),
+                                    ["{{puntaje}}"] = string.Empty
+                                };
+
+                                if (capacitacion.ArchivoDocxCertificado is { Length: > 0 })
+                                {
+                                    var mimeType = capacitacion.TipoArchivoCertificado
+                                        ?? "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
+                                    pdfBytes = certificadoPdfService.GenerarPdf(capacitacion.ArchivoDocxCertificado, variables, mimeType);
                                 }
-                                catch { /* No bloquear si falla la generacion del PDF */ }
+                                else
+                                {
+                                    var pdfData = new CertificatePdfDataDto
+                                    {
+                                        ParticipantName = colEntity is not null ? $"{colEntity.Nombre} {colEntity.Apellido}" : string.Empty,
+                                        TrainingName = capacitacion.NombreCertificado ?? capacitacion.PlantillaNombreCertificado ?? capacitacion.Nombre,
+                                        IssuedDate = DateTime.Today,
+                                        DurationHours = capacitacion.DuracionHoras,
+                                        CertificateCode = $"C-{inscripcion.ColaboradorId}-{capacitacion.Id}-{DateTime.UtcNow:yyyyMMddHHmmss}"
+                                    };
+
+                                    pdfBytes = certificatePdfGenerator.Generate(pdfData);
+                                }
+                            }
+                            catch
+                            {
+                                /* No bloquear si falla la generacion del PDF */
                             }
 
-                            await certificadoRepository.CreateAsync(new Certificado
+                            var certificado = new Certificado
                             {
                                 Nombre = nombreCert,
                                 Institucion = "NovaHub",
                                 FechaEmision = DateTime.Today,
                                 ColaboradorId = inscripcion.ColaboradorId,
-                                CapacitacionId = capacitacion.Id,
-                                PdfBytes = pdfBytes
-                            });
+                                CapacitacionId = capacitacion.Id
+                            };
+
+                            if (pdfBytes is not null && pdfBytes.Length > 0)
+                            {
+                                await certificadoService.CreateAsync(certificado, pdfBytes, colEntity?.Email);
+                            }
+                            else
+                            {
+                                await certificadoRepository.CreateAsync(certificado);
+                            }
 
                             return new ResultadoCuestionarioDto
                             {

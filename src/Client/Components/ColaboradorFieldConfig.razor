@@ -1,0 +1,454 @@
+@inject ColaboradorCampoApiService CampoApiService
+@using System.ComponentModel.DataAnnotations
+@using System.Linq
+
+<h3>Configuración de ficha de colaboradores</h3>
+<p>Define campos adicionales que aparecerán en la ficha de colaborador. Las opciones se usan solo para campos de tipo "Seleccion".</p>
+
+<div class="card card-flat" style="margin-bottom:1rem;">
+    <div class="card-body">
+        <div class="text-muted text-sm">
+            Los campos estándar de la ficha (Nombre, Apellido, Email, Cédula, Área, Cargo, etc.) se aplican automáticamente y no se editan desde esta vista.
+        </div>
+    </div>
+</div>
+
+<div class="card card-flat" style="margin-bottom:1rem;">
+    <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;gap:.5rem;">
+        <span class="card-title">Campos configurados</span>
+        <button class="btn btn-sm btn-primary" @onclick="AbrirNuevoCampo">+ Nuevo campo</button>
+    </div>
+    <div class="card-body">
+        @if (campos is null)
+        {
+            <div>Cargando...</div>
+        }
+        else if (!campos.Any())
+        {
+            <div class="empty-state">
+                <div class="empty-state-icon">🧩</div>
+                <h3>Sin campos definidos</h3>
+                <p>Agrega campos nuevos para que aparezcan en las fichas de colaborador.</p>
+            </div>
+        }
+        else
+        {
+            <div class="field-list" style="display:grid;gap:.5rem;">
+                @foreach (var campo in PagedCampos)
+                {
+                    <div class="field-row" style="display:flex;justify-content:space-between;align-items:center;padding:.75rem 1rem;border:1px solid var(--border);border-radius:.5rem;gap:1rem;">
+                        <div style="flex:1;min-width:0;">
+                            <div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">@campo.Nombre</div>
+                            <div style="display:flex;flex-wrap:wrap;gap:.35rem;margin-top:.25rem;font-size:.85rem;color:var(--text-muted);">
+                                <span class="badge badge-gray" style="padding:.2rem .45rem;font-size:.8rem;">@campo.Tipo</span>
+                                @if (campo.Requerido)
+                                {
+                                    <span class="badge badge-danger" style="padding:.2rem .45rem;font-size:.8rem;">Requerido</span>
+                                }
+                                @if (!string.IsNullOrWhiteSpace(campo.Opciones))
+                                {
+                                    <span class="badge badge-gray" style="padding:.2rem .45rem;font-size:.8rem;">Opciones: @campo.Opciones</span>
+                                }
+                            </div>
+                        </div>
+                        <div style="display:flex;gap:.35rem;align-items:center;flex-shrink:0;">
+                            <button class="btn btn-ghost btn-sm" @onclick="() => EditarCampo(campo)">Editar</button>
+                            <button class="btn btn-danger btn-sm" @onclick="() => ConfirmarEliminarCampo(campo)">Eliminar</button>
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <div class="pagination-toolbar" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.75rem;margin-top:1rem;">
+                <div class="text-muted" style="font-size:.95rem;">Mostrando @PagedCampos.Count() de @totalRecords registros</div>
+                <div style="display:flex;gap:.35rem;flex-wrap:wrap;align-items:center;">
+                    <button class="btn btn-sm btn-ghost" disabled="@(!CanGoPrevious)" @onclick="() => PreviousPage()">Anterior</button>
+                    @for (var pageNum = 1; pageNum <= totalPages; pageNum++)
+                    {
+                        var page = pageNum;
+                        var pageClass = page == currentPage ? "btn-primary" : "btn-ghost";
+                        <button class=@($"btn btn-sm {pageClass}") @onclick="() => GoToPage(page)">@page</button>
+                    }
+                    <button class="btn btn-sm btn-ghost" disabled="@(!CanGoNext)" @onclick="() => NextPage()">Siguiente</button>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+@if (mostrarConfirmEliminar)
+{
+    <div class="card card-flat" style="margin-bottom:1rem;border:1px solid var(--danger);">
+        <div class="card-body">
+            <p>¿Estás seguro de que deseas eliminar el campo <strong>@eliminandoCampoNombre</strong>? Esta acción desactivará el campo en la ficha de colaboradores.</p>
+            <div style="display:flex;gap:.5rem;justify-content:flex-end;">
+                <button class="btn btn-ghost btn-sm" @onclick="CancelarEliminarCampo">Cancelar</button>
+                <button class="btn btn-danger btn-sm" @onclick="EliminarCampoConfirmado">Eliminar</button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (mostrarFormulario)
+{
+    <div class="modal-overlay @(modalVisible ? "show" : "")" tabindex="0" @onkeydown="OnModalKeyDown" @onclick="OnOverlayClick">
+        <div class="modal-card @(modalVisible ? "show" : "")" role="dialog" aria-modal="true" @onclick:stopPropagation>
+            <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center;padding:1rem 1.25rem;border-bottom:1px solid var(--border);">
+                <div style="font-weight:600">@(editando ? "Editar campo" : "Nuevo campo")</div>
+                <button class="btn btn-ghost" aria-label="Cerrar" @onclick="CerrarFormulario">✕</button>
+            </div>
+            <div class="modal-body" style="padding:1rem 1.25rem;">
+                <EditForm Model="campoFormModel" OnValidSubmit="OnValidSubmit">
+                    <DataAnnotationsValidator />
+                    <ValidationSummary />
+
+                    @if (!string.IsNullOrWhiteSpace(apiError))
+                    {
+                        <div class="alert alert-danger" style="margin-bottom:.75rem;">@apiError</div>
+                    }
+
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>Nombre</label>
+                            <InputText class="form-control" @bind-Value="campoFormModel.Nombre" />
+                            <ValidationMessage For="() => campoFormModel.Nombre" />
+                        </div>
+                        <div class="form-group">
+                            <label>Tipo</label>
+                            <InputSelect class="form-control" @bind-Value="campoFormModel.Tipo">
+                                @foreach (var tipo in tipos)
+                                {
+                                    <option value="@tipo">@tipo</option>
+                                }
+                            </InputSelect>
+                            <ValidationMessage For="() => campoFormModel.Tipo" />
+                        </div>
+                        <div class="form-group">
+                            <label>Requerido</label>
+                            <InputCheckbox @bind-Value="campoFormModel.Requerido" />
+                        </div>
+                        <div class="form-group" style="grid-column: span 2;">
+                            <label>Opciones (coma separado)</label>
+                            <InputTextArea class="form-control" @bind-Value="campoFormModel.Opciones" Rows="2" />
+                        </div>
+                    </div>
+
+                    <div class="modal-footer" style="display:flex;justify-content:flex-end;gap:.5rem;padding-top:1rem;border-top:1px solid var(--border);">
+                        <button type="button" class="btn btn-ghost" @onclick="CerrarFormulario">Cancelar</button>
+                        <button type="submit" class="btn btn-primary" disabled="@guardando">@((guardando) ? "Guardando..." : "Guardar campo")</button>
+                    </div>
+                </EditForm>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .modal-overlay {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 2000;
+        background: rgba(0, 0, 0, 0);
+        opacity: 0;
+        transition: opacity 180ms ease-out;
+    }
+
+    .modal-overlay.show {
+        background: rgba(0, 0, 0, 0.45);
+        opacity: 1;
+    }
+
+    .modal-card {
+        background: var(--bg);
+        width: 720px;
+        max-width: 95%;
+        border-radius: 0.75rem;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+        opacity: 0;
+        transform: translateY(20px) scale(0.98);
+        transition: opacity 180ms ease-out, transform 180ms ease-out;
+        min-width: 320px;
+    }
+
+    .modal-card.show {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+
+    .modal-header button {
+        min-width: 2.5rem;
+        min-height: 2.5rem;
+        border-radius: 50%;
+    }
+
+    .modal-body {
+        padding: 1rem 1.25rem;
+    }
+
+    .modal-footer button {
+        min-width: 7rem;
+    }
+</style>
+
+@code {
+    private List<ColaboradorCampoDto>? campos;
+    private bool mostrarFormulario;
+    private bool modalVisible;
+    private bool editando;
+    private CampoFormModel campoFormModel = new();
+    private string? apiError;
+    private bool guardando;
+    private bool mostrarConfirmEliminar;
+    private int eliminandoCampoId;
+    private string eliminandoCampoNombre = string.Empty;
+    private int currentPage = 1;
+    private int pageSize = 5;
+    private int totalPages = 1;
+    private int totalRecords = 0;
+    private readonly string[] tipos = new[] { "Texto", "Numero", "Fecha", "Seleccion", "Area", "Cargo" };
+
+    private IEnumerable<ColaboradorCampoDto> PagedCampos => campos?.Skip((currentPage - 1) * pageSize).Take(pageSize) ?? Array.Empty<ColaboradorCampoDto>();
+    private bool CanGoPrevious => currentPage > 1;
+    private bool CanGoNext => currentPage < totalPages;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarCampos();
+    }
+
+    private readonly (string Clave, string Nombre, int Orden)[] standardFields = new[] {
+        ("Nombre", "Nombre", 10),
+        ("Apellido", "Apellido", 20),
+        ("Email", "Email", 30),
+        ("Telefono", "Teléfono", 40),
+        ("FechaIngreso", "Fecha de ingreso", 50),
+        ("Cedula", "Cédula", 60),
+        ("TipoContrato", "Tipo de contrato", 70),
+        ("SueldoBasico", "Sueldo básico", 80),
+        ("Ciudad", "Ciudad", 90),
+        ("Genero", "Género", 100),
+        ("AreaNombre", "Área", 110),
+        ("CargoNombre", "Cargo", 120),
+        ("SupervisorNombre", "Supervisor", 130)
+    };
+
+    private async Task CargarCampos()
+    {
+        var definiciones = await CampoApiService.GetAllAsync() ?? new List<ColaboradorCampoDto>();
+
+        // Build merged list: include standard fields (using existing definition when present)
+        var merged = new List<ColaboradorCampoDto>();
+        foreach (var s in standardFields)
+        {
+            var existing = definiciones.FirstOrDefault(d => string.Equals(d.CampoClave, s.Clave, StringComparison.OrdinalIgnoreCase));
+            if (existing is not null)
+            {
+                merged.Add(existing);
+            }
+            else
+            {
+                merged.Add(new ColaboradorCampoDto
+                {
+                    Id = 0,
+                    CampoClave = s.Clave,
+                    Nombre = s.Nombre,
+                    Tipo = "Texto",
+                    Requerido = false,
+                    Opciones = null,
+                    Orden = s.Orden
+                });
+            }
+        }
+
+        // Add non-standard custom fields after standard ones
+        var custom = definiciones.Where(d => !standardFields.Any(s => string.Equals(s.Clave, d.CampoClave, StringComparison.OrdinalIgnoreCase)))
+                                .OrderBy(d => d.Orden);
+        merged.AddRange(custom);
+
+        campos = merged.OrderBy(c => c.Orden).ToList();
+        RefreshPagination();
+    }
+
+    private void RefreshPagination()
+    {
+        totalRecords = campos?.Count ?? 0;
+        totalPages = totalRecords == 0 ? 1 : (int)Math.Ceiling(totalRecords / (double)pageSize);
+        if (currentPage > totalPages)
+        {
+            currentPage = totalPages;
+        }
+    }
+
+    private async Task AbrirNuevoCampo()
+    {
+        editando = false;
+        var nextOrder = (campos?.Max(c => c.Orden) ?? 0) + 1;
+        campoFormModel = new CampoFormModel { Tipo = "Texto", Orden = nextOrder };
+        apiError = null;
+        mostrarFormulario = true;
+        modalVisible = false;
+        await Task.Yield();
+        modalVisible = true;
+    }
+
+    private async Task EditarCampo(ColaboradorCampoDto campo)
+    {
+        // If the field has an existing DB id use edit mode, otherwise create mode (standard synthetic field)
+        editando = campo.Id != 0;
+        campoFormModel = new CampoFormModel
+        {
+            Id = campo.Id,
+            CampoClave = campo.CampoClave,
+            Nombre = campo.Nombre,
+            Tipo = campo.Tipo ?? "Texto",
+            Requerido = campo.Requerido,
+            Opciones = campo.Opciones,
+            Orden = campo.Orden
+        };
+        apiError = null;
+        mostrarFormulario = true;
+        modalVisible = false;
+        await Task.Yield();
+        modalVisible = true;
+    }
+
+    private void ConfirmarEliminarCampo(ColaboradorCampoDto campo)
+    {
+        eliminandoCampoId = campo.Id;
+        eliminandoCampoNombre = campo.Nombre;
+        mostrarConfirmEliminar = true;
+    }
+
+    private void CancelarEliminarCampo()
+    {
+        mostrarConfirmEliminar = false;
+        eliminandoCampoId = 0;
+        eliminandoCampoNombre = string.Empty;
+    }
+
+    private async Task EliminarCampoConfirmado()
+    {
+        mostrarConfirmEliminar = false;
+        await CampoApiService.DeleteAsync(eliminandoCampoId);
+        await CargarCampos();
+        eliminandoCampoId = 0;
+        eliminandoCampoNombre = string.Empty;
+    }
+
+    private void PreviousPage()
+    {
+        if (CanGoPrevious)
+        {
+            currentPage--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (CanGoNext)
+        {
+            currentPage++;
+        }
+    }
+
+    private void GoToPage(int page)
+    {
+        if (page >= 1 && page <= totalPages)
+        {
+            currentPage = page;
+        }
+    }
+
+    private async Task CerrarFormulario()
+    {
+        modalVisible = false;
+        apiError = null;
+        guardando = false;
+        StateHasChanged();
+        await Task.Delay(190);
+        mostrarFormulario = false;
+    }
+
+    private void OnModalKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+        {
+            _ = CerrarFormulario();
+        }
+    }
+
+    private async Task OnOverlayClick()
+    {
+        await CerrarFormulario();
+    }
+
+    private async Task OnValidSubmit()
+    {
+        guardando = true;
+        apiError = null;
+        try
+        {
+            if (editando)
+            {
+                var dto = new UpdateColaboradorCampoDto
+                {
+                    Nombre = campoFormModel.Nombre,
+                    Tipo = campoFormModel.Tipo,
+                    Requerido = campoFormModel.Requerido,
+                    Opciones = campoFormModel.Opciones,
+                    Orden = campoFormModel.Orden
+                };
+                await CampoApiService.UpdateAsync(campoFormModel.Id, dto);
+            }
+            else
+            {
+                var dto = new CreateColaboradorCampoDto
+                {
+                    CampoClave = string.IsNullOrWhiteSpace(campoFormModel.CampoClave) ? null : campoFormModel.CampoClave,
+                    Nombre = campoFormModel.Nombre,
+                    Tipo = campoFormModel.Tipo,
+                    Requerido = campoFormModel.Requerido,
+                    Opciones = campoFormModel.Opciones,
+                    Orden = campoFormModel.Orden
+                };
+                await CampoApiService.CreateAsync(dto);
+            }
+
+            await CargarCampos();
+            mostrarFormulario = false;
+        }
+        catch (Exception ex)
+        {
+            apiError = ex.Message;
+        }
+        finally
+        {
+            guardando = false;
+        }
+    }
+
+    private class CampoFormModel
+    {
+        public int Id { get; set; }
+
+        public string? CampoClave { get; set; }
+
+        [Required(ErrorMessage = "El nombre es requerido")]
+        public string? Nombre { get; set; }
+
+        [Required(ErrorMessage = "El tipo es requerido")]
+        public string Tipo { get; set; } = "Texto";
+
+        public bool Requerido { get; set; }
+
+        public string? Opciones { get; set; }
+
+        [Range(0, int.MaxValue, ErrorMessage = "El orden debe ser un número válido")]
+        public int Orden { get; set; }
+    }
+
+    
+}

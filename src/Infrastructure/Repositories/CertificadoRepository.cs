@@ -40,6 +40,12 @@ public class CertificadoRepository(AppDbContext context) : ICertificadoRepositor
         return certificado;
     }
 
+    public async Task AddEventoAsync(CertificadoEvento evento)
+    {
+        context.Add(evento);
+        await context.SaveChangesAsync();
+    }
+
     public async Task DeleteAsync(int id)
     {
         var cert = await context.Certificados.FindAsync(id);

@@ -9,12 +9,16 @@ public class CertificadoPdfService(PdfGeneratorService pdfGenerator) : ICertific
 {
     private const string MimeDocx = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
     private const string MimePptx = "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+    private const string MimePdf = "application/pdf";
 
     public byte[] GenerarPdf(byte[] archivoBytes, Dictionary<string, string> variables,
         string mimeType = MimeDocx)
     {
         if (mimeType == MimePptx)
             return pdfGenerator.GenerarPdfDesdePptx(archivoBytes, variables);
+
+        if (mimeType == MimePdf)
+            return pdfGenerator.GenerarPdfDesdePdf(archivoBytes, variables);
 
         // DOCX: flujo existente
         var payload = new { DocxBase64 = Convert.ToBase64String(archivoBytes), Variables = variables };

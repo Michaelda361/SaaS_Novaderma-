@@ -25,6 +25,7 @@ public class CreateColaboradorDto
 
     /// <summary>NoInformado, Masculino, Femenino, OtroOPrefieroNoDecir</summary>
     public string Genero { get; set; } = "NoInformado";
+    public Dictionary<string, string?>? CamposAdicionales { get; set; }
 
     [Required(ErrorMessage = "El área es requerida")]
     public int AreaId { get; set; }

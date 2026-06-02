@@ -22,6 +22,7 @@ public class UpdateColaboradorDto
 
     /// <summary>NoInformado, Masculino, Femenino, OtroOPrefieroNoDecir</summary>
     public string Genero { get; set; } = "NoInformado";
+    public Dictionary<string, string?>? CamposAdicionales { get; set; }
 
     [Required]
     public int AreaId { get; set; }

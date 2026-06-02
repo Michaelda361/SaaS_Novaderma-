@@ -10,6 +10,7 @@ public interface ICertificadoRepository
     Task<Certificado> CreateAsync(Certificado certificado);
     Task<Certificado> UpdateAsync(Certificado certificado);
     Task DeleteAsync(int id);
+    Task AddEventoAsync(CertificadoEvento evento);
     Task<IEnumerable<Certificado>> GetVencidosAsync();
     Task<IEnumerable<Certificado>> GetProximosAVencerAsync(int diasAlerta = 30);
 }

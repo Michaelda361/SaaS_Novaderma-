@@ -16,7 +16,10 @@ public class ColaboradorService(IColaboradorRepository repository)
     public async Task<ColaboradorDto?> GetByIdAsync(int id)
     {
         var colaborador = await repository.GetByIdAsync(id);
-        return colaborador is null ? null : MapToDto(colaborador);
+        if (colaborador is null) return null;
+        var dto = MapToDto(colaborador);
+        dto.CamposAdicionales = await repository.GetValoresPorColaboradorAsync(id);
+        return dto;
     }
 
     public async Task<ColaboradorDto> CreateAsync(CreateColaboradorDto dto)
@@ -45,7 +48,11 @@ public class ColaboradorService(IColaboradorRepository repository)
         };
 
         var created = await repository.CreateAsync(colaborador);
-        return MapToDto(created);
+        if (dto.CamposAdicionales is not null)
+            await repository.SetValoresAdicionalesAsync(created.Id, dto.CamposAdicionales);
+
+        var result = await repository.GetByIdAsync(created.Id);
+        return result is null ? MapToDto(created) : MapToDto(result);
     }
 
     public async Task<ColaboradorDto?> UpdateAsync(int id, UpdateColaboradorDto dto)
@@ -76,7 +83,11 @@ public class ColaboradorService(IColaboradorRepository repository)
         colaborador.SupervisorId = dto.SupervisorId;
 
         var updated = await repository.UpdateAsync(colaborador);
-        return MapToDto(updated);
+        if (dto.CamposAdicionales is not null)
+            await repository.SetValoresAdicionalesAsync(id, dto.CamposAdicionales);
+
+        var result = await repository.GetByIdAsync(id);
+        return result is null ? MapToDto(updated) : MapToDto(result);
     }
 
     public async Task<bool> DeleteAsync(int id)
@@ -112,6 +123,11 @@ public class ColaboradorService(IColaboradorRepository repository)
         return MapToDto(updated);
     }
 
+    private static GeneroColaborador ParseGenero(string genero)
+        => Enum.TryParse<GeneroColaborador>(genero, ignoreCase: true, out var parsed)
+            ? parsed
+            : GeneroColaborador.NoInformado;
+
     private static ColaboradorDto MapToDto(Colaborador c) => new()
     {
         Id = c.Id,
@@ -128,16 +144,10 @@ public class ColaboradorService(IColaboradorRepository repository)
         AreaId = c.AreaId,
         CargoNombre = c.Cargo?.Nombre ?? string.Empty,
         CargoId = c.CargoId,
+        SupervisorId = c.SupervisorId,
         SupervisorNombre = c.Supervisor is null ? null : $"{c.Supervisor.Nombre} {c.Supervisor.Apellido}",
         Rol = c.Rol.ToString(),
         Genero = c.Genero.ToString(),
+        CamposAdicionales = new Dictionary<string, string?>()
     };
-
-    private static GeneroColaborador ParseGenero(string? s)
-    {
-        if (string.IsNullOrWhiteSpace(s)) return GeneroColaborador.NoInformado;
-        return Enum.TryParse<GeneroColaborador>(s, ignoreCase: true, out var g)
-            ? g
-            : GeneroColaborador.NoInformado;
-    }
 }

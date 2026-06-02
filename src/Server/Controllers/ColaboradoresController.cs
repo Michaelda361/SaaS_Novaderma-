@@ -11,6 +11,7 @@ namespace TalentManagement.Server.Controllers;
 [Route("api/v1/[controller]")]
 public class ColaboradoresController(
     ColaboradorService service,
+    ColaboradorCampoService campoService,
     CurrentUserService currentUser) : ControllerBase
 {
     [HttpGet]
@@ -29,6 +30,33 @@ public class ColaboradoresController(
     {
         var result = await service.GetByIdAsync(id);
         return result is null ? NotFound() : Ok(result);
+    }
+
+    [HttpGet("campos")]
+    public async Task<IActionResult> GetCampos() =>
+        Ok(await campoService.GetAllAsync());
+
+    [HttpPost("campos")]
+    public async Task<IActionResult> CreateCampo([FromBody] CreateColaboradorCampoDto dto)
+    {
+        if (!await currentUser.EsAdminAsync()) return Forbid();
+        return Ok(await campoService.CreateAsync(dto));
+    }
+
+    [HttpPut("campos/{id:int}")]
+    public async Task<IActionResult> UpdateCampo(int id, [FromBody] UpdateColaboradorCampoDto dto)
+    {
+        if (!await currentUser.EsAdminAsync()) return Forbid();
+        var result = await campoService.UpdateAsync(id, dto);
+        return result is null ? NotFound() : Ok(result);
+    }
+
+    [HttpDelete("campos/{id:int}")]
+    public async Task<IActionResult> DeleteCampo(int id)
+    {
+        if (!await currentUser.EsAdminAsync()) return Forbid();
+        await campoService.DeleteAsync(id);
+        return NoContent();
     }
 
     [HttpPost]

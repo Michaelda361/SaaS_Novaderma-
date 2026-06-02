@@ -1,4 +1,5 @@
 using TalentManagement.Domain.Common;
+using TalentManagement.Domain.Enums;
 
 namespace TalentManagement.Domain.Entities;
 
@@ -16,6 +17,11 @@ public class Certificado : BaseEntity
     /// </summary>
     public string? PdfFileKey { get; set; }
 
+    public string? CertificateCode { get; set; }
+    public DateTime? GeneratedAt { get; set; }
+    public string? GeneratedBy { get; set; }
+    public CertificadoStatus Status { get; set; } = CertificadoStatus.Pending;
+
     // ── Compatibilidad temporal ──────────────────────────────────────────────
     /// <summary>
     /// OBSOLETO — binario heredado. Se mantiene solo para migración de datos viejos.
@@ -29,4 +35,6 @@ public class Certificado : BaseEntity
     /// <summary>Si fue emitido automáticamente al aprobar una capacitación, referencia a ella.</summary>
     public int? CapacitacionId { get; set; }
     public Capacitacion? Capacitacion { get; set; }
+
+    public ICollection<CertificadoEvento> Eventos { get; set; } = new List<CertificadoEvento>();
 }

@@ -1,9 +1,12 @@
 @page "/colaboradores"
 @attribute [PageTitle("Colaboradores")]
 @attribute [Authorize]
+@using TalentManagement.Client.Components
 @inject ColaboradorApiService ApiService
+@inject ColaboradorCampoApiService CampoApiService
 @inject AreaApiService AreaService
 @inject CargoApiService CargoService
+@inject AuthInfoService AuthInfo
 
 <Toast @ref="toast" />
 <ConfirmDialog Visible="confirmVisible"
@@ -11,6 +14,34 @@
                OnConfirm="ConfirmarEliminar"
                OnCancel="CancelarEliminar" />
 
+<!-- Pestañas: Colaboradores | Áreas | Cargos -->
+<div style='display:flex;gap:.5rem;margin-bottom:1rem;align-items:center;'>
+    <button class='btn btn-sm @(activeTab == "colaboradores" ? "btn-primary" : "btn-ghost")' @onclick='() => SelectTab("colaboradores")'>Colaboradores</button>
+    @if (AuthInfo.EsJefe || AuthInfo.EsAdmin)
+    {
+        <button class='btn btn-sm @(activeTab == "areas" ? "btn-primary" : "btn-ghost")' @onclick='() => SelectTab("areas")'>Áreas</button>
+        <button class='btn btn-sm @(activeTab == "cargos" ? "btn-primary" : "btn-ghost")' @onclick='() => SelectTab("cargos")'>Cargos</button>
+    }
+    @if (AuthInfo.EsAdmin)
+    {
+        <button class='btn btn-sm @(activeTab == "campos" ? "btn-primary" : "btn-ghost")' @onclick='() => SelectTab("campos")'>Ficha</button>
+    }
+</div>
+
+@if (activeTab == "areas")
+{
+    <AreasManagement />
+}
+else if (activeTab == "cargos")
+{
+    <CargosManagement />
+}
+else if (activeTab == "campos")
+{
+    <ColaboradorFieldConfig />
+}
+else
+{
 <div class="card">
     <div class="card-header">
         <span class="card-title">Colaboradores</span>
@@ -185,6 +216,8 @@
     } @* cierre else (activos) *@
 </div>
 
+}
+
 @if (mostrarModal)
 {
     <div class="modal-backdrop" @onclick="CerrarModal">
@@ -197,92 +230,126 @@
                 <DataAnnotationsValidator />
                 <div class="modal-body">
                     <div class="form-grid">
-                        <div class="form-group">
-                            <label>Nombre</label>
-                            <InputText @bind-Value="form.Nombre" placeholder="Nombre" />
-                            <ValidationMessage For="() => form.Nombre" class="validation-message" />
-                        </div>
-                        <div class="form-group">
-                            <label>Apellido</label>
-                            <InputText @bind-Value="form.Apellido" placeholder="Apellido" />
-                            <ValidationMessage For="() => form.Apellido" class="validation-message" />
-                        </div>
-                        <div class="form-group">
-                            <label>Email</label>
-                            <InputText @bind-Value="form.Email" placeholder="correo@empresa.com" />
-                            <ValidationMessage For="() => form.Email" class="validation-message" />
-                        </div>
-                        <div class="form-group">
-                            <label>Teléfono</label>
-                            <InputText @bind-Value="form.Telefono" placeholder="+57 300 000 0000" />
-                        </div>
-                        <div class="form-group">
-                            <label>Fecha de ingreso</label>
-                            <InputDate @bind-Value="form.FechaIngreso" />
-                        </div>
-                        <div class="form-group">
-                            <label>Cédula</label>
-                            <InputText @bind-Value="form.Cedula" placeholder="Ej: 1083693175" />
-                        </div>
-                        <div class="form-group">
-                            <label>Tipo de contrato</label>
-                            <InputSelect @bind-Value="form.TipoContrato">
-                                <option value="">-- Selecciona --</option>
-                                <option value="término indefinido">Término indefinido</option>
-                                <option value="término fijo">Término fijo</option>
-                                <option value="obra o labor">Obra o labor</option>
-                                <option value="prestación de servicios">Prestación de servicios</option>
-                            </InputSelect>
-                        </div>
-                        <div class="form-group">
-                            <label>Sueldo básico</label>
-                            <InputNumber @bind-Value="form.SueldoBasico" placeholder="Ej: 3500000" />
-                        </div>
-                        <div class="form-group">
-                            <label>Ciudad</label>
-                            <InputText @bind-Value="form.Ciudad" placeholder="Ej: Bogotá" />
-                        </div>
-                        <div class="form-group">
-                            <label>Género (cartas laborales / tratamiento)</label>
-                            <InputSelect @bind-Value="form.Genero">
-                                <option value="NoInformado">Sin especificar</option>
-                                <option value="Masculino">Masculino</option>
-                                <option value="Femenino">Femenino</option>
-                                <option value="OtroOPrefieroNoDecir">Otro / Prefiero no decir</option>
-                            </InputSelect>
-                        </div>
-                        <div class="form-group">
-                            <label>Área</label>
-                            <InputSelect @bind-Value="form.AreaId" @bind-Value:after="OnAreaChanged">
-                                <option value="0">-- Selecciona un área --</option>
-                                @foreach (var a in areas ?? [])
+                        @foreach (var campo in GetMergedCampos())
+                        {
+                            <div class="form-group">
+                                <label>@campo.Nombre@if (campo.Requerido) { <span class="text-danger">*</span> }</label>
+
+                                @if (campo.CampoClave == "Nombre")
                                 {
-                                    <option value="@a.Id">@a.Nombre</option>
+                                    <InputText @bind-Value="form.Nombre" />
+                                    <ValidationMessage For="() => form.Nombre" class="validation-message" />
                                 }
-                            </InputSelect>
-                            <ValidationMessage For="() => form.AreaId" class="validation-message" />
-                        </div>
-                        <div class="form-group">
-                            <label>Cargo</label>
-                            <InputSelect @bind-Value="form.CargoId">
-                                <option value="0">-- Selecciona un cargo --</option>
-                                @foreach (var c in cargosFiltrados ?? [])
+                                else if (campo.CampoClave == "Apellido")
                                 {
-                                    <option value="@c.Id">@c.Nombre</option>
+                                    <InputText @bind-Value="form.Apellido" />
+                                    <ValidationMessage For="() => form.Apellido" class="validation-message" />
                                 }
-                            </InputSelect>
-                            <ValidationMessage For="() => form.CargoId" class="validation-message" />
-                        </div>
-                        <div class="form-group">
-                            <label>ID Supervisor (opcional)</label>
-                            <InputSelect @bind-Value="form.SupervisorId">
-                                <option value="">-- Sin supervisor --</option>
-                                @foreach (var c in colaboradores ?? [])
+                                else if (campo.CampoClave == "Email")
                                 {
-                                    <option value="@c.Id">@c.NombreCompleto</option>
+                                    <InputText @bind-Value="form.Email" />
+                                    <ValidationMessage For="() => form.Email" class="validation-message" />
                                 }
-                            </InputSelect>
-                        </div>
+                                else if (campo.CampoClave == "Telefono")
+                                {
+                                    <InputText @bind-Value="form.Telefono" />
+                                }
+                                else if (campo.CampoClave == "FechaIngreso")
+                                {
+                                    <InputDate @bind-Value="form.FechaIngreso" />
+                                }
+                                else if (campo.CampoClave == "Cedula")
+                                {
+                                    <InputText @bind-Value="form.Cedula" />
+                                }
+                                else if (campo.CampoClave == "TipoContrato")
+                                {
+                                    <InputSelect @bind-Value="form.TipoContrato">
+                                        <option value="">-- Selecciona --</option>
+                                        <option value="término indefinido">Término indefinido</option>
+                                        <option value="término fijo">Término fijo</option>
+                                        <option value="obra o labor">Obra o labor</option>
+                                        <option value="prestación de servicios">Prestación de servicios</option>
+                                    </InputSelect>
+                                }
+                                else if (campo.CampoClave == "SueldoBasico")
+                                {
+                                    <InputNumber @bind-Value="form.SueldoBasico" />
+                                }
+                                else if (campo.CampoClave == "Ciudad")
+                                {
+                                    <InputText @bind-Value="form.Ciudad" />
+                                }
+                                else if (campo.CampoClave == "Genero")
+                                {
+                                    <InputSelect @bind-Value="form.Genero">
+                                        <option value="NoInformado">Sin especificar</option>
+                                        <option value="Masculino">Masculino</option>
+                                        <option value="Femenino">Femenino</option>
+                                        <option value="OtroOPrefieroNoDecir">Otro / Prefiero no decir</option>
+                                    </InputSelect>
+                                }
+                                else if (campo.CampoClave == "AreaNombre")
+                                {
+                                    <InputSelect @bind-Value="form.AreaId" @bind-Value:after="OnAreaChanged">
+                                        <option value="0">-- Selecciona un área --</option>
+                                        @foreach (var a in areas ?? [])
+                                        {
+                                            <option value="@a.Id">@a.Nombre</option>
+                                        }
+                                    </InputSelect>
+                                    <ValidationMessage For="() => form.AreaId" class="validation-message" />
+                                }
+                                else if (campo.CampoClave == "CargoNombre")
+                                {
+                                    <InputSelect @bind-Value="form.CargoId">
+                                        <option value="0">-- Selecciona un cargo --</option>
+                                        @foreach (var c in cargosFiltrados ?? [])
+                                        {
+                                            <option value="@c.Id">@c.Nombre</option>
+                                        }
+                                    </InputSelect>
+                                    <ValidationMessage For="() => form.CargoId" class="validation-message" />
+                                }
+                                else if (campo.CampoClave == "SupervisorNombre")
+                                {
+                                    <InputSelect @bind-Value="form.SupervisorId">
+                                        <option value="">-- Sin supervisor --</option>
+                                        @foreach (var c in colaboradores ?? [])
+                                        {
+                                            <option value="@c.Id">@c.NombreCompleto</option>
+                                        }
+                                    </InputSelect>
+                                }
+                                else
+                                {
+                                    @* Dynamic custom field *@
+                                    @if (campo.Tipo == "Seleccion")
+                                    {
+                                        <select class="form-control" value="@GetCampoValor(campo.CampoClave)" @onchange="@(e => SetCampoValor(campo.CampoClave, e.Value?.ToString()))">
+                                            <option value="">-- Selecciona --</option>
+                                            @foreach (var opcion in campo.Opciones?.Split(',').Select(o => o.Trim()).Where(o => !string.IsNullOrWhiteSpace(o)) ?? Enumerable.Empty<string>())
+                                            {
+                                                <option value="@opcion">@opcion</option>
+                                            }
+                                        </select>
+                                    }
+                                    else if (campo.Tipo == "Fecha")
+                                    {
+                                        <input type="date" class="form-control" value="@GetCampoValor(campo.CampoClave)" @onchange="@(e => SetCampoValor(campo.CampoClave, e.Value?.ToString()))" />
+                                    }
+                                    else if (campo.Tipo == "Numero")
+                                    {
+                                        <input type="number" class="form-control" value="@GetCampoValor(campo.CampoClave)" @onchange="@(e => SetCampoValor(campo.CampoClave, e.Value?.ToString()))" />
+                                    }
+                                    else
+                                    {
+                                        <input type="text" class="form-control" value="@GetCampoValor(campo.CampoClave)" @onchange="@(e => SetCampoValor(campo.CampoClave, e.Value?.ToString()))" />
+                                    }
+                                }
+
+                            </div>
+                        }
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -298,8 +365,10 @@
 
 @code {
     private List<ColaboradorDto>? colaboradores;
+    private string activeTab = "colaboradores";
     private List<AreaDto>? areas;
     private List<CargoDto>? todosLosCargos;
+    private List<ColaboradorCampoDto>? camposDefinidos;
     private List<CargoDto>? cargosFiltrados;
     private bool cargando = true;
     private bool mostrarModal = false;
@@ -336,23 +405,66 @@
         filtroAreaId = 0;
     }
 
+    private void SelectTab(string tab) => activeTab = tab;
+
     protected override async Task OnInitializedAsync()
     {
         var t1 = ApiService.GetAllAsync();
         var t2 = AreaService.GetAllAsync();
         var t3 = CargoService.GetAllAsync();
-        await Task.WhenAll(t1, t2, t3);
+        var t4 = CampoApiService.GetAllAsync();
+        await Task.WhenAll(t1, t2, t3, t4);
         colaboradores = t1.Result;
         areas = t2.Result;
         todosLosCargos = t3.Result;
+        camposDefinidos = t4.Result;
         cargando = false;
     }
 
     private async Task Cargar()
     {
         cargando = true;
-        colaboradores = await ApiService.GetAllAsync();
+        var t1 = ApiService.GetAllAsync();
+        var t2 = CampoApiService.GetAllAsync();
+        await Task.WhenAll(t1, t2);
+        colaboradores = t1.Result;
+        camposDefinidos = t2.Result;
         cargando = false;
+    }
+
+    private readonly (string Clave, string Nombre, int Orden)[] standardCampos = new[] {
+        ("Nombre", "Nombre", 10),
+        ("Apellido", "Apellido", 20),
+        ("Email", "Email", 30),
+        ("Telefono", "Teléfono", 40),
+        ("FechaIngreso", "Fecha de ingreso", 50),
+        ("Cedula", "Cédula", 60),
+        ("TipoContrato", "Tipo de contrato", 70),
+        ("SueldoBasico", "Sueldo básico", 80),
+        ("Ciudad", "Ciudad", 90),
+        ("Genero", "Género", 100),
+        ("AreaNombre", "Área", 110),
+        ("CargoNombre", "Cargo", 120),
+        ("SupervisorNombre", "Supervisor", 130)
+    };
+
+    private List<ColaboradorCampoDto> GetMergedCampos()
+    {
+        var definiciones = camposDefinidos ?? new List<ColaboradorCampoDto>();
+        var merged = new List<ColaboradorCampoDto>();
+        foreach (var s in standardCampos)
+        {
+            var existing = definiciones.FirstOrDefault(d => string.Equals(d.CampoClave, s.Clave, StringComparison.OrdinalIgnoreCase));
+            if (existing is not null)
+                merged.Add(existing);
+            else
+                merged.Add(new ColaboradorCampoDto { Id = 0, CampoClave = s.Clave, Nombre = s.Nombre, Tipo = "Texto", Requerido = false, Orden = s.Orden });
+        }
+
+        var custom = definiciones.Where(d => !standardCampos.Any(s => string.Equals(s.Clave, d.CampoClave, StringComparison.OrdinalIgnoreCase)))
+                                .OrderBy(d => d.Orden);
+        merged.AddRange(custom);
+        return merged.OrderBy(c => c.Orden).ToList();
     }
 
     private async Task OnAreaChanged()
@@ -363,27 +475,69 @@
         form.CargoId = 0;
     }
 
+    private void InicializarCamposAdicionales()
+    {
+        if (form.CamposAdicionales is null)
+            form.CamposAdicionales = new Dictionary<string, string?>();
+
+        if (camposDefinidos is null) return;
+        foreach (var campo in camposDefinidos)
+        {
+            if (!form.CamposAdicionales.ContainsKey(campo.CampoClave))
+                form.CamposAdicionales[campo.CampoClave] = null;
+        }
+    }
+
     private void AbrirModal()
     {
-        form = new CreateColaboradorDto { FechaIngreso = DateTime.Today };
+        form = new CreateColaboradorDto { FechaIngreso = DateTime.Today, CamposAdicionales = new Dictionary<string, string?>() };
         cargosFiltrados = todosLosCargos;
         editandoId = null;
+        InicializarCamposAdicionales();
         mostrarModal = true;
     }
 
-    private void AbrirEditar(ColaboradorDto c)
+    private async Task AbrirEditar(ColaboradorDto c)
     {
+        var collaborator = await ApiService.GetByIdAsync(c.Id);
+        if (collaborator is null) return;
+
         form = new CreateColaboradorDto
         {
-            Nombre = c.Nombre, Apellido = c.Apellido,
-            Email = c.Email, Telefono = c.Telefono,
-            FechaIngreso = c.FechaIngreso, AreaId = c.AreaId, CargoId = c.CargoId,
-            Cedula = c.Cedula, TipoContrato = c.TipoContrato, SueldoBasico = c.SueldoBasico, Ciudad = c.Ciudad,
-            Genero = c.Genero,
+            Nombre = collaborator.Nombre,
+            Apellido = collaborator.Apellido,
+            Email = collaborator.Email,
+            Telefono = collaborator.Telefono,
+            FechaIngreso = collaborator.FechaIngreso,
+            AreaId = collaborator.AreaId,
+            CargoId = collaborator.CargoId,
+            Cedula = collaborator.Cedula,
+            TipoContrato = collaborator.TipoContrato,
+            SueldoBasico = collaborator.SueldoBasico,
+            Ciudad = collaborator.Ciudad,
+            Genero = collaborator.Genero,
+            SupervisorId = collaborator.SupervisorId,
+            CamposAdicionales = collaborator.CamposAdicionales ?? new Dictionary<string, string?>()
         };
-        cargosFiltrados = todosLosCargos?.Where(x => x.AreaId == c.AreaId).ToList() ?? todosLosCargos;
+
+        cargosFiltrados = todosLosCargos?.Where(x => x.AreaId == collaborator.AreaId).ToList() ?? todosLosCargos;
         editandoId = c.Id;
+        InicializarCamposAdicionales();
         mostrarModal = true;
+    }
+
+    private string? GetCampoValor(string clave)
+    {
+        if (form.CamposAdicionales is null) return null;
+        return form.CamposAdicionales.TryGetValue(clave, out var valor) ? valor : null;
+    }
+
+    private void SetCampoValor(string clave, string? valor)
+    {
+        if (form.CamposAdicionales is null)
+            form.CamposAdicionales = new Dictionary<string, string?>();
+
+        form.CamposAdicionales[clave] = valor;
     }
 
     private void CerrarModal() => mostrarModal = false;
@@ -404,6 +558,7 @@
                     SupervisorId = form.SupervisorId,
                     Cedula = form.Cedula, TipoContrato = form.TipoContrato, SueldoBasico = form.SueldoBasico, Ciudad = form.Ciudad,
                     Genero = form.Genero,
+                    CamposAdicionales = form.CamposAdicionales
                 };
                 ok = await ApiService.UpdateAsync(editandoId.Value, dto) is not null;
             }

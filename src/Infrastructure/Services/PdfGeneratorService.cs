@@ -1,10 +1,19 @@
-﻿using DocumentFormat.OpenXml.Packaging;
+﻿using System.Reflection;
+using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Wordprocessing;
+using PdfSharpCore.Pdf;
+using PdfSharpCore.Pdf.AcroForms;
+using PdfSharpCore.Pdf.Content;
+using PdfSharpCore.Pdf.Content.Objects;
+using PdfSharpCore.Pdf.IO;
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
 using Syncfusion.DocIO.DLS;
 using Syncfusion.DocIORenderer;
+using Syncfusion.Pdf;
+using Syncfusion.Pdf.Interactive;
+using Syncfusion.Pdf.Parsing;
 using TalentManagement.Application.Services;
 using TalentManagement.Domain.Entities;
 using TalentManagement.Domain.Enums;
@@ -59,6 +68,178 @@ public class PdfGeneratorService(LibreOfficeConverterService libreOffice)
         using var outputStream = new MemoryStream();
         pdfDoc.Save(outputStream);
         return outputStream.ToArray();
+    }
+
+    public byte[] GenerarPdfDesdePdf(byte[] pdfBytes, Dictionary<string, string> variables)
+    {
+        using var input = new MemoryStream(pdfBytes);
+        using var document = new PdfLoadedDocument(input);
+
+        var normalizedVariables = BuildPdfReplacementDictionary(variables);
+
+        if (document.Form is PdfLoadedForm form && form.Fields is PdfLoadedFormFieldCollection fields && fields.Count > 0)
+        {
+            var normalizedFields = normalizedVariables
+                .Select(kvp => new KeyValuePair<string, string>(NormalizeFieldName(kvp.Key), kvp.Value))
+                .Where(pair => !string.IsNullOrWhiteSpace(pair.Key))
+                .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.OrdinalIgnoreCase);
+
+            FillPdfFields(fields, normalizedFields);
+            form.Flatten = true;
+
+            using var output = new MemoryStream();
+            document.Save(output);
+            return output.ToArray();
+        }
+
+        return ReemplazarVariablesEnPdf(pdfBytes, normalizedVariables);
+    }
+
+    private static byte[] ReemplazarVariablesEnPdf(byte[] pdfBytes, Dictionary<string, string> variables)
+    {
+        using var input = new MemoryStream(pdfBytes);
+        using var document = PdfReader.Open(input, PdfDocumentOpenMode.Modify);
+
+        var contentWriterType = typeof(PdfDocument).Assembly.GetType("PdfSharpCore.Pdf.Content.ContentWriter");
+        var writeMethod = contentWriterType?.GetMethod(
+            "WriteContent",
+            BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic,
+            null,
+            new[] { typeof(PdfSharpCore.Pdf.PdfPage), typeof(CObject) },
+            null);
+
+        foreach (var page in document.Pages)
+        {
+            var content = ContentReader.ReadContent(page);
+            if (!ReplaceVariablesInContent(content, variables))
+                continue;
+
+            page.Contents.Elements.Clear();
+            if (writeMethod is not null)
+            {
+                writeMethod.Invoke(null, new object[] { page, content });
+            }
+        }
+
+        using var output = new MemoryStream();
+        document.Save(output);
+        return output.ToArray();
+    }
+
+    private static void FillPdfFields(PdfLoadedFormFieldCollection fields, Dictionary<string, string> normalizedFields)
+    {
+        foreach (PdfLoadedField field in fields)
+        {
+            var fieldName = NormalizeFieldName(field.Name ?? string.Empty);
+            if (!normalizedFields.TryGetValue(fieldName, out var value))
+            {
+                continue;
+            }
+
+            switch (field)
+            {
+                case PdfLoadedTextBoxField textBox:
+                    textBox.Text = value;
+                    break;
+                case PdfLoadedComboBoxField comboBox:
+                    comboBox.SelectedValue = value;
+                    break;
+                case PdfLoadedListBoxField listBox:
+                    listBox.SelectedValue = new[] { value };
+                    break;
+                case PdfLoadedCheckBoxField checkBox:
+                    checkBox.Checked = value.Equals("true", StringComparison.OrdinalIgnoreCase)
+                                       || value == "1" || value.Equals("x", StringComparison.OrdinalIgnoreCase);
+                    break;
+                default:
+                    field.SetValue("V", value);
+                    break;
+            }
+        }
+    }
+
+    private static string NormalizeFieldName(string key)
+        => key.Trim().TrimStart('{').TrimEnd('}').Trim().ToLowerInvariant();
+
+    private static Dictionary<string, string> BuildPdfReplacementDictionary(Dictionary<string, string> variables)
+    {
+        var replacements = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var (key, value) in variables)
+        {
+            if (string.IsNullOrWhiteSpace(key))
+                continue;
+
+            replacements[key.Trim()] = value;
+
+            var keyWithoutBraces = key.Trim().TrimStart('{').TrimEnd('}').Trim();
+            if (!string.IsNullOrWhiteSpace(keyWithoutBraces) && !replacements.ContainsKey(keyWithoutBraces))
+            {
+                replacements[keyWithoutBraces] = value;
+            }
+        }
+
+        return replacements;
+    }
+
+    private static bool ReplaceVariablesInContent(CObject? content, Dictionary<string, string> variables)
+    {
+        if (content is COperator op)
+        {
+            if (op.OpCode.Name is "Tj" && op.Operands.Count == 1 && op.Operands[0] is CString str)
+            {
+                return ReplaceInString(str, variables);
+            }
+
+            if (op.OpCode.Name is "TJ" && op.Operands.Count == 1 && op.Operands[0] is CArray array)
+            {
+                var changed = false;
+                foreach (var element in array)
+                {
+                    if (element is CString item)
+                        changed |= ReplaceInString(item, variables);
+                }
+                return changed;
+            }
+        }
+
+        if (content is CSequence seq)
+        {
+            var changed = false;
+            foreach (var item in seq)
+                changed |= ReplaceVariablesInContent(item, variables);
+            return changed;
+        }
+
+        if (content is CArray arr)
+        {
+            var changed = false;
+            foreach (var item in arr)
+                changed |= ReplaceVariablesInContent(item, variables);
+            return changed;
+        }
+
+        return false;
+    }
+
+    private static bool ReplaceInString(CString textObject, Dictionary<string, string> variables)
+    {
+        var original = textObject.Value;
+        var replaced = original;
+
+        foreach (var (key, value) in variables)
+        {
+            if (string.IsNullOrEmpty(key)) continue;
+            replaced = replaced.Replace(key, value, StringComparison.OrdinalIgnoreCase);
+        }
+
+        if (replaced != original)
+        {
+            textObject.Value = replaced;
+            return true;
+        }
+
+        return false;
     }
 
     /// <summary>

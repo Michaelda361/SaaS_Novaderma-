@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using TalentManagement.Application.Interfaces;
 using TalentManagement.Application.Services;
 using TalentManagement.Shared.DTOs.Certificados;
 
@@ -8,7 +9,11 @@ namespace TalentManagement.Server.Controllers;
 [Authorize]
 [ApiController]
 [Route("api/v1/[controller]")]
-public class CertificadosController(CertificadoService service) : ControllerBase
+public class CertificadosController(
+    CertificadoService service,
+    TalentManagement.Server.Services.CurrentUserService currentUser,
+    ICertificatePdfGenerator certificatePdfGenerator,
+    ICertificadoPdfService certificadoPdfService) : ControllerBase
 {
     [HttpGet]
     public async Task<IActionResult> GetAll() =>
@@ -75,6 +80,8 @@ public class CertificadosController(CertificadoService service) : ControllerBase
     {
         var pdf = await service.GetPdfAsync(id);
         if (pdf is null || pdf.Length == 0) return NotFound();
+
+        await service.RegistrarEventoAsync(id, "Download", $"PDF descargado por {currentUser.GetEmail()}");
         return File(pdf, "application/pdf", $"certificado_{id}.pdf");
     }
 
@@ -113,11 +120,19 @@ public class CertificadosController(CertificadoService service) : ControllerBase
             var mimeType = cap.TipoArchivoCertificado
                 ?? "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
-            if (mimeType != "application/vnd.openxmlformats-officedocument.presentationml.presentation")
-                return BadRequest(new { message = "La plantilla no es PPTX." });
+            if (mimeType == "application/vnd.openxmlformats-officedocument.presentationml.presentation")
+            {
+                var pptx = pdfService.GenerarPptxAplicado(cap.ArchivoDocxCertificado, vars);
+                return File(pptx, "application/vnd.openxmlformats-officedocument.presentationml.presentation", $"certificado_{id}.pptx");
+            }
 
-            var pptx = pdfService.GenerarPptxAplicado(cap.ArchivoDocxCertificado, vars);
-            return File(pptx, "application/vnd.openxmlformats-officedocument.presentationml.presentation", $"certificado_{id}.pptx");
+            if (mimeType == "application/pdf")
+            {
+                var pdf = pdfService.GenerarPdf(cap.ArchivoDocxCertificado, vars, mimeType);
+                return File(pdf, "application/pdf", $"certificado_{id}.pdf");
+            }
+
+            return BadRequest(new { message = "La plantilla no es PPTX ni PDF." });
         }
         catch (Exception ex)
         {
@@ -128,9 +143,8 @@ public class CertificadosController(CertificadoService service) : ControllerBase
     [HttpPost("{id:int}/regenerar-pdf")]
     public async Task<IActionResult> RegenerarPdf(
         int id,
-        [FromServices] TalentManagement.Application.Interfaces.ICertificadoPdfService pdfService,
-        [FromServices] TalentManagement.Application.Interfaces.ICapacitacionRepository capRepo,
-        [FromServices] TalentManagement.Application.Interfaces.IColaboradorRepository colRepo)
+        [FromServices] ICapacitacionRepository capRepo,
+        [FromServices] IColaboradorRepository colRepo)
     {
         try
         {
@@ -140,24 +154,49 @@ public class CertificadosController(CertificadoService service) : ControllerBase
                 return BadRequest(new { message = "El certificado no tiene capacitacion asociada." });
 
             var cap = await capRepo.GetByIdAsync(cert.CapacitacionId.Value);
-            if (cap?.ArchivoDocxCertificado is not { Length: > 0 })
-                return BadRequest(new { message = "La capacitacion no tiene plantilla DOCX configurada." });
+            if (cap is null)
+                return NotFound(new { message = "La capacitación no existe." });
 
             var col = await colRepo.GetByIdAsync(cert.ColaboradorId);
-            var vars = new Dictionary<string, string>
+            var participantName = col is not null ? $"{col.Nombre} {col.Apellido}" : "N/A";
+            var trainingName = cap.NombreCertificado ?? cap.PlantillaNombreCertificado ?? cap.Nombre;
+
+            var colaborador = await colRepo.GetByIdAsync(cert.ColaboradorId);
+            var variables = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
-                ["{{nombre_completo}}"] = col is not null ? $"{col.Nombre} {col.Apellido}" : "",
-                ["{{cargo}}"]           = col?.Cargo?.Nombre ?? "",
-                ["{{area}}"]            = col?.Area?.Nombre ?? "",
-                ["{{capacitacion}}"]    = cap.Nombre,
-                ["{{fecha_emision}}"]   = cert.FechaEmision.ToString("dd/MM/yyyy"),
-                ["{{puntaje}}"]         = ""
+                ["{{nombre_completo}}"] = participantName,
+                ["{{cargo}}"] = colaborador?.Cargo?.Nombre ?? string.Empty,
+                ["{{area}}"] = colaborador?.Area?.Nombre ?? string.Empty,
+                ["{{capacitacion}}"] = trainingName,
+                ["{{fecha_emision}}"] = cert.FechaEmision.ToString("dd/MM/yyyy"),
+                ["{{puntaje}}"] = string.Empty
             };
 
-            var mimeType = cap.TipoArchivoCertificado
-                ?? "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-            var pdf = pdfService.GenerarPdf(cap.ArchivoDocxCertificado, vars, mimeType);
-            await service.ActualizarPdfAsync(id, pdf);
+            byte[] pdf;
+            if (cap.ArchivoDocxCertificado is { Length: > 0 })
+            {
+                var mimeType = cap.TipoArchivoCertificado
+                    ?? "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
+                // Usa la plantilla cargada para preservar el diseño del certificado.
+                pdf = certificadoPdfService.GenerarPdf(cap.ArchivoDocxCertificado, variables, mimeType);
+            }
+            else
+            {
+                var data = new CertificatePdfDataDto
+                {
+                    ParticipantName = participantName,
+                    TrainingName = trainingName,
+                    IssuedDate = cert.FechaEmision,
+                    DurationHours = cap.DuracionHoras,
+                    CertificateCode = cert.CertificateCode ?? $"C-{id}-{DateTime.UtcNow:yyyyMMddHHmmss}"
+                };
+
+                pdf = certificatePdfGenerator.Generate(data);
+            }
+
+            await service.ActualizarPdfAsync(id, pdf, currentUser.GetEmail());
+            await service.RegistrarEventoAsync(id, "Generation", $"PDF regenerado por {currentUser.GetEmail()}");
             return Ok(new { message = "PDF regenerado correctamente." });
         }
         catch (Exception ex)

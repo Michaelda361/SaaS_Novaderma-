@@ -12,6 +12,16 @@ public interface IColaboradorRepository
     Task DeleteAsync(int id);
     Task<bool> ExistsAsync(int id);
     Task<bool> EsJefeDeAreaAsync(int colaboradorId);
+
+    Task<List<ColaboradorCampoDefinicion>> GetCamposDefinicionAsync();
+    Task<ColaboradorCampoDefinicion?> GetCampoDefinicionAsync(int id);
+    Task<ColaboradorCampoDefinicion> CreateCampoDefinicionAsync(ColaboradorCampoDefinicion campo);
+    Task<ColaboradorCampoDefinicion> UpdateCampoDefinicionAsync(ColaboradorCampoDefinicion campo);
+    Task DeleteCampoDefinicionAsync(int id);
+
+    Task<Dictionary<string, string?>> GetValoresPorColaboradorAsync(int colaboradorId);
+    Task SetValoresAdicionalesAsync(int colaboradorId, Dictionary<string, string?> valores);
+
     Task<IEnumerable<Colaborador>> GetInactivosAsync();
     Task RestaurarAsync(int id);
 }

@@ -17,8 +17,10 @@ public class ColaboradorDto
     public int AreaId { get; set; }
     public string CargoNombre { get; set; } = string.Empty;
     public int CargoId { get; set; }
+    public int? SupervisorId { get; set; }
     public string? SupervisorNombre { get; set; }
     public string Rol { get; set; } = "Colaborador";
+    public Dictionary<string, string?> CamposAdicionales { get; set; } = new();
 
     /// <summary>GeneroColaborador como string (API / JSON).</summary>
     public string Genero { get; set; } = "NoInformado";

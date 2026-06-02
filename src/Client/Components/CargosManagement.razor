@@ -1,0 +1,196 @@
+@using TalentManagement.Shared.DTOs.Cargos
+@using TalentManagement.Shared.DTOs.Areas
+@inject CargoApiService CargoService
+@inject AreaApiService AreaService
+
+<Toast @ref="toast" />
+<ConfirmDialog Visible="confirmVisible"
+               Message="@confirmMensaje"
+               OnConfirm="ConfirmarEliminar"
+               OnCancel="() => confirmVisible = false" />
+
+<div class="card">
+    <div class="card-header">
+        <span class="card-title">Cargos</span>
+        <button class="btn btn-primary btn-sm" @onclick="AbrirModal">+ Nuevo cargo</button>
+    </div>
+
+    <div class="filter-bar">
+        <div class="search-input-wrap">
+            <span class="search-icon">🔍</span>
+            <input type="search" placeholder="Buscar cargo..." @bind="busqueda" @bind:event="oninput" />
+        </div>
+        @if (!string.IsNullOrEmpty(busqueda))
+        {
+            <span class="text-sm text-muted">@Filtrados.Count resultado(s)</span>
+        }
+    </div>
+
+    @if (cargando)
+    {
+        <div class="loading"><div class="spinner"></div> Cargando...</div>
+    }
+    else if (cargos is null || cargos.Count == 0)
+    {
+        <div class="empty-state">
+            <div class="empty-state-icon">💼</div>
+            <h3>Sin cargos</h3>
+            <p>Crea el primer cargo para asignarlo a colaboradores.</p>
+        </div>
+    }
+    else if (Filtrados.Count == 0)
+    {
+        <div class="empty-state">
+            <div class="empty-state-icon">🔍</div>
+            <h3>Sin resultados</h3>
+            <p>No hay cargos que coincidan con "@busqueda".</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Cargo</th>
+                        <th>Área</th>
+                        <th>Descripción</th>
+                        <th>Colaboradores</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var c in Filtrados)
+                    {
+                        <tr>
+                            <td><strong>@c.Nombre</strong></td>
+                            <td><span class="badge badge-info">@c.AreaNombre</span></td>
+                            <td class="text-muted text-sm">@(c.Descripcion ?? "—")</td>
+                            <td><span class="badge badge-success">@c.TotalColaboradores</span></td>
+                            <td>
+                                <div class="flex gap-2">
+                                    <button class="btn btn-ghost btn-sm btn-icon" @onclick="() => AbrirEditar(c)" title="Editar">✏️</button>
+                                    <button class="btn btn-danger btn-sm btn-icon" @onclick="() => PedirConfirmacion(c)" title="Eliminar">🗑️</button>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@if (mostrarModal)
+{
+    <div class="modal-backdrop" @onclick="CerrarModal">
+        <div class="modal" @onclick:stopPropagation>
+            <div class="modal-header">
+                <span class="modal-title">@(editandoId.HasValue ? "Editar cargo" : "Nuevo cargo")</span>
+                <button class="btn btn-ghost btn-sm btn-icon" @onclick="CerrarModal">✕</button>
+            </div>
+            <EditForm Model="form" OnValidSubmit="Guardar">
+                <DataAnnotationsValidator />
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label>Nombre</label>
+                        <InputText @bind-Value="form.Nombre" placeholder="Ej: Desarrollador Senior" />
+                        <ValidationMessage For="() => form.Nombre" class="validation-message" />
+                    </div>
+                    <div class="form-group">
+                        <label>Área</label>
+                        <InputSelect @bind-Value="form.AreaId">
+                            <option value="0">-- Selecciona un área --</option>
+                            @foreach (var a in areas ?? [])
+                            {
+                                <option value="@a.Id">@a.Nombre</option>
+                            }
+                        </InputSelect>
+                        <ValidationMessage For="() => form.AreaId" class="validation-message" />
+                    </div>
+                    <div class="form-group">
+                        <label>Descripción (opcional)</label>
+                        <InputText @bind-Value="form.Descripcion" placeholder="Descripción del cargo" />
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-ghost" @onclick="CerrarModal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary" disabled="@guardando">
+                        @(guardando ? "Guardando..." : "Guardar")
+                    </button>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+}
+
+@code {
+    private List<CargoDto>? cargos;
+    private List<AreaDto>? areas;
+    private bool cargando = true;
+    private bool mostrarModal = false;
+    private bool guardando = false;
+    private int? editandoId = null;
+    private string busqueda = string.Empty;
+    private Toast toast = default!;
+    private bool confirmVisible = false;
+    private int eliminandoId;
+    private string confirmMensaje = string.Empty;
+    private CreateCargoDto form = new();
+
+    private List<CargoDto> Filtrados =>
+        string.IsNullOrWhiteSpace(busqueda)
+            ? cargos ?? []
+            : (cargos ?? []).Where(c =>
+                c.Nombre.Contains(busqueda, StringComparison.OrdinalIgnoreCase) ||
+                c.AreaNombre.Contains(busqueda, StringComparison.OrdinalIgnoreCase)).ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var t1 = CargoService.GetAllAsync();
+        var t2 = AreaService.GetAllAsync();
+        await Task.WhenAll(t1, t2);
+        cargos = t1.Result;
+        areas = t2.Result;
+        cargando = false;
+    }
+
+    private void AbrirModal() { form = new(); editandoId = null; mostrarModal = true; }
+
+    private void AbrirEditar(CargoDto c)
+    {
+        form = new CreateCargoDto { Nombre = c.Nombre, Descripcion = c.Descripcion, AreaId = c.AreaId };
+        editandoId = c.Id;
+        mostrarModal = true;
+    }
+
+    private void CerrarModal() => mostrarModal = false;
+
+    private async Task Guardar()
+    {
+        guardando = true;
+        bool ok = editandoId.HasValue
+            ? await CargoService.UpdateAsync(editandoId.Value, form) is not null
+            : await CargoService.CreateAsync(form) is not null;
+        guardando = false;
+
+        if (ok) { CerrarModal(); await CargarCargos(); await toast.Show(editandoId.HasValue ? "Cargo actualizado." : "Cargo creado."); }
+        else await toast.Show("Error al guardar.", "error");
+    }
+
+    private async Task CargarCargos() => cargos = await CargoService.GetAllAsync();
+
+    private void PedirConfirmacion(CargoDto c)
+    {
+        eliminandoId = c.Id;
+        confirmMensaje = $"¿Eliminar el cargo \"{c.Nombre}\"?";
+        confirmVisible = true;
+    }
+
+    private async Task ConfirmarEliminar()
+    {
+        confirmVisible = false;
+        if (await CargoService.DeleteAsync(eliminandoId)) { await CargarCargos(); await toast.Show("Cargo eliminado."); }
+        else await toast.Show("No se pudo eliminar.", "error");
+    }
+}

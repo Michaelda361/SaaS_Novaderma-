@@ -425,7 +425,9 @@
                     }
                     @if (capacitacion.TienePlantillaDocx)
                     {
-                        <span class="badge badge-purple">Word</span>
+                        <span class="badge badge-purple">
+                            @(capacitacion.TipoArchivoCertificado == "application/pdf" ? "PDF" : capacitacion.TipoArchivoCertificado == "application/vnd.openxmlformats-officedocument.presentationml.presentation" ? "PPTX" : "DOCX")
+                        </span>
                     }
                 </div>
             }
@@ -464,6 +466,13 @@
                             <span class="tipo-icon"></span>
                             <div><div class="tipo-label">Presentacion PowerPoint</div><div class="tipo-desc">Sube un .pptx con variables</div></div>
                         </label>
+                        <label class="tipo-option @(tipoCertificado == "pdf" ? "tipo-option--active" : "")">
+                            <input type="radio" name="tipoCert" value="pdf"
+                                   checked="@(tipoCertificado == "pdf")"
+                                   @onchange='() => tipoCertificado = "pdf"' />
+                            <span class="tipo-icon"></span>
+                            <div><div class="tipo-label">Plantilla PDF</div><div class="tipo-desc">Sube un .pdf con variables o campos de formulario</div></div>
+                        </label>
                     </div>
                 </div>
 
@@ -487,18 +496,18 @@
                 </div>
 
                     <div>
-                        <label style="font-size:.85rem;font-weight:500;">@(tipoCertificado == "pptx" ? "Presentacion PowerPoint (.pptx)" : "Archivo Word (.docx)")</label>
+                        <label style="font-size:.85rem;font-weight:500;">@(tipoCertificado == "pptx" ? "Presentacion PowerPoint (.pptx)" : tipoCertificado == "pdf" ? "Plantilla PDF (.pdf)" : "Archivo Word (.docx)")</label>
                         @if (capacitacion.TienePlantillaDocx && string.IsNullOrWhiteSpace(certForm.ArchivoDocxBase64))
                         {
                             <div style="margin-top:.35rem;display:flex;align-items:center;gap:.75rem;">
-                                <span class="badge badge-success">✅ DOCX cargado</span>
+                                <span class="badge badge-success">✅ Plantilla cargada</span>
                                 <button type="button" class="btn btn-ghost btn-sm"
                                         @onclick="() => certForm.EliminarDocx = true">Quitar</button>
                             </div>
                         }
                         @if (!capacitacion.TienePlantillaDocx || certForm.EliminarDocx)
                         {
-                            <InputFile OnChange="OnArchivoCertificadoSeleccionado" accept="@(tipoCertificado == "pptx" ? ".pptx" : ".docx")" style="margin-top:.35rem;" />
+                            <InputFile OnChange="OnArchivoCertificadoSeleccionado" accept="@(tipoCertificado == "pptx" ? ".pptx" : tipoCertificado == "pdf" ? ".pdf" : ".docx")" style="margin-top:.35rem;" />
                             @if (!string.IsNullOrWhiteSpace(certForm.ArchivoDocxBase64))
                             {
                                 <div class="alert alert-success" style="margin-top:.35rem;padding:.4rem .75rem;font-size:.8rem;">
@@ -506,7 +515,7 @@
                                 </div>
                             }
                             <p class="text-xs text-muted" style="margin-top:.3rem;">
-                                Sube un .docx con variables {{nombre_completo}}, {{cargo}}, {{capacitacion}}, etc.
+                                Sube un @(tipoCertificado == "pptx" ? ".pptx" : tipoCertificado == "pdf" ? ".pdf" : ".docx") con variables {{nombre_completo}}, {{cargo}}, {{capacitacion}}, etc.
                             </p>
                         }
                     </div>
@@ -1126,7 +1135,10 @@
         {
             tipoCertificado = capacitacion.TipoArchivoCertificado ==
                 "application/vnd.openxmlformats-officedocument.presentationml.presentation"
-                ? "pptx" : "docx";
+                ? "pptx"
+                : capacitacion.TipoArchivoCertificado == "application/pdf"
+                    ? "pdf"
+                    : "docx";
         }
         else
         {
@@ -1144,7 +1156,8 @@
     {
         var file = e.File;
         bool isPptx = tipoCertificado == "pptx";
-        var expectedExt = isPptx ? ".pptx" : ".docx";
+        bool isPdf = tipoCertificado == "pdf";
+        var expectedExt = isPptx ? ".pptx" : isPdf ? ".pdf" : ".docx";
 
         if (!file.Name.EndsWith(expectedExt, StringComparison.OrdinalIgnoreCase))
         { await toast.Show($"Solo se aceptan archivos {expectedExt}", "warning"); return; }
@@ -1154,9 +1167,11 @@
         using var ms = new System.IO.MemoryStream();
         await file.OpenReadStream(5 * 1024 * 1024).CopyToAsync(ms);
         certForm.ArchivoDocxBase64 = Convert.ToBase64String(ms.ToArray());
-        certForm.TipoArchivoCertificado = isPptx 
+        certForm.TipoArchivoCertificado = isPptx
             ? "application/vnd.openxmlformats-officedocument.presentationml.presentation"
-            : "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+            : isPdf
+                ? "application/pdf"
+                : "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
         certForm.EliminarDocx = false;
     }
 

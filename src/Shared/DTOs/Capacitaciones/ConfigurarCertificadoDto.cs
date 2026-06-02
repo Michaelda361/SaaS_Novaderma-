@@ -16,12 +16,12 @@ public class ConfigurarCertificadoDto
     public string? PlantillaNombreCertificado { get; set; }
 
     /// <summary>
-    /// Archivo DOCX o PPTX en Base64. Si se envía, se guarda como plantilla del certificado.
+    /// Archivo DOCX, PPTX o PDF en Base64. Si se envía, se guarda como plantilla del certificado.
     /// Soporta las mismas variables que PlantillaNombreCertificado.
     /// </summary>
     public string? ArchivoDocxBase64 { get; set; }
 
-    /// <summary>Tipo MIME del archivo, e.g. DOCX o PPTX.</summary>
+    /// <summary>Tipo MIME del archivo, e.g. DOCX, PPTX o PDF.</summary>
     public string? TipoArchivoCertificado { get; set; }
 
     /// <summary>True si se quiere eliminar el DOCX/PPTX existente sin subir uno nuevo.</summary>

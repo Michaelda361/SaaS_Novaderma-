@@ -42,6 +42,7 @@ builder.Services.AddScoped(sp =>
 });
 
 builder.Services.AddScoped<ColaboradorApiService>();
+builder.Services.AddScoped<ColaboradorCampoApiService>();
 builder.Services.AddScoped<CapacitacionApiService>();
 builder.Services.AddScoped<CertificadoApiService>();
 builder.Services.AddScoped<AreaApiService>();

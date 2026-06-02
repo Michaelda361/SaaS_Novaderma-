@@ -17,6 +17,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Area> Areas => Set<Area>();
     public DbSet<Cargo> Cargos => Set<Cargo>();
     public DbSet<Certificado> Certificados => Set<Certificado>();
+    public DbSet<CertificadoEvento> CertificadoEventos => Set<CertificadoEvento>();
     public DbSet<Capacitacion> Capacitaciones => Set<Capacitacion>();
     public DbSet<Inscripcion> Inscripciones => Set<Inscripcion>();
     public DbSet<RecursoCapacitacion> RecursosCapacitacion => Set<RecursoCapacitacion>();
@@ -31,6 +32,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<ListadoMaestroPermiso> ListadoMaestroPermisos => Set<ListadoMaestroPermiso>();
     public DbSet<DocumentoControl> DocumentosControl => Set<DocumentoControl>();
     public DbSet<DocumentoControlCampoDefinicion> DocumentoControlCampoDefiniciones => Set<DocumentoControlCampoDefinicion>();
+
+    // Colaboradores - campos dinámicos
+    public DbSet<ColaboradorCampoDefinicion> ColaboradorCampoDefiniciones => Set<ColaboradorCampoDefinicion>();
+    public DbSet<ColaboradorCampoValor> ColaboradorCampoValores => Set<ColaboradorCampoValor>();
 
     // Cartas Laborales
     public DbSet<PlantillaDocumento> PlantillasDocumento => Set<PlantillaDocumento>();
@@ -61,6 +66,13 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         modelBuilder.Entity<Area>().HasQueryFilter(a => a.Activo);
         modelBuilder.Entity<Cargo>().HasQueryFilter(c => c.Activo);
         modelBuilder.Entity<Certificado>().HasQueryFilter(c => c.Activo);
+        modelBuilder.Entity<Certificado>().Property(c => c.Status).HasConversion<string>();
+        modelBuilder.Entity<CertificadoEvento>()
+            .HasOne(e => e.Certificado)
+            .WithMany(c => c.Eventos)
+            .HasForeignKey(e => e.CertificadoId)
+            .OnDelete(DeleteBehavior.Cascade);
+        modelBuilder.Entity<CertificadoEvento>().HasQueryFilter(e => true);
         modelBuilder.Entity<Capacitacion>().HasQueryFilter(c => c.Activo);
         modelBuilder.Entity<Inscripcion>().HasQueryFilter(i => i.Activo);
         modelBuilder.Entity<RecursoCapacitacion>().HasQueryFilter(r => r.Activo);
@@ -86,6 +98,22 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .HasForeignKey(c => c.SupervisorId)
             .OnDelete(DeleteBehavior.Restrict);
 
+        modelBuilder.Entity<ColaboradorCampoValor>()
+            .HasOne(v => v.Colaborador)
+            .WithMany()
+            .HasForeignKey(v => v.ColaboradorId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<ColaboradorCampoValor>()
+            .HasOne(v => v.ColaboradorCampoDefinicion)
+            .WithMany(d => d.Valores)
+            .HasForeignKey(v => v.ColaboradorCampoDefinicionId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<ColaboradorCampoValor>()
+            .HasIndex(v => new { v.ColaboradorId, v.ColaboradorCampoDefinicionId })
+            .IsUnique();
+
         // Jefe de área — sin cascade para evitar ciclos
         modelBuilder.Entity<Area>()
             .HasOne(a => a.Jefe)
@@ -99,6 +127,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         modelBuilder.Entity<ListadoMaestro>().HasQueryFilter(l => l.Activo);
         modelBuilder.Entity<DocumentoControl>().HasQueryFilter(d => d.Activo);
         modelBuilder.Entity<DocumentoControlCampoDefinicion>().HasQueryFilter(c => c.Activo);
+        modelBuilder.Entity<ColaboradorCampoDefinicion>().HasQueryFilter(c => c.Activo);
+        modelBuilder.Entity<ColaboradorCampoValor>().HasQueryFilter(v => v.Activo);
 
         // Enums como string para legibilidad en BD
         modelBuilder.Entity<Documento>()

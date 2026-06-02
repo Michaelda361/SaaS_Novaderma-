@@ -36,6 +36,7 @@ public static class DependencyInjection
 
         // Servicios de aplicación
         services.AddScoped<ColaboradorService>();
+        services.AddScoped<ColaboradorCampoService>();
         services.AddScoped<ControlDocumentalService>();
         services.AddScoped<IControlDocumentalService, ControlDocumentalService>();
         services.AddScoped<CapacitacionService>();
@@ -69,6 +70,7 @@ public static class DependencyInjection
             services.AddScoped<IFileStorageService, AzureBlobStorageService>();
         }
 
+        services.AddScoped<ICertificatePdfGenerator, CertificatePdfGenerator>();
         return services;
     }
 }

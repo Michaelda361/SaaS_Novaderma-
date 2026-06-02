@@ -204,6 +204,9 @@ namespace TalentManagement.Infrastructure.Migrations
                     b.Property<int?>("CapacitacionId")
                         .HasColumnType("int");
 
+                    b.Property<string>("CertificateCode")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<int>("ColaboradorId")
                         .HasColumnType("int");
 
@@ -212,6 +215,12 @@ namespace TalentManagement.Infrastructure.Migrations
 
                     b.Property<DateTime?>("FechaVencimiento")
                         .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("GeneratedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("GeneratedBy")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Institucion")
                         .IsRequired()
@@ -227,6 +236,10 @@ namespace TalentManagement.Infrastructure.Migrations
                     b.Property<string>("PdfFileKey")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("UrlDocumento")
                         .HasColumnType("nvarchar(max)");
 
@@ -237,6 +250,35 @@ namespace TalentManagement.Infrastructure.Migrations
                     b.HasIndex("ColaboradorId");
 
                     b.ToTable("Certificados");
+                });
+
+            modelBuilder.Entity("TalentManagement.Domain.Entities.CertificadoEvento", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CertificadoId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Descripcion")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("Fecha")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Tipo")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CertificadoId");
+
+                    b.ToTable("CertificadoEventos");
                 });
 
             modelBuilder.Entity("TalentManagement.Domain.Entities.Colaborador", b =>
@@ -311,6 +353,72 @@ namespace TalentManagement.Infrastructure.Migrations
                     b.HasIndex("SupervisorId");
 
                     b.ToTable("Colaboradores");
+                });
+
+            modelBuilder.Entity("TalentManagement.Domain.Entities.ColaboradorCampoDefinicion", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("Activo")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("CampoClave")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Nombre")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Opciones")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("Orden")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("Requerido")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("Tipo")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("ColaboradorCampoDefiniciones");
+                });
+
+            modelBuilder.Entity("TalentManagement.Domain.Entities.ColaboradorCampoValor", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("Activo")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("ColaboradorCampoDefinicionId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ColaboradorId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Valor")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ColaboradorCampoDefinicionId");
+
+                    b.HasIndex("ColaboradorId", "ColaboradorCampoDefinicionId")
+                        .IsUnique();
+
+                    b.ToTable("ColaboradorCampoValores");
                 });
 
             modelBuilder.Entity("TalentManagement.Domain.Entities.Cuestionario", b =>
@@ -1136,6 +1244,17 @@ namespace TalentManagement.Infrastructure.Migrations
                     b.Navigation("Colaborador");
                 });
 
+            modelBuilder.Entity("TalentManagement.Domain.Entities.CertificadoEvento", b =>
+                {
+                    b.HasOne("TalentManagement.Domain.Entities.Certificado", "Certificado")
+                        .WithMany("Eventos")
+                        .HasForeignKey("CertificadoId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Certificado");
+                });
+
             modelBuilder.Entity("TalentManagement.Domain.Entities.Colaborador", b =>
                 {
                     b.HasOne("TalentManagement.Domain.Entities.Area", "Area")
@@ -1160,6 +1279,25 @@ namespace TalentManagement.Infrastructure.Migrations
                     b.Navigation("Cargo");
 
                     b.Navigation("Supervisor");
+                });
+
+            modelBuilder.Entity("TalentManagement.Domain.Entities.ColaboradorCampoValor", b =>
+                {
+                    b.HasOne("TalentManagement.Domain.Entities.ColaboradorCampoDefinicion", "ColaboradorCampoDefinicion")
+                        .WithMany("Valores")
+                        .HasForeignKey("ColaboradorCampoDefinicionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("TalentManagement.Domain.Entities.Colaborador", "Colaborador")
+                        .WithMany()
+                        .HasForeignKey("ColaboradorId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Colaborador");
+
+                    b.Navigation("ColaboradorCampoDefinicion");
                 });
 
             modelBuilder.Entity("TalentManagement.Domain.Entities.Cuestionario", b =>
@@ -1482,11 +1620,21 @@ namespace TalentManagement.Infrastructure.Migrations
                     b.Navigation("Colaboradores");
                 });
 
+            modelBuilder.Entity("TalentManagement.Domain.Entities.Certificado", b =>
+                {
+                    b.Navigation("Eventos");
+                });
+
             modelBuilder.Entity("TalentManagement.Domain.Entities.Colaborador", b =>
                 {
                     b.Navigation("Certificados");
 
                     b.Navigation("Inscripciones");
+                });
+
+            modelBuilder.Entity("TalentManagement.Domain.Entities.ColaboradorCampoDefinicion", b =>
+                {
+                    b.Navigation("Valores");
                 });
 
             modelBuilder.Entity("TalentManagement.Domain.Entities.Cuestionario", b =>

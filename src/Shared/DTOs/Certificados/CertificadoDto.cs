@@ -19,6 +19,10 @@ public class CertificadoDto
 
     /// <summary>Nombre de la capacitación de origen, si aplica.</summary>
     public string? CapacitacionNombre { get; set; }
+    public string? CertificateCode { get; set; }
+    public DateTime? GeneratedAt { get; set; }
+    public string? GeneratedBy { get; set; }
+    public string Status { get; set; } = string.Empty;
 
     /// <summary>True si tiene un PDF generado disponible para descargar.</summary>
     public bool TienePdf { get; set; }
