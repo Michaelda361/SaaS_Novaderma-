@@ -13,10 +13,19 @@ public interface IInscripcionRepository
     Task<bool> DeleteAsync(int id);
     Task<bool> ExisteInscripcionAsync(int capacitacionId, int colaboradorId);
 
+    Task<List<(Inscripcion inscripcion, RespuestaCuestionario? respuesta, Cuestionario? cuestionario)>>
+        GetHistorialCompletoByCapacitacionAsync(int capacitacionId);
+
     /// <summary>
     /// Devuelve todas las inscripciones con su resultado de cuestionario en una sola query.
     /// Reemplaza el N+1 masivo de CargarHistorial en el cliente.
     /// </summary>
     Task<List<(Inscripcion inscripcion, RespuestaCuestionario? respuesta, Cuestionario? cuestionario)>>
         GetHistorialCompletoAsync();
+
+    /// <summary>
+    /// Devuelve el historial completo del colaborador.
+    /// </summary>
+    Task<List<(Inscripcion inscripcion, RespuestaCuestionario? respuesta, Cuestionario? cuestionario)>>
+        GetHistorialCompletoAsync(int colaboradorId);
 }

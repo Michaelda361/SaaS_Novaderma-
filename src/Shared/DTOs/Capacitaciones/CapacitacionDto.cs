@@ -19,6 +19,9 @@ public class CapacitacionDto
     public bool EmiteCertificado { get; set; }
     public string? NombreCertificado { get; set; }
     public string? PlantillaNombreCertificado { get; set; }
+    /// <summary>True si la capacitación ha sido finalizada.</summary>
+    public bool Finalizada { get; set; }
+    public DateTime? FechaFinalizacion { get; set; }
     /// <summary>True si la capacitación tiene un DOCX de plantilla de certificado.</summary>
     public bool TienePlantillaDocx { get; set; }
 

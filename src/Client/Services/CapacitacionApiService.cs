@@ -10,8 +10,14 @@ public class CapacitacionApiService(HttpClient http)
     public Task<List<CapacitacionDto>?> GetAllAsync() =>
         http.GetFromJsonAsync<List<CapacitacionDto>>(Base);
 
-    public Task<CapacitacionDto?> GetByIdAsync(int id) =>
-        http.GetFromJsonAsync<CapacitacionDto>($"{Base}/{id}");
+    public async Task<CapacitacionDto?> GetByIdAsync(int id)
+    {
+        var resp = await http.GetAsync($"{Base}/{id}");
+        if (resp.StatusCode == System.Net.HttpStatusCode.Forbidden)
+            throw new System.UnauthorizedAccessException("Acceso restringido");
+        if (!resp.IsSuccessStatusCode) return null;
+        return await resp.Content.ReadFromJsonAsync<CapacitacionDto>();
+    }
 
     public Task<List<CapacitacionDto>?> GetByAreaAsync(int areaId) =>
         http.GetFromJsonAsync<List<CapacitacionDto>>($"{Base}/area/{areaId}");

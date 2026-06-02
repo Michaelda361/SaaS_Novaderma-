@@ -11,6 +11,7 @@ public class CuestionarioService(
     ICapacitacionRepository capacitacionRepository,
     ICertificadoRepository certificadoRepository,
     IInscripcionRepository inscripcionRepository,
+    IAuditLogRepository auditLogRepository,
     CertificadoService certificadoService,
     ICertificatePdfGenerator certificatePdfGenerator,
     ICertificadoPdfService certificadoPdfService)
@@ -162,7 +163,9 @@ public class CuestionarioService(
 
         await repository.SaveRespuestaAsync(respuesta);
 
-        // Emitir certificado automáticamente si la capacitación lo tiene configurado y el colaborador aprobó
+        bool certificadoEmitido = false;
+        string? nombreCertificado = null;
+
         if (aprobado)
         {
             try
@@ -260,16 +263,8 @@ public class CuestionarioService(
                                 await certificadoRepository.CreateAsync(certificado);
                             }
 
-                            return new ResultadoCuestionarioDto
-                            {
-                                Puntaje = puntaje,
-                                Aprobado = aprobado,
-                                PuntajeAprobacion = cuestionario.PuntajeAprobacion,
-                                TotalPreguntas = total,
-                                Correctas = correctas,
-                                CertificadoEmitido = true,
-                                NombreCertificado = nombreCert
-                            };
+                            certificadoEmitido = true;
+                            nombreCertificado = nombreCert;
                         }
                     }
                 }
@@ -277,13 +272,17 @@ public class CuestionarioService(
             catch { /* No bloquear el resultado si falla la emisión del certificado */ }
         }
 
+        await FinalizarCapacitacionSiCorrespondeAsync(cuestionario.CapacitacionId);
+
         return new ResultadoCuestionarioDto
         {
             Puntaje = puntaje,
             Aprobado = aprobado,
             PuntajeAprobacion = cuestionario.PuntajeAprobacion,
             TotalPreguntas = total,
-            Correctas = correctas
+            Correctas = correctas,
+            CertificadoEmitido = certificadoEmitido,
+            NombreCertificado = nombreCertificado
         };
     }
 
@@ -308,6 +307,33 @@ public class CuestionarioService(
     /// </summary>
     public Task<List<int>> GetCapacitacionesAprobadasAsync(int colaboradorId) =>
         repository.GetCapacitacionesAprobadasPorColaboradorAsync(colaboradorId);
+
+    private async Task FinalizarCapacitacionSiCorrespondeAsync(int capacitacionId)
+    {
+        var filas = await inscripcionRepository.GetHistorialCompletoByCapacitacionAsync(capacitacionId);
+        if (!filas.Any()) return;
+
+        // Finaliza la capacitación solo cuando todas las inscripciones activas tienen respuestas aprobadas.
+        if (filas.Any(f => f.respuesta is null || !f.respuesta.Aprobado)) return;
+
+        var capacitacion = await capacitacionRepository.GetByIdAsync(capacitacionId);
+        if (capacitacion is null || capacitacion.Finalizada) return;
+
+        capacitacion.Finalizada = true;
+        capacitacion.FechaFinalizacion = DateTime.Today;
+        capacitacion.MotivoFinalizacion = "Todos los participantes inscritos aprobaron el cuestionario.";
+        await capacitacionRepository.UpdateAsync(capacitacion);
+
+        await auditLogRepository.CreateAsync(new AuditLog
+        {
+            EntidadTipo = nameof(Capacitacion),
+            EntidadId = capacitacion.Id,
+            EntidadNombre = capacitacion.Nombre,
+            Accion = "Finalizada",
+            FechaHora = DateTime.UtcNow,
+            Observaciones = capacitacion.MotivoFinalizacion
+        });
+    }
 
     private static CuestionarioDto MapToDto(Cuestionario c) => new()
     {

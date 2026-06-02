@@ -156,6 +156,8 @@ public class CapacitacionService(
         EmiteCertificado = c.EmiteCertificado,
         NombreCertificado = c.NombreCertificado,
         PlantillaNombreCertificado = c.PlantillaNombreCertificado,
+        Finalizada = c.Finalizada,
+        FechaFinalizacion = c.FechaFinalizacion,
         TienePlantillaDocx = c.ArchivoDocxCertificado is not null && c.ArchivoDocxCertificado.Length > 0,
         TipoArchivoCertificado = c.ArchivoDocxCertificado is { Length: > 0 } ? c.TipoArchivoCertificado : null,
         Publicada = c.Publicada

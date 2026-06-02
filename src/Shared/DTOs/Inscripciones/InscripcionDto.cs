@@ -13,5 +13,6 @@ public class InscripcionDto
     public DateTime FechaInscripcion { get; set; }
     public bool Asistio { get; set; }
     public decimal? Calificacion { get; set; }
+    public DateTime? FechaFinalizacion { get; set; }
     public string? Observaciones { get; set; }
 }

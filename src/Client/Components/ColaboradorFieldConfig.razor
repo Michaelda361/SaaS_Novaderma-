@@ -67,7 +67,8 @@
                     {
                         var page = pageNum;
                         var pageClass = page == currentPage ? "btn-primary" : "btn-ghost";
-                        <button class=@($"btn btn-sm {pageClass}") @onclick="() => GoToPage(page)">@page</button>
+                        var pageLabel = page.ToString();
+                        <button class="btn btn-sm @(pageClass)" @onclick="() => GoToPage(page)">@pageLabel</button>
                     }
                     <button class="btn btn-sm btn-ghost" disabled="@(!CanGoNext)" @onclick="() => NextPage()">Siguiente</button>
                 </div>

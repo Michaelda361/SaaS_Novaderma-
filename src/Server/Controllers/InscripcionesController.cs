@@ -97,7 +97,12 @@ public class InscripcionesController(
     [HttpGet("historial-completo")]
     public async Task<IActionResult> GetHistorialCompleto()
     {
-        if (!await currentUser.PuedeGestionarPlantillasAsync()) return Forbid();
-        return Ok(await service.GetHistorialCompletoAsync());
+        if (await currentUser.PuedeGestionarPlantillasAsync())
+            return Ok(await service.GetHistorialCompletoAsync());
+
+        var miId = await currentUser.GetColaboradorIdAsync();
+        if (miId is null) return Forbid();
+
+        return Ok(await service.GetHistorialCompletoAsync(miId.Value));
     }
 }

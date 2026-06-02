@@ -69,7 +69,7 @@
                 <div class="search-input-wrap">
                     <span class="search-icon">🔍</span>
                     <input type="search" placeholder="Buscar colaborador o capacitación..."
-                           @bind="busquedaHistorial" @bind:event="oninput" />
+                           @bind="BusquedaHistorial" @bind:event="oninput" />
                 </div>
                 <span class="text-sm text-muted">@HistorialFiltrado.Count() registro(s)</span>
             </div>
@@ -88,7 +88,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var h in HistorialFiltrado)
+                        @foreach (var h in HistorialPagina)
                         {
                             <tr>
                                 <td class="font-medium">@h.Inscripcion.ColaboradorNombre</td>
@@ -126,6 +126,13 @@
                         }
                     </tbody>
                 </table>
+            </div>
+            <div class="pagination" style="display:flex;align-items:center;justify-content:space-between;gap:.75rem;padding:.75rem 1rem;border-top:1px solid var(--border);">
+                <div class="text-sm text-muted">Página @paginaHistorial de @TotalPaginas</div>
+                <div>
+                    <button class="btn btn-sm btn-secondary" disabled="@(!CanPrevHistorial)" @onclick="IrPaginaAnterior">Anterior</button>
+                    <button class="btn btn-sm btn-secondary" disabled="@(!CanNextHistorial)" @onclick="IrPaginaSiguiente">Siguiente</button>
+                </div>
             </div>
             <div class="text-sm text-muted" style="padding:.75rem 1rem;border-top:1px solid var(--border);">
                 @historialItems.Count(h => h.Resultado?.Aprobado == true) aprobado(s) ·
@@ -405,9 +412,22 @@
     private bool cargandoHistorial = false;
     private bool historialCargado = false;
     private string busquedaHistorial = string.Empty;
+    private int paginaHistorial = 1;
+    private const int HistorialPaginaSize = 10;
 
     // Capacitaciones aprobadas por el colaborador (excluidas de la lista activa)
     private HashSet<int> capacitacionesAprobadas = [];
+
+    private string BusquedaHistorial
+    {
+        get => busquedaHistorial;
+        set
+        {
+            if (busquedaHistorial == value) return;
+            busquedaHistorial = value;
+            paginaHistorial = 1;
+        }
+    }
 
     private IEnumerable<HistorialItem> HistorialFiltrado =>
         string.IsNullOrWhiteSpace(busquedaHistorial)
@@ -415,6 +435,18 @@
             : historialItems.Where(h =>
                 h.Inscripcion.ColaboradorNombre.Contains(busquedaHistorial, StringComparison.OrdinalIgnoreCase) ||
                 h.Inscripcion.CapacitacionNombre.Contains(busquedaHistorial, StringComparison.OrdinalIgnoreCase));
+
+    private IEnumerable<HistorialItem> HistorialPagina =>
+        HistorialFiltrado
+            .Skip((paginaHistorial - 1) * HistorialPaginaSize)
+            .Take(HistorialPaginaSize);
+
+    private int TotalPaginas => Math.Max(1, (int)Math.Ceiling(HistorialFiltrado.Count() / (double)HistorialPaginaSize));
+    private bool CanPrevHistorial => paginaHistorial > 1;
+    private bool CanNextHistorial => paginaHistorial < TotalPaginas;
+
+    private void IrPaginaAnterior() => paginaHistorial = Math.Max(1, paginaHistorial - 1);
+    private void IrPaginaSiguiente() => paginaHistorial = Math.Min(TotalPaginas, paginaHistorial + 1);
 
     private List<CapacitacionDto> Filtradas
     {
@@ -425,7 +457,7 @@
             if (AuthInfo.EsSoloColaborador)
             {
                 lista = lista.Where(c =>
-                    c.Publicada && (
+                    c.Publicada && !c.Finalizada && (
                     c.TipoAsignacion == "General" ||
                     (c.AreaId.HasValue && c.AreaId == AuthInfo.AreaId) ||
                     (c.ColaboradorId.HasValue && c.ColaboradorId == AuthInfo.ColaboradorId))).ToList();
@@ -433,6 +465,8 @@
                 // Excluir las que ya aprobó — pasan al historial
                 lista = lista.Where(c => !capacitacionesAprobadas.Contains(c.Id)).ToList();
             }
+
+            lista = lista.Where(c => !c.Finalizada).ToList();
 
             if (!string.IsNullOrWhiteSpace(busqueda))
                 lista = lista.Where(c => c.Nombre.Contains(busqueda, StringComparison.OrdinalIgnoreCase)).ToList();
@@ -444,6 +478,7 @@
 
     private static (string Texto, string Clase) EstadoCapacitacion(CapacitacionDto c)
     {
+        if (c.Finalizada) return ("Finalizada", "badge-gray");
         var hoy = DateTime.Today;
         if (c.FechaFin < hoy)    return ("Finalizada", "badge-gray");
         if (c.FechaInicio > hoy) return ("Próxima",    "badge-info");
@@ -583,9 +618,11 @@
             var filas = await InscripcionService.GetHistorialCompletoAsync();
             historialItems = filas
                 .Select(f => new HistorialItem(f.Inscripcion, f.Resultado))
-                .OrderBy(h => h.Inscripcion.ColaboradorNombre)
-                .ThenBy(h => h.Inscripcion.CapacitacionNombre)
+                .Where(h => h.Inscripcion.FechaFinalizacion.HasValue)
+                .OrderByDescending(h => h.Inscripcion.FechaFinalizacion)
+                .ThenByDescending(h => h.Inscripcion.FechaInscripcion)
                 .ToList();
+            paginaHistorial = 1;
         }
         catch { historialItems = []; }
 

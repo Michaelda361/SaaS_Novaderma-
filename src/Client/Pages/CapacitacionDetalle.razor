@@ -9,8 +9,19 @@
 @inject AuthInfoService AuthInfo
 @inject NavigationManager Nav
 <Toast @ref="toast" />
+@if (accessDenied)
+{
+    <div class="empty-state" style="padding:1.5rem;">
+        <div class="empty-state-icon">🔒</div>
+        <h3>Acceso restringido</h3>
+        <p>No tienes permiso para ver esta capacitación. Si crees que es un error, contacta al administrador.</p>
+    </div>
+}
 
-<div class="page-header" style="margin-bottom:1.5rem;display:flex;align-items:center;gap:1rem;flex-wrap:wrap;">
+@if (!accessDenied)
+{
+
+<div class="page-header" style="margin-bottom:1.5rem;display:flex;align-items:center;gap:1rem;flex-wrap:wrap;"> 
     <button class="btn btn-ghost btn-sm" @onclick='() => Nav.NavigateTo("/capacitaciones")'>← Volver</button>
     <h2 style="margin:0;font-size:1.25rem;font-weight:600;">
         @(capacitacion?.Nombre ?? "Cargando...")
@@ -716,6 +727,7 @@
         </div>
     </div>
 }
+}
 
 @code {
     [Parameter] public int Id { get; set; }
@@ -758,13 +770,24 @@
     private Dictionary<int, int> respuestasColaborador = new(); // preguntaId -> opcionId
     private ResultadoCuestionarioDto? resultadoPropio;
     private InscripcionDto? inscripcionPropia;
+    private bool accessDenied = false;
     // Resultados de todos los inscritos (para la vista admin) — inscripcionId -> resultado
     private Dictionary<int, ResultadoCuestionarioDto> resultadosInscritos = [];
 
     protected override async Task OnInitializedAsync()
     {
         await AuthInfo.LoadAsync();
-        capacitacion = await CapacitacionService.GetByIdAsync(Id);
+        try
+        {
+            capacitacion = await CapacitacionService.GetByIdAsync(Id);
+        }
+        catch (System.UnauthorizedAccessException)
+        {
+            accessDenied = true;
+            return;
+        }
+
+        if (accessDenied) return;
 
         if (PuedeGestionar)
         {

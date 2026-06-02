@@ -19,22 +19,69 @@ public class CapacitacionesController(
 {
 
     [HttpGet]
-    public async Task<IActionResult> GetAll() =>
-        Ok(await service.GetAllAsync());
+    public async Task<IActionResult> GetAll()
+    {
+        if (await currentUser.EsAdminAsync())
+            return Ok(await service.GetAllAsync());
+
+        var miId = await currentUser.GetColaboradorIdAsync();
+        if (miId is null) return Ok(new List<TalentManagement.Shared.DTOs.Capacitaciones.CapacitacionDto>());
+
+        // Obtener las inscripciones del colaborador y devolver las capacitaciones asociadas
+        var inscripciones = await inscripcionService.GetByColaboradorAsync(miId.Value);
+        var tareas = inscripciones.Select(i => service.GetByIdAsync(i.CapacitacionId));
+        var caps = await Task.WhenAll(tareas);
+        var lista = caps.Where(c => c is not null).GroupBy(c => c!.Id).Select(g => g.First()!).ToList();
+        return Ok(lista);
+    }
 
     [HttpGet("area/{areaId:int}")]
-    public async Task<IActionResult> GetByArea(int areaId) =>
-        Ok(await service.GetByAreaAsync(areaId));
+    public async Task<IActionResult> GetByArea(int areaId)
+    {
+        if (await currentUser.EsAdminAsync())
+            return Ok(await service.GetByAreaAsync(areaId));
+
+        var miId = await currentUser.GetColaboradorIdAsync();
+        if (miId is null) return Ok(new List<TalentManagement.Shared.DTOs.Capacitaciones.CapacitacionDto>());
+
+        var inscripciones = await inscripcionService.GetByColaboradorAsync(miId.Value);
+        var tareas = inscripciones.Select(i => service.GetByIdAsync(i.CapacitacionId));
+        var caps = await Task.WhenAll(tareas);
+        var lista = caps.Where(c => c is not null && c.AreaId == areaId).GroupBy(c => c!.Id).Select(g => g.First()!).ToList();
+        return Ok(lista);
+    }
 
     [HttpGet("colaborador/{colaboradorId:int}")]
-    public async Task<IActionResult> GetByColaborador(int colaboradorId) =>
-        Ok(await service.GetByColaboradorAsync(colaboradorId));
+    public async Task<IActionResult> GetByColaborador(int colaboradorId)
+    {
+        var miId = await currentUser.GetColaboradorIdAsync();
+        if (!await currentUser.EsAdminAsync() && miId != colaboradorId) return Forbid();
+
+        // Devolver las capacitaciones en las que el colaborador está inscrito
+        var inscripciones = await inscripcionService.GetByColaboradorAsync(colaboradorId);
+        var tareas = inscripciones.Select(i => service.GetByIdAsync(i.CapacitacionId));
+        var caps = await Task.WhenAll(tareas);
+        var lista = caps.Where(c => c is not null).GroupBy(c => c!.Id).Select(g => g.First()!).ToList();
+        return Ok(lista);
+    }
 
     [HttpGet("{id:int}")]
     public async Task<IActionResult> GetById(int id)
     {
-        var result = await service.GetByIdAsync(id);
-        return result is null ? NotFound() : Ok(result);
+        if (await currentUser.EsAdminAsync())
+        {
+            var result = await service.GetByIdAsync(id);
+            return result is null ? NotFound() : Ok(result);
+        }
+
+        var miId = await currentUser.GetColaboradorIdAsync();
+        if (miId is null) return Forbid();
+
+        if (!await inscripcionService.ExisteInscripcionAsync(id, miId.Value))
+            return Forbid();
+
+        var result2 = await service.GetByIdAsync(id);
+        return result2 is null ? NotFound() : Ok(result2);
     }
 
     [HttpPost]

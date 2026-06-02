@@ -20,6 +20,16 @@ public class CuestionariosController(
     [HttpGet("capacitacion/{capacitacionId:int}")]
     public async Task<IActionResult> GetByCapacitacion(int capacitacionId)
     {
+        if (await currentUser.EsAdminAsync())
+        {
+            var r = await service.GetByCapacitacionAsync(capacitacionId);
+            return r is null ? NotFound() : Ok(r);
+        }
+
+        var miId = await currentUser.GetColaboradorIdAsync();
+        if (miId is null) return Forbid();
+        if (!await inscripcionService.ExisteInscripcionAsync(capacitacionId, miId.Value)) return Forbid();
+
         var result = await service.GetByCapacitacionAsync(capacitacionId);
         return result is null ? NotFound() : Ok(result);
     }

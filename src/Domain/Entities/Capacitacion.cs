@@ -47,6 +47,15 @@ public class Capacitacion : BaseEntity
     /// </summary>
     public bool Publicada { get; set; } = false;
 
+    /// <summary>Se marca true cuando la capacitación se finaliza automáticamente tras aprobar todos los cuestionarios inscritos.</summary>
+    public bool Finalizada { get; set; } = false;
+
+    /// <summary>Fecha en la que la capacitación fue finalizada automáticamente.</summary>
+    public DateTime? FechaFinalizacion { get; set; }
+
+    /// <summary>Motivo o razón por la cual la capacitación pasó a estado finalizada.</summary>
+    public string? MotivoFinalizacion { get; set; }
+
     [JsonIgnore]
     public ICollection<Inscripcion> Inscripciones { get; set; } = [];
     [JsonIgnore]

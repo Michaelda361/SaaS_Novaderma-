@@ -10,7 +10,8 @@ public class CapacitacionRepository(AppDbContext context) : ICapacitacionReposit
     private IQueryable<Capacitacion> WithIncludes() =>
         context.Capacitaciones
             .Include(c => c.Area)
-            .Include(c => c.Colaborador);
+            .Include(c => c.Colaborador)
+            .Include(c => c.Inscripciones);
 
     private IQueryable<Capacitacion> WithIncludesFull() =>
         context.Capacitaciones
@@ -19,17 +20,13 @@ public class CapacitacionRepository(AppDbContext context) : ICapacitacionReposit
             .Include(c => c.Inscripciones);
 
     public async Task<IEnumerable<Capacitacion>> GetAllAsync() =>
-        await WithIncludes().AsNoTracking().ToListAsync();
+        await WithIncludes().Where(c => !c.Finalizada).AsNoTracking().ToListAsync();
 
     public async Task<IEnumerable<Capacitacion>> GetByAreaAsync(int areaId) =>
-        await WithIncludes().AsNoTracking()
-            .Where(c => c.AreaId == areaId)
-            .ToListAsync();
+        await WithIncludes().Where(c => c.AreaId == areaId && !c.Finalizada).AsNoTracking().ToListAsync();
 
     public async Task<IEnumerable<Capacitacion>> GetByColaboradorAsync(int colaboradorId) =>
-        await WithIncludes().AsNoTracking()
-            .Where(c => c.ColaboradorId == colaboradorId)
-            .ToListAsync();
+        await WithIncludes().Where(c => c.ColaboradorId == colaboradorId && !c.Finalizada).AsNoTracking().ToListAsync();
 
     public async Task<Capacitacion?> GetByIdAsync(int id) =>
         await WithIncludesFull().AsNoTracking().FirstOrDefaultAsync(c => c.Id == id);

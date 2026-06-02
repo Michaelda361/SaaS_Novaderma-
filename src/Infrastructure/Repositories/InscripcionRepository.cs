@@ -117,4 +117,88 @@ public class InscripcionRepository(AppDbContext context) : IInscripcionRepositor
             return (i, respuesta, cuestionario);
         }).ToList();
     }
+
+    public async Task<List<(Inscripcion inscripcion, RespuestaCuestionario? respuesta, Cuestionario? cuestionario)>>
+        GetHistorialCompletoAsync(int colaboradorId)
+    {
+        var inscripciones = await context.Inscripciones
+            .IgnoreQueryFilters()
+            .Include(i => i.Colaborador).ThenInclude(c => c.Area)
+            .Include(i => i.Colaborador).ThenInclude(c => c.Cargo)
+            .Include(i => i.Capacitacion)
+            .Where(i => i.ColaboradorId == colaboradorId && i.Activo && i.Colaborador.Activo)
+            .AsNoTracking()
+            .ToListAsync();
+
+        if (inscripciones.Count == 0) return [];
+
+        var capacitacionIds = inscripciones.Select(i => i.CapacitacionId).Distinct().ToList();
+        var cuestionarios = await context.Cuestionarios
+            .Where(c => capacitacionIds.Contains(c.CapacitacionId))
+            .AsNoTracking()
+            .ToListAsync();
+
+        var inscripcionIds = inscripciones.Select(i => i.Id).ToList();
+        var cuestionarioIds = cuestionarios.Select(c => c.Id).ToList();
+        var respuestas = await context.RespuestasCuestionario
+            .Where(r => inscripcionIds.Contains(r.InscripcionId)
+                     && cuestionarioIds.Contains(r.CuestionarioId))
+            .AsNoTracking()
+            .ToListAsync();
+
+        var cuestionarioPorCapacitacion = cuestionarios.ToDictionary(c => c.CapacitacionId);
+        var respuestaPorInscripcionYCuestionario = respuestas
+            .ToDictionary(r => (r.InscripcionId, r.CuestionarioId));
+
+        return inscripciones.Select(i =>
+        {
+            cuestionarioPorCapacitacion.TryGetValue(i.CapacitacionId, out var cuestionario);
+            RespuestaCuestionario? respuesta = null;
+            if (cuestionario is not null)
+                respuestaPorInscripcionYCuestionario.TryGetValue((i.Id, cuestionario.Id), out respuesta);
+            return (i, respuesta, cuestionario);
+        }).ToList();
+    }
+
+    public async Task<List<(Inscripcion inscripcion, RespuestaCuestionario? respuesta, Cuestionario? cuestionario)>>
+        GetHistorialCompletoByCapacitacionAsync(int capacitacionId)
+    {
+        var inscripciones = await context.Inscripciones
+            .IgnoreQueryFilters()
+            .Include(i => i.Colaborador).ThenInclude(c => c.Area)
+            .Include(i => i.Colaborador).ThenInclude(c => c.Cargo)
+            .Include(i => i.Capacitacion)
+            .Where(i => i.CapacitacionId == capacitacionId && i.Activo && i.Colaborador.Activo)
+            .AsNoTracking()
+            .ToListAsync();
+
+        if (inscripciones.Count == 0) return [];
+
+        var capacitacionIds = inscripciones.Select(i => i.CapacitacionId).Distinct().ToList();
+        var cuestionarios = await context.Cuestionarios
+            .Where(c => capacitacionIds.Contains(c.CapacitacionId))
+            .AsNoTracking()
+            .ToListAsync();
+
+        var inscripcionIds = inscripciones.Select(i => i.Id).ToList();
+        var cuestionarioIds = cuestionarios.Select(c => c.Id).ToList();
+        var respuestas = await context.RespuestasCuestionario
+            .Where(r => inscripcionIds.Contains(r.InscripcionId)
+                     && cuestionarioIds.Contains(r.CuestionarioId))
+            .AsNoTracking()
+            .ToListAsync();
+
+        var cuestionarioPorCapacitacion = cuestionarios.ToDictionary(c => c.CapacitacionId);
+        var respuestaPorInscripcionYCuestionario = respuestas
+            .ToDictionary(r => (r.InscripcionId, r.CuestionarioId));
+
+        return inscripciones.Select(i =>
+        {
+            cuestionarioPorCapacitacion.TryGetValue(i.CapacitacionId, out var cuestionario);
+            RespuestaCuestionario? respuesta = null;
+            if (cuestionario is not null)
+                respuestaPorInscripcionYCuestionario.TryGetValue((i.Id, cuestionario.Id), out respuesta);
+            return (i, respuesta, cuestionario);
+        }).ToList();
+    }
 }

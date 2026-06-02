@@ -64,6 +64,9 @@ public class InscripcionService(IInscripcionRepository repository)
 
     public async Task<bool> DeleteAsync(int id) => await repository.DeleteAsync(id);
 
+    public Task<bool> ExisteInscripcionAsync(int capacitacionId, int colaboradorId) =>
+        repository.ExisteInscripcionAsync(capacitacionId, colaboradorId);
+
     /// <summary>
     /// Devuelve el historial completo (inscripciones + resultados) en 3 queries planas.
     /// Reemplaza el N+1 masivo de CargarHistorial en Capacitaciones.razor.
@@ -71,6 +74,33 @@ public class InscripcionService(IInscripcionRepository repository)
     public async Task<List<HistorialInscripcionDto>> GetHistorialCompletoAsync()
     {
         var filas = await repository.GetHistorialCompletoAsync();
+
+        return filas.Select(f =>
+        {
+            var (insc, respuesta, cuestionario) = f;
+            ResultadoCuestionarioDto? resultado = null;
+            if (respuesta is not null)
+            {
+                resultado = new ResultadoCuestionarioDto
+                {
+                    Puntaje           = respuesta.Puntaje,
+                    Aprobado          = respuesta.Aprobado,
+                    PuntajeAprobacion = cuestionario?.PuntajeAprobacion ?? 70,
+                    TotalPreguntas    = cuestionario?.Preguntas.Count ?? 0,
+                    Correctas         = respuesta.TotalCorrectas
+                };
+            }
+            return new HistorialInscripcionDto
+            {
+                Inscripcion = MapToDto(insc),
+                Resultado   = resultado
+            };
+        }).ToList();
+    }
+
+    public async Task<List<HistorialInscripcionDto>> GetHistorialCompletoAsync(int colaboradorId)
+    {
+        var filas = await repository.GetHistorialCompletoAsync(colaboradorId);
 
         return filas.Select(f =>
         {
@@ -106,6 +136,7 @@ public class InscripcionService(IInscripcionRepository repository)
         CapacitacionId = i.CapacitacionId,
         CapacitacionNombre = i.Capacitacion.Nombre,
         FechaInscripcion = i.FechaInscripcion,
+        FechaFinalizacion = i.Capacitacion?.FechaFinalizacion,
         Asistio = i.Asistio,
         Calificacion = i.Calificacion,
         Observaciones = i.Observaciones

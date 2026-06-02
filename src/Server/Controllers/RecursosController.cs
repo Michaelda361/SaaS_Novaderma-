@@ -11,11 +11,24 @@ namespace TalentManagement.Server.Controllers;
 [Route("api/v1/[controller]")]
 public class RecursosController(
     RecursoService service,
-    CurrentUserService currentUser) : ControllerBase
+    CurrentUserService currentUser,
+    InscripcionService inscripcionService) : ControllerBase
 {
     [HttpGet("capacitacion/{capacitacionId:int}")]
-    public async Task<IActionResult> GetByCapacitacion(int capacitacionId) =>
-        Ok(await service.GetByCapacitacionAsync(capacitacionId));
+    public async Task<IActionResult> GetByCapacitacion(int capacitacionId)
+    {
+        if (await currentUser.EsAdminAsync())
+            return Ok(await service.GetByCapacitacionAsync(capacitacionId));
+
+        // Solo colaboradores inscritos pueden ver recursos
+        var miId = await currentUser.GetColaboradorIdAsync();
+        if (miId is null) return Forbid();
+
+        if (!await inscripcionService.ExisteInscripcionAsync(capacitacionId, miId.Value))
+            return Forbid();
+
+        return Ok(await service.GetByCapacitacionAsync(capacitacionId));
+    }
 
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreateRecursoDto dto)

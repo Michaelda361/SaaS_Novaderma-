@@ -43,7 +43,12 @@ public class CertificadosController(
     public async Task<IActionResult> GetById(int id)
     {
         var result = await service.GetByIdAsync(id);
-        return result is null ? NotFound() : Ok(result);
+        if (result is null) return NotFound();
+        if (await currentUser.EsAdminAsync()) return Ok(result);
+
+        var miId = await currentUser.GetColaboradorIdAsync();
+        if (miId is null || miId.Value != result.ColaboradorId) return Forbid();
+        return Ok(result);
     }
 
     [HttpGet("vencidos")]
@@ -78,6 +83,14 @@ public class CertificadosController(
     [HttpGet("{id:int}/pdf")]
     public async Task<IActionResult> DescargarPdf(int id)
     {
+        var certEntity = await service.GetCertificadoEntityAsync(id);
+        if (certEntity is null) return NotFound();
+        if (!await currentUser.EsAdminAsync())
+        {
+            var miId = await currentUser.GetColaboradorIdAsync();
+            if (miId is null || miId.Value != certEntity.ColaboradorId) return Forbid();
+        }
+
         var pdf = await service.GetPdfAsync(id);
         if (pdf is null || pdf.Length == 0) return NotFound();
 
@@ -99,6 +112,12 @@ public class CertificadosController(
         {
             var cert = await service.GetCertificadoEntityAsync(id);
             if (cert is null) return NotFound();
+
+            if (!await currentUser.EsAdminAsync())
+            {
+                var miId = await currentUser.GetColaboradorIdAsync();
+                if (miId is null || miId.Value != cert.ColaboradorId) return Forbid();
+            }
             if (!cert.CapacitacionId.HasValue)
                 return BadRequest(new { message = "El certificado no tiene capacitacion asociada." });
 
@@ -150,6 +169,12 @@ public class CertificadosController(
         {
             var cert = await service.GetCertificadoEntityAsync(id);
             if (cert is null) return NotFound();
+
+            if (!await currentUser.EsAdminAsync())
+            {
+                var miId = await currentUser.GetColaboradorIdAsync();
+                if (miId is null || miId.Value != cert.ColaboradorId) return Forbid();
+            }
             if (!cert.CapacitacionId.HasValue)
                 return BadRequest(new { message = "El certificado no tiene capacitacion asociada." });
 
