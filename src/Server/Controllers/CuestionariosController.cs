@@ -38,17 +38,31 @@ public class CuestionariosController(
     public async Task<IActionResult> Create([FromBody] CreateCuestionarioDto dto)
     {
         if (!await currentUser.PuedeGestionarPlantillasAsync()) return Forbid();
-        var created = await service.CreateAsync(dto);
-        return CreatedAtAction(nameof(GetByCapacitacion),
-            new { capacitacionId = created.CapacitacionId }, created);
+        try
+        {
+            var created = await service.CreateAsync(dto);
+            return CreatedAtAction(nameof(GetByCapacitacion),
+                new { capacitacionId = created.CapacitacionId }, created);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
     }
 
     [HttpPut("{id:int}")]
     public async Task<IActionResult> Update(int id, [FromBody] CreateCuestionarioDto dto)
     {
         if (!await currentUser.PuedeGestionarPlantillasAsync()) return Forbid();
-        var result = await service.UpdateAsync(id, dto);
-        return result is null ? NotFound() : Ok(result);
+        try
+        {
+            var result = await service.UpdateAsync(id, dto);
+            return result is null ? NotFound() : Ok(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
     }
 
     [HttpDelete("{id:int}")]
@@ -64,19 +78,44 @@ public class CuestionariosController(
     {
         try
         {
+            if (dto is null)
+            {
+                Console.WriteLine("[DEBUG Responder] Error: DTO nulo");
+                return BadRequest(new { message = "Payload inválido." });
+            }
+
+            dto.Respuestas ??= new();
+
+            Console.WriteLine($"[DEBUG Responder] Recibido DTO: CuestionarioId={dto.CuestionarioId}, InscripcionId={dto.InscripcionId}, Respuestas={dto.Respuestas.Count}");
+            if (dto.CuestionarioId <= 0 || dto.InscripcionId <= 0)
+            {
+                Console.WriteLine($"[DEBUG Responder] Error: Identificadores inválidos. CuestionarioId={dto.CuestionarioId}, InscripcionId={dto.InscripcionId}");
+                return BadRequest(new { message = "CuestionarioId e InscripcionId deben ser valores válidos." });
+            }
+
             // Validar que la inscripción pertenece al colaborador autenticado
             var miColaboradorId = await currentUser.GetColaboradorIdAsync();
             if (miColaboradorId is null)
+            {
+                Console.WriteLine("[DEBUG Responder] Error: No se encontró colaboradorId autenticado");
                 return Forbid();
+            }
+
+            Console.WriteLine($"[DEBUG Responder] ColaboradorId autenticado: {miColaboradorId}");
 
             var inscripcion = await inscripcionService.GetByIdAsync(dto.InscripcionId);
+            Console.WriteLine($"[DEBUG Responder] Inscripción buscada con ID {dto.InscripcionId}: {(inscripcion is null ? "NO ENCONTRADA" : $"Encontrada, ColaboradorId={inscripcion.ColaboradorId}")}");
             if (inscripcion is null)
                 return NotFound(new { message = "Inscripción no encontrada." });
 
             if (inscripcion.ColaboradorId != miColaboradorId)
+            {
+                Console.WriteLine($"[DEBUG Responder] Error: ColaboradorId de inscripción ({inscripcion.ColaboradorId}) no coincide con el autenticado ({miColaboradorId})");
                 return Forbid();
+            }
 
             var resultado = await service.ResponderAsync(dto);
+            Console.WriteLine($"[DEBUG Responder] Resultado calculado: CuestionarioId={dto.CuestionarioId}, InscripcionId={dto.InscripcionId}, Puntaje={resultado.Puntaje:0.##}, Correctas={resultado.Correctas}/{resultado.TotalPreguntas}, Aprobado={resultado.Aprobado}, CertificadoEmitido={resultado.CertificadoEmitido}, NombreCertificado={resultado.NombreCertificado ?? "(ninguno)"}");
 
             // Construir las notificaciones dentro del scope del request (service es scoped)
             var email = currentUser.GetEmail();
@@ -110,10 +149,12 @@ public class CuestionariosController(
         }
         catch (InvalidOperationException ex)
         {
+            Console.WriteLine($"[DEBUG Responder] InvalidOperationException: {ex.Message}");
             return UnprocessableEntity(new { message = ex.Message });
         }
         catch (Exception ex)
         {
+            Console.WriteLine($"[DEBUG Responder] Exception: {ex.GetType().Name}: {ex.Message}");
             return StatusCode(500, new { message = "Error interno al procesar el cuestionario.", detail = ex.Message });
         }
     }
@@ -121,12 +162,25 @@ public class CuestionariosController(
     [HttpGet("{cuestionarioId:int}/resultado/{inscripcionId:int}")]
     public async Task<IActionResult> GetResultado(int cuestionarioId, int inscripcionId)
     {
+        Console.WriteLine($"[DEBUG GetResultado] Buscando resultado para CuestionarioId={cuestionarioId}, InscripcionId={inscripcionId}");
+        if (cuestionarioId <= 0 || inscripcionId <= 0)
+        {
+            Console.WriteLine($"[DEBUG GetResultado] Identificadores inválidos. CuestionarioId={cuestionarioId}, InscripcionId={inscripcionId}");
+            return BadRequest(new { message = "CuestionarioId e InscripcionId deben ser valores válidos." });
+        }
+
         var resultado = await service.GetResultadoAsync(cuestionarioId, inscripcionId);
-        return resultado is null ? NotFound() : Ok(resultado);
+        if (resultado is null)
+        {
+            Console.WriteLine($"[DEBUG GetResultado] No se encontró resultado para CuestionarioId={cuestionarioId}, InscripcionId={inscripcionId}");
+            return Ok((ResultadoCuestionarioDto?)null);
+        }
+        Console.WriteLine($"[DEBUG GetResultado] Resultado encontrado: Puntaje={resultado.Puntaje:0.##}, Aprobado={resultado.Aprobado}, Correctas={resultado.Correctas}/{resultado.TotalPreguntas}");
+        return Ok(resultado);
     }
 
     /// <summary>
-    /// Devuelve los IDs de capacitaciones aprobadas por el colaborador en una sola query.
+    /// Devuelve los IDs de capacitaciones completadas por el colaborador en una sola query.
     /// Reemplaza el N+1 de CargarAprobadas en Capacitaciones.razor.
     /// </summary>
     [HttpGet("capacitaciones-aprobadas/{colaboradorId:int}")]

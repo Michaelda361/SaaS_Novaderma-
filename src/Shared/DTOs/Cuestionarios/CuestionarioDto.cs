@@ -6,6 +6,9 @@ public class CuestionarioDto
     public string Titulo { get; set; } = string.Empty;
     public string? Descripcion { get; set; }
     public int PuntajeAprobacion { get; set; }
+    public bool AprobacionPorCorrectas { get; set; }
+    public int MinCorrectas { get; set; }
+    public int IntentosPermitidos { get; set; } = 1;
     public int CapacitacionId { get; set; }
     public List<PreguntaDto> Preguntas { get; set; } = [];
 }

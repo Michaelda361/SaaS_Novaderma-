@@ -1,0 +1,53 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v10.0",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v10.0": {
+      "TalentManagement.Application/1.0.0": {
+        "dependencies": {
+          "TalentManagement.Domain": "1.0.0",
+          "TalentManagement.Shared": "1.0.0"
+        },
+        "runtime": {
+          "TalentManagement.Application.dll": {}
+        }
+      },
+      "TalentManagement.Domain/1.0.0": {
+        "runtime": {
+          "TalentManagement.Domain.dll": {
+            "assemblyVersion": "1.0.0.0",
+            "fileVersion": "1.0.0.0"
+          }
+        }
+      },
+      "TalentManagement.Shared/1.0.0": {
+        "runtime": {
+          "TalentManagement.Shared.dll": {
+            "assemblyVersion": "1.0.0.0",
+            "fileVersion": "1.0.0.0"
+          }
+        }
+      }
+    }
+  },
+  "libraries": {
+    "TalentManagement.Application/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "TalentManagement.Domain/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "TalentManagement.Shared/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    }
+  }
+}

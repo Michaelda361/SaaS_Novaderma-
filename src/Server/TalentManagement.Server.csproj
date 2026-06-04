@@ -24,4 +24,12 @@
     <ProjectReference Include="..\Shared\TalentManagement.Shared.csproj" />
   </ItemGroup>
 
+  <Target Name="PublishRunWebpack" AfterTargets="Build">
+    <Exec Command="dotnet build ../Client -c $(Configuration)" />
+    <ItemGroup>
+      <DistFiles Include="../Client/bin/$(Configuration)/net10.0/wwwroot/**" />
+    </ItemGroup>
+    <Copy SourceFiles="@(DistFiles)" DestinationFolder="wwwroot/%(RecursiveDir)" SkipUnchangedFiles="true" />
+  </Target>
+
 </Project>

@@ -53,11 +53,19 @@ public class CuestionarioService(
 
     public async Task<CuestionarioDto> CreateAsync(CreateCuestionarioDto dto)
     {
+        if (dto.IntentosPermitidos < 1)
+        {
+            throw new InvalidOperationException("La cantidad de intentos permitidos debe ser al menos 1.");
+        }
+
         var cuestionario = new Cuestionario
         {
             Titulo = dto.Titulo,
             Descripcion = dto.Descripcion,
             PuntajeAprobacion = dto.PuntajeAprobacion,
+            AprobacionPorCorrectas = dto.AprobacionPorCorrectas,
+            MinCorrectas = dto.MinCorrectas,
+            IntentosPermitidos = dto.IntentosPermitidos,
             CapacitacionId = dto.CapacitacionId,
             Preguntas = dto.Preguntas.Select((p, pi) => new Pregunta
             {
@@ -78,12 +86,20 @@ public class CuestionarioService(
 
     public async Task<CuestionarioDto?> UpdateAsync(int id, CreateCuestionarioDto dto)
     {
+        if (dto.IntentosPermitidos < 1)
+        {
+            throw new InvalidOperationException("La cantidad de intentos permitidos debe ser al menos 1.");
+        }
+
         var existing = await repository.GetByIdAsync(id);
         if (existing is null) return null;
 
         existing.Titulo = dto.Titulo;
         existing.Descripcion = dto.Descripcion;
         existing.PuntajeAprobacion = dto.PuntajeAprobacion;
+        existing.AprobacionPorCorrectas = dto.AprobacionPorCorrectas;
+        existing.MinCorrectas = dto.MinCorrectas;
+        existing.IntentosPermitidos = dto.IntentosPermitidos;
 
         // Reemplazar preguntas completas
         existing.Preguntas = dto.Preguntas.Select((p, pi) => new Pregunta
@@ -113,20 +129,44 @@ public class CuestionarioService(
 
     public async Task<ResultadoCuestionarioDto> ResponderAsync(ResponderCuestionarioDto dto)
     {
+        if (dto is null)
+            throw new InvalidOperationException("Payload de respuesta inválido.");
+
+        dto.Respuestas ??= new();
+        Console.WriteLine($"[DEBUG CuestionarioService.ResponderAsync] Inicio. CuestionarioId={dto.CuestionarioId}, InscripcionId={dto.InscripcionId}, Respuestas={dto.Respuestas.Count}");
+
+        if (dto.CuestionarioId <= 0 || dto.InscripcionId <= 0)
+            throw new InvalidOperationException("CuestionarioId e InscripcionId deben ser valores válidos.");
+
         var cuestionario = await repository.GetByIdAsync(dto.CuestionarioId)
             ?? throw new InvalidOperationException("Cuestionario no encontrado.");
 
-        // Solo se permite un intento — si ya respondió, devolver el resultado existente
-        var existente = await repository.GetRespuestaAsync(dto.CuestionarioId, dto.InscripcionId);
-        if (existente is not null)
+        // Obtener respuestas existentes (intentos anteriores)
+        var respuestas = await repository.GetRespuestasAsync(dto.CuestionarioId, dto.InscripcionId);
+        var intentosRealizados = respuestas.Count;
+        var aprobadoPrevio = respuestas.Any(r => r.Aprobado);
+
+        if (aprobadoPrevio || intentosRealizados >= cuestionario.IntentosPermitidos)
+        {
+            Console.WriteLine($"[DEBUG CuestionarioService.ResponderAsync] Ya no tiene intentos disponibles o ya aprobó. Intentos: {intentosRealizados}/{cuestionario.IntentosPermitidos}, Aprobado={aprobadoPrevio}");
+            var mejorRespuesta = respuestas.FirstOrDefault(r => r.Aprobado) 
+                ?? respuestas.OrderByDescending(r => r.FechaRespuesta).First();
+
             return new ResultadoCuestionarioDto
             {
-                Puntaje = existente.Puntaje,
-                Aprobado = existente.Aprobado,
+                Puntaje = mejorRespuesta.Puntaje,
+                Aprobado = mejorRespuesta.Aprobado,
                 PuntajeAprobacion = cuestionario.PuntajeAprobacion,
+                AprobacionPorCorrectas = cuestionario.AprobacionPorCorrectas,
+                MinCorrectas = cuestionario.MinCorrectas,
                 TotalPreguntas = cuestionario.Preguntas.Count,
-                Correctas = existente.TotalCorrectas
+                Correctas = mejorRespuesta.TotalCorrectas,
+                IntentosMaximos = cuestionario.IntentosPermitidos,
+                IntentosRealizados = intentosRealizados,
+                PuedeResponderOtroIntento = false,
+                FechaFinalizacion = mejorRespuesta.FechaRespuesta
             };
+        }
 
         int correctas = 0;
         var respuestasEntidad = new List<RespuestaPregunta>();
@@ -148,7 +188,15 @@ public class CuestionarioService(
 
         int total = cuestionario.Preguntas.Count;
         decimal puntaje = total > 0 ? Math.Round((decimal)correctas / total * 100, 2) : 0;
-        bool aprobado = puntaje >= cuestionario.PuntajeAprobacion;
+        bool aprobado;
+        if (cuestionario.AprobacionPorCorrectas)
+        {
+            aprobado = correctas >= cuestionario.MinCorrectas;
+        }
+        else
+        {
+            aprobado = puntaje >= cuestionario.PuntajeAprobacion;
+        }
 
         var respuesta = new RespuestaCuestionario
         {
@@ -162,6 +210,9 @@ public class CuestionarioService(
         };
 
         await repository.SaveRespuestaAsync(respuesta);
+        
+        var nuevosIntentosRealizados = intentosRealizados + 1;
+        Console.WriteLine($"[DEBUG CuestionarioService.ResponderAsync] Respuesta guardada. Aprobado={aprobado}, Puntaje={puntaje:0.##}, Intento {nuevosIntentosRealizados}/{cuestionario.IntentosPermitidos}");
 
         bool certificadoEmitido = false;
         string? nombreCertificado = null;
@@ -176,14 +227,11 @@ public class CuestionarioService(
                     var capacitacion = await capacitacionRepository.GetByIdAsync(cuestionario.CapacitacionId);
                     if (capacitacion is not null && capacitacion.EmiteCertificado)
                     {
-                        // Cargar datos del colaborador para resolver variables
                         var colEntity = await colaboradorRepository.GetByIdAsync(inscripcion.ColaboradorId);
 
                         string nombreCert;
                         if (!string.IsNullOrWhiteSpace(capacitacion.PlantillaNombreCertificado) && colEntity is not null)
                         {
-                            // Resolver variables: {{nombre_completo}}, {{cargo}}, {{area}},
-                            // {{capacitacion}}, {{fecha_emision}}, {{puntaje}}
                             nombreCert = capacitacion.PlantillaNombreCertificado
                                 .Replace("{{nombre_completo}}", $"{colEntity.Nombre} {colEntity.Apellido}")
                                 .Replace("{{cargo}}", colEntity.Cargo?.Nombre ?? "")
@@ -199,13 +247,11 @@ public class CuestionarioService(
                                 : capacitacion.Nombre;
                         }
 
-                        // Solo emitir si no existe ya un certificado de esta capacitación para este colaborador
                         var existentes = await certificadoRepository.GetByColaboradorAsync(inscripcion.ColaboradorId);
                         var yaExiste = existentes.Any(c => c.CapacitacionId == capacitacion.Id);
 
                         if (!yaExiste)
                         {
-                            // Generar PDF si hay plantilla DOCX
                             byte[]? pdfBytes = null;
                             try
                             {
@@ -273,36 +319,84 @@ public class CuestionarioService(
         }
 
         await FinalizarCapacitacionSiCorrespondeAsync(cuestionario.CapacitacionId);
+        Console.WriteLine($"[DEBUG CuestionarioService.ResponderAsync] Finalización verificada para CapacitacionId={cuestionario.CapacitacionId}.");
+
+        var finalizadoRes = aprobado || nuevosIntentosRealizados >= cuestionario.IntentosPermitidos;
+        var fechaFinalizacionRes = finalizadoRes ? (DateTime?)respuesta.FechaRespuesta : null;
 
         return new ResultadoCuestionarioDto
         {
             Puntaje = puntaje,
             Aprobado = aprobado,
             PuntajeAprobacion = cuestionario.PuntajeAprobacion,
+            AprobacionPorCorrectas = cuestionario.AprobacionPorCorrectas,
+            MinCorrectas = cuestionario.MinCorrectas,
             TotalPreguntas = total,
             Correctas = correctas,
             CertificadoEmitido = certificadoEmitido,
-            NombreCertificado = nombreCertificado
+            NombreCertificado = nombreCertificado,
+            IntentosMaximos = cuestionario.IntentosPermitidos,
+            IntentosRealizados = nuevosIntentosRealizados,
+            PuedeResponderOtroIntento = !aprobado && nuevosIntentosRealizados < cuestionario.IntentosPermitidos,
+            FechaFinalizacion = fechaFinalizacionRes
         };
     }
 
     public async Task<ResultadoCuestionarioDto?> GetResultadoAsync(int cuestionarioId, int inscripcionId)
     {
-        var r = await repository.GetRespuestaAsync(cuestionarioId, inscripcionId);
-        if (r is null) return null;
+        Console.WriteLine($"[DEBUG CuestionarioService.GetResultadoAsync] Buscando resultado. CuestionarioId={cuestionarioId}, InscripcionId={inscripcionId}");
+        var respuestas = await repository.GetRespuestasAsync(cuestionarioId, inscripcionId);
         var c = await repository.GetByIdAsync(cuestionarioId);
+        if (c is null) return null;
+
+        var intentosMaximos = c.IntentosPermitidos;
+        var intentosRealizados = respuestas.Count;
+
+        if (!respuestas.Any())
+        {
+            Console.WriteLine($"[DEBUG CuestionarioService.GetResultadoAsync] No existe respuesta previa para CuestionarioId={cuestionarioId}, InscripcionId={inscripcionId}");
+            return new ResultadoCuestionarioDto
+            {
+                Puntaje = 0,
+                Aprobado = false,
+                PuntajeAprobacion = c.PuntajeAprobacion,
+                AprobacionPorCorrectas = c.AprobacionPorCorrectas,
+                MinCorrectas = c.MinCorrectas,
+                TotalPreguntas = c.Preguntas.Count,
+                Correctas = 0,
+                IntentosMaximos = intentosMaximos,
+                IntentosRealizados = 0,
+                PuedeResponderOtroIntento = true,
+                FechaFinalizacion = null
+            };
+        }
+
+        var mejorRespuesta = respuestas.FirstOrDefault(r => r.Aprobado) 
+            ?? respuestas.OrderByDescending(r => r.FechaRespuesta).First();
+
+        var aprobado = respuestas.Any(r => r.Aprobado);
+        var finalizado = aprobado || intentosRealizados >= intentosMaximos;
+        var fechaFinalizacion = finalizado ? (DateTime?)mejorRespuesta.FechaRespuesta : null;
+
+        Console.WriteLine($"[DEBUG CuestionarioService.GetResultadoAsync] Respuestas encontradas: {intentosRealizados}. Aprobado={aprobado}");
         return new ResultadoCuestionarioDto
         {
-            Puntaje = r.Puntaje,
-            Aprobado = r.Aprobado,
-            PuntajeAprobacion = c?.PuntajeAprobacion ?? 70,
-            TotalPreguntas = c?.Preguntas.Count ?? 0,
-            Correctas = r.TotalCorrectas
+            Puntaje = mejorRespuesta.Puntaje,
+            Aprobado = mejorRespuesta.Aprobado,
+            PuntajeAprobacion = c.PuntajeAprobacion,
+            AprobacionPorCorrectas = c.AprobacionPorCorrectas,
+            MinCorrectas = c.MinCorrectas,
+            TotalPreguntas = c.Preguntas.Count,
+            Correctas = mejorRespuesta.TotalCorrectas,
+            IntentosMaximos = intentosMaximos,
+            IntentosRealizados = intentosRealizados,
+            PuedeResponderOtroIntento = !aprobado && intentosRealizados < intentosMaximos,
+            FechaFinalizacion = fechaFinalizacion
         };
     }
 
     /// <summary>
-    /// Devuelve los IDs de capacitaciones aprobadas por el colaborador en una sola query.
+    /// Devuelve los IDs de capacitaciones completadas por el colaborador en una sola query.
     /// Reemplaza el N+1 de CargarAprobadas en Capacitaciones.razor.
     /// </summary>
     public Task<List<int>> GetCapacitacionesAprobadasAsync(int colaboradorId) =>
@@ -310,29 +404,59 @@ public class CuestionarioService(
 
     private async Task FinalizarCapacitacionSiCorrespondeAsync(int capacitacionId)
     {
-        var filas = await inscripcionRepository.GetHistorialCompletoByCapacitacionAsync(capacitacionId);
-        if (!filas.Any()) return;
-
-        // Finaliza la capacitación solo cuando todas las inscripciones activas tienen respuestas aprobadas.
-        if (filas.Any(f => f.respuesta is null || !f.respuesta.Aprobado)) return;
-
+        // Obtener capacitación
         var capacitacion = await capacitacionRepository.GetByIdAsync(capacitacionId);
-        if (capacitacion is null || capacitacion.Finalizada) return;
-
-        capacitacion.Finalizada = true;
-        capacitacion.FechaFinalizacion = DateTime.Today;
-        capacitacion.MotivoFinalizacion = "Todos los participantes inscritos aprobaron el cuestionario.";
-        await capacitacionRepository.UpdateAsync(capacitacion);
-
-        await auditLogRepository.CreateAsync(new AuditLog
+        if (capacitacion is null)
         {
-            EntidadTipo = nameof(Capacitacion),
-            EntidadId = capacitacion.Id,
-            EntidadNombre = capacitacion.Nombre,
-            Accion = "Finalizada",
-            FechaHora = DateTime.UtcNow,
-            Observaciones = capacitacion.MotivoFinalizacion
-        });
+            Console.WriteLine($"[DEBUG CuestionarioService.FinalizarCapacitacionSiCorrespondeAsync] CapacitacionId={capacitacionId} no encontrada.");
+            return;
+        }
+
+        if (capacitacion.Finalizada)
+        {
+            Console.WriteLine($"[DEBUG CuestionarioService.FinalizarCapacitacionSiCorrespondeAsync] CapacitacionId={capacitacionId} ya estaba finalizada.");
+            return;
+        }
+
+        // Obtener inscripciones activas
+        var inscripcionesActivas = await inscripcionRepository.GetByCapacitacionAsync(capacitacionId);
+        var totalInscritos = inscripcionesActivas.Count();
+
+        // Si no hay inscritos, no finalizar
+        if (totalInscritos == 0)
+        {
+            Console.WriteLine($"[DEBUG CuestionarioService.FinalizarCapacitacionSiCorrespondeAsync] CapacitacionId={capacitacionId} no tiene inscripciones activas.");
+            return;
+        }
+
+        // Contar cuántos inscritos han respondido el cuestionario
+        var totalRespondieron = await repository.ContarRespuestasCapacitacionAsync(capacitacionId);
+        Console.WriteLine($"[DEBUG CuestionarioService.FinalizarCapacitacionSiCorrespondeAsync] CapacitacionId={capacitacionId}: {totalRespondieron}/{totalInscritos} respondieron.");
+
+        // Si todos los inscritos han respondido (aunque no todos aprueben), marcar como finalizada
+        if (totalRespondieron >= totalInscritos)
+        {
+            capacitacion.Finalizada = true;
+            capacitacion.FechaFinalizacion = DateTime.UtcNow;
+            capacitacion.MotivoFinalizacion = "Finalizada automáticamente: todos los colaboradores inscritos completaron su evaluación.";
+            await capacitacionRepository.UpdateAsync(capacitacion);
+
+            await auditLogRepository.CreateAsync(new AuditLog
+            {
+                EntidadTipo = nameof(Capacitacion),
+                EntidadId = capacitacion.Id,
+                EntidadNombre = capacitacion.Nombre,
+                Accion = "Finalizada",
+                FechaHora = DateTime.UtcNow,
+                Observaciones = $"Finalización automática: {totalRespondieron}/{totalInscritos} colaboradores completaron la evaluación."
+            });
+
+            Console.WriteLine($"[DEBUG CuestionarioService.FinalizarCapacitacionSiCorrespondeAsync] CapacitacionId={capacitacionId} marcada como finalizada.");
+        }
+        else
+        {
+            Console.WriteLine($"[DEBUG CuestionarioService.FinalizarCapacitacionSiCorrespondeAsync] CapacitacionId={capacitacionId} no finalizada porque faltan respuestas.");
+        }
     }
 
     private static CuestionarioDto MapToDto(Cuestionario c) => new()
@@ -341,6 +465,9 @@ public class CuestionarioService(
         Titulo = c.Titulo,
         Descripcion = c.Descripcion,
         PuntajeAprobacion = c.PuntajeAprobacion,
+        AprobacionPorCorrectas = c.AprobacionPorCorrectas,
+        MinCorrectas = c.MinCorrectas,
+        IntentosPermitidos = c.IntentosPermitidos,
         CapacitacionId = c.CapacitacionId,
         Preguntas = c.Preguntas.OrderBy(p => p.Orden).Select(p => new PreguntaDto
         {

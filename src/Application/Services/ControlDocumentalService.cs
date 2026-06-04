@@ -72,6 +72,8 @@ public class ControlDocumentalService(
         if (creador is null || (creador.Rol != Domain.Enums.RolUsuario.Admin && creador.Rol != Domain.Enums.RolUsuario.Jefe))
             throw new UnauthorizedAccessException("No tiene permisos para crear listados maestros.");
 
+        Console.WriteLine($"[PERSISTENCE DIAGNOSTIC] Registros enviados a persistencia para creación: {dto.Documentos?.Count ?? 0} documentos y {dto.Campos?.Count ?? 0} columnas.");
+
         var listado = new ListadoMaestro
         {
             Nombre = dto.Nombre.Trim(),
@@ -79,6 +81,7 @@ public class ControlDocumentalService(
         };
 
         var created = await repository.CreateListadoAsync(listado);
+        Console.WriteLine($"[PERSISTENCE DIAGNOSTIC] Listado Maestro guardado en base de datos. ID: {created.Id}, Nombre: '{created.Nombre}'");
 
         if (dto.Campos is not null && dto.Campos.Any())
         {
@@ -86,18 +89,6 @@ public class ControlDocumentalService(
             {
                 var campo = MapToCampoDefinicion(campoDto, created.Id);
                 await repository.CreateCampoAsync(campo);
-            }
-
-            var creadosClaves = dto.Campos.Select(c => c.CampoClave).ToHashSet(StringComparer.OrdinalIgnoreCase);
-            var predeterminados = GenerateDefaultCampoDefiniciones(created.Id);
-            var maxOrden = dto.Campos.Max(c => c.Orden);
-            foreach (var pred in predeterminados)
-            {
-                if (!creadosClaves.Contains(pred.CampoClave))
-                {
-                    pred.Orden = ++maxOrden;
-                    await repository.CreateCampoAsync(pred);
-                }
             }
         }
         else
@@ -129,6 +120,8 @@ public class ControlDocumentalService(
                 MapTemplateToDocumento(docDto, doc, GetAreaId(docDto.Area));
 
                 var createdDoc = await repository.CreateDocumentoAsync(doc);
+                Console.WriteLine($"[PERSISTENCE DIAGNOSTIC] Registro/Documento guardado en base de datos: Código='{createdDoc.Codigo}', Nombre='{createdDoc.Nombre}', ID={createdDoc.Id}");
+
                 var log = await BuildAuditLogAsync(
                     createdDoc.Id,
                     createdDoc.Nombre,
@@ -156,6 +149,8 @@ public class ControlDocumentalService(
         if (editor is null || (editor.Rol != Domain.Enums.RolUsuario.Admin && editor.Rol != Domain.Enums.RolUsuario.Jefe))
             throw new UnauthorizedAccessException("No tiene permisos para actualizar listados maestros.");
 
+        Console.WriteLine($"[PERSISTENCE DIAGNOSTIC] Registros enviados a persistencia para actualización del listado ID {id}: {dto.Documentos?.Count ?? 0} documentos y {dto.Campos?.Count ?? 0} columnas.");
+
         var existing = await repository.GetListadoByIdAsync(id);
         if (existing is null) return null;
 
@@ -163,6 +158,7 @@ public class ControlDocumentalService(
         existing.Descripcion = dto.Descripcion?.Trim();
 
         var updated = await repository.UpdateListadoAsync(existing);
+        Console.WriteLine($"[PERSISTENCE DIAGNOSTIC] Listado Maestro actualizado en base de datos. ID: {updated.Id}, Nombre: '{updated.Nombre}'");
 
         if (dto.Documentos is not null && dto.Documentos.Any())
         {
@@ -203,21 +199,9 @@ public class ControlDocumentalService(
 
             foreach (var existente in existentes.Values)
             {
-                if (!existente.EsPredeterminado && !solicitados.ContainsKey(existente.CampoClave))
+                if (!solicitados.ContainsKey(existente.CampoClave))
                 {
                     await repository.DeleteCampoAsync(existente);
-                }
-            }
-
-            var predeterminados = GenerateDefaultCampoDefiniciones(updated.Id);
-            var updatedExistentes = (await repository.GetCamposPorListadoAsync(updated.Id))?.ToDictionary(c => c.CampoClave, StringComparer.OrdinalIgnoreCase) ?? new Dictionary<string, DocumentoControlCampoDefinicion>(StringComparer.OrdinalIgnoreCase);
-            var maxOrden = dto.Campos.Max(c => c.Orden);
-            foreach (var pred in predeterminados)
-            {
-                if (!updatedExistentes.ContainsKey(pred.CampoClave))
-                {
-                    pred.Orden = ++maxOrden;
-                    await repository.CreateCampoAsync(pred);
                 }
             }
         }
@@ -252,9 +236,14 @@ public class ControlDocumentalService(
             return areasByName.TryGetValue(areaName.Trim(), out var id) ? id : null;
         }
 
+        Console.WriteLine($"[PERSISTENCE DIAGNOSTIC] Iniciando sincronización de {documentos.Count()} documentos en la base de datos para listado ID {listadoId}.");
+
+        var importedCodigos = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
         foreach (var docDto in documentos)
         {
             var codigo = docDto.Codigo.Trim();
+            importedCodigos.Add(codigo);
             var existingDoc = await repository.GetDocumentoByCodigoAsync(listadoId, codigo);
 
             if (existingDoc is not null)
@@ -263,6 +252,8 @@ public class ControlDocumentalService(
                 existingDoc.Activo = true;
 
                 await repository.UpdateDocumentoAsync(existingDoc);
+                Console.WriteLine($"[PERSISTENCE DIAGNOSTIC] Registro/Documento existente actualizado y guardado en base de datos: Código='{existingDoc.Codigo}', Nombre='{existingDoc.Nombre}', ID={existingDoc.Id}");
+
                 var log = await BuildAuditLogAsync(existingDoc.Id, existingDoc.Nombre, "Actualizado", docDto.ComentarioCambio, usuarioEmail, existingDoc, null);
                 await auditRepository.CreateAsync(log);
             }
@@ -276,8 +267,28 @@ public class ControlDocumentalService(
                 MapTemplateToDocumento(docDto, newDoc, GetAreaId(docDto.Area));
 
                 var createdDoc = await repository.CreateDocumentoAsync(newDoc);
+                Console.WriteLine($"[PERSISTENCE DIAGNOSTIC] Registro/Documento nuevo creado y guardado en base de datos: Código='{createdDoc.Codigo}', Nombre='{createdDoc.Nombre}', ID={createdDoc.Id}");
+
                 var log = await BuildAuditLogAsync(createdDoc.Id, createdDoc.Nombre, "Creado", docDto.ComentarioCambio, usuarioEmail, createdDoc, null);
                 await auditRepository.CreateAsync(log);
+            }
+        }
+
+        var dbDocs = await repository.GetDocumentosAsync(listadoId, null, null, null, null, null);
+        foreach (var dbDoc in dbDocs)
+        {
+            if (!importedCodigos.Contains(dbDoc.Codigo))
+            {
+                var docEntity = await repository.GetDocumentoByIdAsync(dbDoc.Id);
+                if (docEntity is not null)
+                {
+                    docEntity.Activo = false;
+                    await repository.UpdateDocumentoAsync(docEntity);
+                    Console.WriteLine($"[PERSISTENCE DIAGNOSTIC] Registro/Documento desactivado en base de datos: Código='{docEntity.Codigo}', Nombre='{docEntity.Nombre}', ID={docEntity.Id}");
+
+                    var log = await BuildAuditLogAsync(docEntity.Id, docEntity.Nombre, "Eliminado", "Eliminado durante la importación (sincronización)", usuarioEmail, docEntity, null);
+                    await auditRepository.CreateAsync(log);
+                }
             }
         }
     }

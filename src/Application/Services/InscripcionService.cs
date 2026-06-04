@@ -10,20 +10,20 @@ public class InscripcionService(IInscripcionRepository repository)
     public async Task<List<InscripcionDto>> GetByCapacitacionAsync(int capacitacionId)
     {
         var items = await repository.GetByCapacitacionAsync(capacitacionId);
-        return items.Select(MapToDto).ToList();
+        return items.Select(i => MapToDto(i)).ToList();
     }
 
     // Para el historial del admin: incluye inscripciones de capacitaciones eliminadas
     public async Task<List<InscripcionDto>> GetByCapacitacionHistorialAsync(int capacitacionId)
     {
         var items = await repository.GetByCapacitacionIgnorandoFiltrosAsync(capacitacionId);
-        return items.Select(MapToDto).ToList();
+        return items.Select(i => MapToDto(i)).ToList();
     }
 
     public async Task<List<InscripcionDto>> GetByColaboradorAsync(int colaboradorId)
     {
         var items = await repository.GetByColaboradorAsync(colaboradorId);
-        return items.Select(MapToDto).ToList();
+        return items.Select(i => MapToDto(i)).ToList();
     }
 
     public async Task<InscripcionDto?> GetByIdAsync(int id)
@@ -77,22 +77,38 @@ public class InscripcionService(IInscripcionRepository repository)
 
         return filas.Select(f =>
         {
-            var (insc, respuesta, cuestionario) = f;
+            var (insc, respuestas, cuestionario) = f;
             ResultadoCuestionarioDto? resultado = null;
-            if (respuesta is not null)
+
+            var intentosRealizados = respuestas.Count;
+            var aprobado = respuestas.Any(r => r.Aprobado);
+            var mejorRespuesta = respuestas.FirstOrDefault(r => r.Aprobado)
+                ?? respuestas.OrderByDescending(r => r.FechaRespuesta).FirstOrDefault();
+
+            var intentosMaximos = cuestionario?.IntentosPermitidos ?? 1;
+            var finalizado = aprobado || intentosRealizados >= intentosMaximos;
+            var fechaFinalizacion = finalizado && mejorRespuesta is not null ? (DateTime?)mejorRespuesta.FechaRespuesta : null;
+
+            if (mejorRespuesta is not null)
             {
                 resultado = new ResultadoCuestionarioDto
                 {
-                    Puntaje           = respuesta.Puntaje,
-                    Aprobado          = respuesta.Aprobado,
+                    Puntaje           = mejorRespuesta.Puntaje,
+                    Aprobado          = mejorRespuesta.Aprobado,
                     PuntajeAprobacion = cuestionario?.PuntajeAprobacion ?? 70,
+                    AprobacionPorCorrectas = cuestionario?.AprobacionPorCorrectas ?? false,
+                    MinCorrectas      = cuestionario?.MinCorrectas ?? 1,
                     TotalPreguntas    = cuestionario?.Preguntas.Count ?? 0,
-                    Correctas         = respuesta.TotalCorrectas
+                    Correctas         = mejorRespuesta.TotalCorrectas,
+                    IntentosMaximos   = intentosMaximos,
+                    IntentosRealizados = intentosRealizados,
+                    PuedeResponderOtroIntento = !aprobado && intentosRealizados < intentosMaximos,
+                    FechaFinalizacion = fechaFinalizacion
                 };
             }
             return new HistorialInscripcionDto
             {
-                Inscripcion = MapToDto(insc),
+                Inscripcion = MapToDto(insc, fechaFinalizacion),
                 Resultado   = resultado
             };
         }).ToList();
@@ -104,28 +120,44 @@ public class InscripcionService(IInscripcionRepository repository)
 
         return filas.Select(f =>
         {
-            var (insc, respuesta, cuestionario) = f;
+            var (insc, respuestas, cuestionario) = f;
             ResultadoCuestionarioDto? resultado = null;
-            if (respuesta is not null)
+
+            var intentosRealizados = respuestas.Count;
+            var aprobado = respuestas.Any(r => r.Aprobado);
+            var mejorRespuesta = respuestas.FirstOrDefault(r => r.Aprobado)
+                ?? respuestas.OrderByDescending(r => r.FechaRespuesta).FirstOrDefault();
+
+            var intentosMaximos = cuestionario?.IntentosPermitidos ?? 1;
+            var finalizado = aprobado || intentosRealizados >= intentosMaximos;
+            var fechaFinalizacion = finalizado && mejorRespuesta is not null ? (DateTime?)mejorRespuesta.FechaRespuesta : null;
+
+            if (mejorRespuesta is not null)
             {
                 resultado = new ResultadoCuestionarioDto
                 {
-                    Puntaje           = respuesta.Puntaje,
-                    Aprobado          = respuesta.Aprobado,
+                    Puntaje           = mejorRespuesta.Puntaje,
+                    Aprobado          = mejorRespuesta.Aprobado,
                     PuntajeAprobacion = cuestionario?.PuntajeAprobacion ?? 70,
+                    AprobacionPorCorrectas = cuestionario?.AprobacionPorCorrectas ?? false,
+                    MinCorrectas      = cuestionario?.MinCorrectas ?? 1,
                     TotalPreguntas    = cuestionario?.Preguntas.Count ?? 0,
-                    Correctas         = respuesta.TotalCorrectas
+                    Correctas         = mejorRespuesta.TotalCorrectas,
+                    IntentosMaximos   = intentosMaximos,
+                    IntentosRealizados = intentosRealizados,
+                    PuedeResponderOtroIntento = !aprobado && intentosRealizados < intentosMaximos,
+                    FechaFinalizacion = fechaFinalizacion
                 };
             }
             return new HistorialInscripcionDto
             {
-                Inscripcion = MapToDto(insc),
+                Inscripcion = MapToDto(insc, fechaFinalizacion),
                 Resultado   = resultado
             };
         }).ToList();
     }
 
-    private static InscripcionDto MapToDto(Inscripcion i) => new()
+    private static InscripcionDto MapToDto(Inscripcion i, DateTime? fechaFinalizacion = null) => new()
     {
         Id = i.Id,
         ColaboradorId = i.ColaboradorId,
@@ -136,7 +168,7 @@ public class InscripcionService(IInscripcionRepository repository)
         CapacitacionId = i.CapacitacionId,
         CapacitacionNombre = i.Capacitacion.Nombre,
         FechaInscripcion = i.FechaInscripcion,
-        FechaFinalizacion = i.Capacitacion?.FechaFinalizacion,
+        FechaFinalizacion = fechaFinalizacion ?? i.Capacitacion?.FechaFinalizacion,
         Asistio = i.Asistio,
         Calificacion = i.Calificacion,
         Observaciones = i.Observaciones

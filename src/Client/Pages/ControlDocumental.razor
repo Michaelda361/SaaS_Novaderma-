@@ -20,72 +20,24 @@
 <div class="page-header">
     <div>
         <h2 class="page-title">Control Documental</h2>
-        <p class="page-subtitle">Registra, busca y audita documentos OneDrive con listados maestros.</p>
+        <p class="page-subtitle">Registra, busca y audita documentos OneDrive.</p>
     </div>
     <div class="page-actions">
         @if (AuthInfo.EsAdmin || AuthInfo.EsJefe)
         {
-            <button class="btn btn-ghost" @onclick="AbrirNuevoListado">
-                + Nuevo listado maestro
+            <button class="btn btn-primary" @onclick="AbrirNuevoDocumento">
+                + Nuevo documento
             </button>
-            <button class="btn btn-ghost" @onclick="AbrirEditarListado" disabled="@(!selectedListadoId.HasValue)">
-                ✏️ Editar listado
-            </button>
-            <button class="btn btn-ghost" @onclick="ToggleImportInstructions">
-                Importar listado
-            </button>
-            @if (AuthInfo.EsAdmin)
-            {
-                <button class="btn btn-ghost" @onclick="AbrirPermisos">
-                    🔒 Gestionar permisos
-                </button>
-            }
             <button class="btn btn-ghost" @onclick="TogglePendingRequests">
                 📝 Solicitudes pendientes (@pendingSolicitudes.Count)
-            </button>
-            <button class="btn btn-danger" @onclick="EliminarListadoSeleccionado" disabled="@(!selectedListadoId.HasValue)">
-                🗑️ Eliminar listado
-            </button>
-        }
-        <button class="btn btn-ghost" @onclick="ExportListado" disabled="@(!selectedListadoId.HasValue)">
-            ⬇️ Exportar listado
-        </button>
-        @if (AuthInfo.EsAdmin || AuthInfo.EsJefe)
-        {
-            <button class="btn btn-primary" @onclick="AbrirNuevoDocumento" disabled="@(!selectedListadoId.HasValue)">
-                + Nuevo documento
             </button>
         }
     </div>
 </div>
 
-@if (showImportInstructions)
-{
-    <div class="card" style="margin-bottom:1rem; padding:1rem; background:#f8f9fa; border:1px solid #dde1e6;">
-        <h3>Manual de importación</h3>
-        <p>El archivo <strong>.xlsx</strong> puede tener cualquier nombre de hoja. El sistema detecta los datos por encabezados.</p>
-        <ul>
-            <li>Hoja de metadatos: filas con <strong>Nombre</strong> y <strong>Descripción</strong>.</li>
-            <li>Hoja de campos: columnas <strong>CampoClave</strong>, <strong>Nombre</strong>, <strong>Tipo</strong>, <strong>Requerido</strong>, <strong>Opciones</strong>, <strong>Orden</strong>.</li>
-            <li>Hoja de documentos: columnas <strong>Codigo</strong>, <strong>Nombre</strong>, <strong>ProcesoResponsable</strong> o <strong>Lugar de archivo</strong>, <strong>Version</strong>, <strong>Estado</strong>.</li>
-        </ul>
-        <p>Si falta el nombre del listado, se usará el nombre del archivo. Las columnas adicionales se ignoran.</p>
-        <label class="btn btn-secondary" style="position:relative; overflow:hidden; cursor:pointer;">
-            Seleccionar archivo
-            <InputFile OnChange="OnArchivoListadoSeleccionado" accept=".xlsx" style="position:absolute; top:0; left:0; width:100%; height:100%; opacity:0; cursor:pointer;" />
-        </label>
-    </div>
-}
 
 <div class="card" style="margin-bottom:1rem;">
     <div class="filter-bar">
-        <select class="form-control" @bind="selectedListadoId" @bind:after="OnSelectedListadoChanged">
-            <option value="">Selecciona un listado maestro</option>
-            @foreach (var listado in listados)
-            {
-                <option value="@listado.Id">@listado.Nombre</option>
-            }
-        </select>
         <select class="form-control" @bind="selectedAreaId" @bind:after="Filtrar">
             <option value="0">Todas las áreas</option>
             @foreach (var area in areas)
@@ -207,14 +159,6 @@
     {
         <div class="loading"><div class="spinner"></div> Cargando...</div>
     }
-    else if (!selectedListadoId.HasValue)
-    {
-        <div class="empty-state">
-            <div class="empty-state-icon">📌</div>
-            <h3>Selecciona un listado maestro</h3>
-            <p>Elige un listado maestro para ver los documentos asociados.</p>
-        </div>
-    }
     else if (!documentos.Any())
     {
         <div class="empty-state">
@@ -284,18 +228,8 @@
             <div class="modal-body">
                 <EditForm Model="form" OnValidSubmit="GuardarDocumento">
                     <DataAnnotationsValidator />
+                    <input type="hidden" value="@form.ListadoMaestroId" />
                     <div class="form-row">
-                        <div class="form-group">
-                            <label>Listado maestro *</label>
-                            <InputSelect class="form-control" @bind-Value="form.ListadoMaestroId" disabled="@(editing && !(AuthInfo.EsAdmin || AuthInfo.EsJefe))">
-                                <option value="">Selecciona un listado maestro</option>
-                                @foreach (var listado in listados)
-                                {
-                                    <option value="@listado.Id">@listado.Nombre</option>
-                                }
-                            </InputSelect>
-                            <ValidationMessage For="() => form.ListadoMaestroId" />
-                        </div>
                         <div class="form-group">
                             <label>@GetCampoLabel("Codigo", "Código") *</label>
                             <InputText class="form-control" @bind-Value="form.Codigo" />

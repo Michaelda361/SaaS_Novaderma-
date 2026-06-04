@@ -72,7 +72,15 @@ else
                             {
                                 <span class="text-sm text-muted">
                                     🎯 Cuestionario: <strong>@i.Resultado.Puntaje.ToString("0.#")%</strong>
-                                    (@i.Resultado.Correctas/@i.Resultado.TotalPreguntas correctas · mínimo @i.Resultado.PuntajeAprobacion%)
+                                    (@i.Resultado.Correctas/@i.Resultado.TotalPreguntas correctas · mínimo 
+                                    @if (i.Resultado.AprobacionPorCorrectas)
+                                    {
+                                        @($"{i.Resultado.MinCorrectas} correctas")
+                                    }
+                                    else
+                                    {
+                                        @($"{i.Resultado.PuntajeAprobacion}%")
+                                    })
                                 </span>
                             }
                         </div>

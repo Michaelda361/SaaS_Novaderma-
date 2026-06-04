@@ -72,7 +72,7 @@ public class InscripcionRepository(AppDbContext context) : IInscripcionRepositor
         context.Inscripciones.AnyAsync(i =>
             i.CapacitacionId == capacitacionId && i.ColaboradorId == colaboradorId);
 
-    public async Task<List<(Inscripcion inscripcion, RespuestaCuestionario? respuesta, Cuestionario? cuestionario)>>
+    public async Task<List<(Inscripcion inscripcion, List<RespuestaCuestionario> respuestas, Cuestionario? cuestionario)>>
         GetHistorialCompletoAsync()
     {
         // 1. Todas las inscripciones activas con navegaciones — una sola query
@@ -105,20 +105,24 @@ public class InscripcionRepository(AppDbContext context) : IInscripcionRepositor
 
         // 4. Lookup O(1) para cruzar los datos en memoria
         var cuestionarioPorCapacitacion = cuestionarios.ToDictionary(c => c.CapacitacionId);
-        var respuestaPorInscripcionYCuestionario = respuestas
-            .ToDictionary(r => (r.InscripcionId, r.CuestionarioId));
+        var respuestasPorInscripcionYCuestionario = respuestas
+            .GroupBy(r => (r.InscripcionId, r.CuestionarioId))
+            .ToDictionary(g => g.Key, g => g.ToList());
 
         return inscripciones.Select(i =>
         {
             cuestionarioPorCapacitacion.TryGetValue(i.CapacitacionId, out var cuestionario);
-            RespuestaCuestionario? respuesta = null;
+            List<RespuestaCuestionario> userRespuestas = [];
             if (cuestionario is not null)
-                respuestaPorInscripcionYCuestionario.TryGetValue((i.Id, cuestionario.Id), out respuesta);
-            return (i, respuesta, cuestionario);
+            {
+                respuestasPorInscripcionYCuestionario.TryGetValue((i.Id, cuestionario.Id), out var list);
+                if (list is not null) userRespuestas = list;
+            }
+            return (i, userRespuestas, cuestionario);
         }).ToList();
     }
 
-    public async Task<List<(Inscripcion inscripcion, RespuestaCuestionario? respuesta, Cuestionario? cuestionario)>>
+    public async Task<List<(Inscripcion inscripcion, List<RespuestaCuestionario> respuestas, Cuestionario? cuestionario)>>
         GetHistorialCompletoAsync(int colaboradorId)
     {
         var inscripciones = await context.Inscripciones
@@ -147,20 +151,24 @@ public class InscripcionRepository(AppDbContext context) : IInscripcionRepositor
             .ToListAsync();
 
         var cuestionarioPorCapacitacion = cuestionarios.ToDictionary(c => c.CapacitacionId);
-        var respuestaPorInscripcionYCuestionario = respuestas
-            .ToDictionary(r => (r.InscripcionId, r.CuestionarioId));
+        var respuestasPorInscripcionYCuestionario = respuestas
+            .GroupBy(r => (r.InscripcionId, r.CuestionarioId))
+            .ToDictionary(g => g.Key, g => g.ToList());
 
         return inscripciones.Select(i =>
         {
             cuestionarioPorCapacitacion.TryGetValue(i.CapacitacionId, out var cuestionario);
-            RespuestaCuestionario? respuesta = null;
+            List<RespuestaCuestionario> userRespuestas = [];
             if (cuestionario is not null)
-                respuestaPorInscripcionYCuestionario.TryGetValue((i.Id, cuestionario.Id), out respuesta);
-            return (i, respuesta, cuestionario);
+            {
+                respuestasPorInscripcionYCuestionario.TryGetValue((i.Id, cuestionario.Id), out var list);
+                if (list is not null) userRespuestas = list;
+            }
+            return (i, userRespuestas, cuestionario);
         }).ToList();
     }
 
-    public async Task<List<(Inscripcion inscripcion, RespuestaCuestionario? respuesta, Cuestionario? cuestionario)>>
+    public async Task<List<(Inscripcion inscripcion, List<RespuestaCuestionario> respuestas, Cuestionario? cuestionario)>>
         GetHistorialCompletoByCapacitacionAsync(int capacitacionId)
     {
         var inscripciones = await context.Inscripciones
@@ -189,16 +197,20 @@ public class InscripcionRepository(AppDbContext context) : IInscripcionRepositor
             .ToListAsync();
 
         var cuestionarioPorCapacitacion = cuestionarios.ToDictionary(c => c.CapacitacionId);
-        var respuestaPorInscripcionYCuestionario = respuestas
-            .ToDictionary(r => (r.InscripcionId, r.CuestionarioId));
+        var respuestasPorInscripcionYCuestionario = respuestas
+            .GroupBy(r => (r.InscripcionId, r.CuestionarioId))
+            .ToDictionary(g => g.Key, g => g.ToList());
 
         return inscripciones.Select(i =>
         {
             cuestionarioPorCapacitacion.TryGetValue(i.CapacitacionId, out var cuestionario);
-            RespuestaCuestionario? respuesta = null;
+            List<RespuestaCuestionario> userRespuestas = [];
             if (cuestionario is not null)
-                respuestaPorInscripcionYCuestionario.TryGetValue((i.Id, cuestionario.Id), out respuesta);
-            return (i, respuesta, cuestionario);
+            {
+                respuestasPorInscripcionYCuestionario.TryGetValue((i.Id, cuestionario.Id), out var list);
+                if (list is not null) userRespuestas = list;
+            }
+            return (i, userRespuestas, cuestionario);
         }).ToList();
     }
 }

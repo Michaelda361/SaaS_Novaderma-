@@ -72,7 +72,9 @@ public class ControlDocumentalRepository(AppDbContext context) : IControlDocumen
         if (!string.IsNullOrWhiteSpace(estado))
             query = query.Where(d => d.Estado.Contains(estado));
 
-        return await query.OrderBy(d => d.Nombre).ToListAsync();
+        var results = await query.OrderBy(d => d.Nombre).ToListAsync();
+        Console.WriteLine($"[RETRIEVAL DIAGNOSTIC] Registros recuperados posteriormente: {results.Count} documentos recuperados de la base de datos para el listado ID {listadoId}.");
+        return results;
     }
 
     public async Task<DocumentoControl?> GetDocumentoByIdAsync(int id) =>
@@ -85,6 +87,7 @@ public class ControlDocumentalRepository(AppDbContext context) : IControlDocumen
         await context.DocumentosControl
             .Include(d => d.ListadoMaestro)
             .Include(d => d.Area)
+            .IgnoreQueryFilters()
             .FirstOrDefaultAsync(d => d.ListadoMaestroId == listadoId && d.Codigo == codigo);
 
     public async Task<DocumentoControl> CreateDocumentoAsync(DocumentoControl documento)

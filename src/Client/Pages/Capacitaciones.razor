@@ -1,4 +1,4 @@
-﻿@page "/capacitaciones"
+@page "/capacitaciones"
 @attribute [PageTitle("Capacitaciones")]
 @attribute [Authorize]
 @inject CapacitacionApiService ApiService
@@ -81,9 +81,8 @@
                             <th>Área</th>
                             <th>Capacitación</th>
                             <th>Inscripción</th>
-                            <th>Asistió</th>
+                            <th>Fecha de Finalización</th>
                             <th>Calificación</th>
-                            <th>Cuestionario</th>
                             <th>Resultado</th>
                         </tr>
                     </thead>
@@ -95,23 +94,17 @@
                                 <td class="text-sm text-muted">@h.Inscripcion.ColaboradorArea</td>
                                 <td class="text-sm">@h.Inscripcion.CapacitacionNombre</td>
                                 <td class="text-sm text-muted">@h.Inscripcion.FechaInscripcion.ToString("dd/MM/yyyy")</td>
-                                <td>
-                                    <span class="badge @(h.Inscripcion.Asistio ? "badge-success" : "badge-gray")">
-                                        @(h.Inscripcion.Asistio ? "Sí" : "No")
-                                    </span>
-                                </td>
                                 <td class="text-sm">
-                                    @(h.Inscripcion.Calificacion.HasValue ? h.Inscripcion.Calificacion.Value.ToString("0.##") : "—")
+                                    @(h.Inscripcion.FechaFinalizacion?.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ?? "—")
                                 </td>
-                                <td>
+                                <td class="text-sm font-medium">
                                     @if (h.Resultado is not null)
                                     {
-                                        <span class="text-sm font-medium">@h.Resultado.Puntaje.ToString("0.#")%</span>
-                                        <span class="text-muted text-xs"> (@h.Resultado.Correctas/@h.Resultado.TotalPreguntas)</span>
+                                        @($"{h.Resultado.Correctas} / {h.Resultado.TotalPreguntas}")
                                     }
                                     else
                                     {
-                                        <span class="text-muted text-sm">Sin responder</span>
+                                        @(h.Inscripcion.Calificacion.HasValue ? h.Inscripcion.Calificacion.Value.ToString("0.##") : "—")
                                     }
                                 </td>
                                 <td>
@@ -258,16 +251,16 @@
 }
 
 @* Sección de capacitaciones completadas — solo para colaboradores *@
-@if (AuthInfo.EsSoloColaborador && capacitacionesAprobadas.Any())
+@if (AuthInfo.EsSoloColaborador && capacitacionesCompletadas.Any())
 {
     <div style="margin-top:1.5rem;">
         <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.75rem;">
             <span style="font-size:1.1rem;">🎓</span>
-            <span class="font-medium">Completadas (@capacitacionesAprobadas.Count)</span>
-            <span class="text-sm text-muted">— capacitaciones que ya aprobaste</span>
+            <span class="font-medium">Completadas (@capacitacionesCompletadas.Count)</span>
+            <span class="text-sm text-muted">— capacitaciones que ya completaste</span>
         </div>
         <div style="display:flex;flex-direction:column;gap:.5rem;">
-            @foreach (var c in (capacitaciones ?? []).Where(c => capacitacionesAprobadas.Contains(c.Id)))
+            @foreach (var c in (capacitaciones ?? []).Where(c => capacitacionesCompletadas.Contains(c.Id)))
             {
                 var cap = c;
                 <div style="display:flex;align-items:center;gap:.875rem;padding:.75rem 1rem;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);opacity:.75;">
@@ -279,7 +272,7 @@
                             <span class="text-xs text-muted" style="margin-left:.5rem;">@c.Descripcion</span>
                         }
                     </div>
-                    <span class="badge badge-success" style="font-size:.7rem;">Aprobada</span>
+                    <span class="badge badge-success" style="font-size:.7rem;">Completada</span>
                     <button class="btn btn-ghost btn-sm btn-icon"
                             @onclick="@(() => Nav.NavigateTo($"/capacitaciones/{cap.Id}"))"
                             title="Ver detalle">👁️</button>
@@ -316,12 +309,9 @@
                             <ValidationMessage For="() => form.DuracionHoras" class="validation-message" />
                         </div>
                         <div class="form-group">
-                            <label>Fecha inicio</label>
-                            <InputDate @bind-Value="form.FechaInicio" />
-                        </div>
-                        <div class="form-group">
-                            <label>Fecha fin</label>
+                            <label>Fecha límite *</label>
                             <InputDate @bind-Value="form.FechaFin" />
+                            <ValidationMessage For="() => form.FechaFin" class="validation-message" />
                         </div>
                         <div class="form-group full">
                             <label>Asignar a</label>
@@ -357,21 +347,6 @@
                                 </select>
                             </div>
                         }
-                        <div class="form-group full" style="border-top:1px solid var(--border);padding-top:.75rem;margin-top:.25rem;">
-                            <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-weight:500;">
-                                <input type="checkbox" @bind="form.EmiteCertificado" />
-                                🏆 Emitir certificado al aprobar el cuestionario
-                            </label>
-                            @if (form.EmiteCertificado)
-                            {
-                                <div style="margin-top:.5rem;">
-                                    <label style="font-size:.8rem;font-weight:400;">Nombre del certificado <span class="text-muted">(opcional — si vacío usa el nombre de la capacitación)</span></label>
-                                    <InputText @bind-Value="form.NombreCertificado"
-                                               placeholder="Ej: Certificado de Seguridad Industrial"
-                                               style="margin-top:.25rem;" />
-                                </div>
-                            }
-                        </div>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -415,8 +390,8 @@
     private int paginaHistorial = 1;
     private const int HistorialPaginaSize = 10;
 
-    // Capacitaciones aprobadas por el colaborador (excluidas de la lista activa)
-    private HashSet<int> capacitacionesAprobadas = [];
+    // Capacitaciones completadas por el colaborador (excluidas de la lista activa)
+    private HashSet<int> capacitacionesCompletadas = [];
 
     private string BusquedaHistorial
     {
@@ -463,7 +438,7 @@
                     (c.ColaboradorId.HasValue && c.ColaboradorId == AuthInfo.ColaboradorId))).ToList();
 
                 // Excluir las que ya aprobó — pasan al historial
-                lista = lista.Where(c => !capacitacionesAprobadas.Contains(c.Id)).ToList();
+                lista = lista.Where(c => !capacitacionesCompletadas.Contains(c.Id)).ToList();
             }
 
             lista = lista.Where(c => !c.Finalizada).ToList();
@@ -497,7 +472,7 @@
             Notificaciones.OnCuestionarioRespondido += OnCuestionarioRespondidoHistorial;
         }
         else
-            await Task.WhenAll(Cargar(), CargarAprobadas());
+            await Task.WhenAll(Cargar(), CargarCompletadas());
     }
 
     protected override void OnInitialized()
@@ -509,7 +484,7 @@
     private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
     {
         if (AuthInfo.EsSoloColaborador && AuthInfo.ColaboradorId.HasValue)
-            InvokeAsync(async () => { await CargarAprobadas(); StateHasChanged(); });
+            InvokeAsync(async () => { await CargarCompletadas(); StateHasChanged(); });
     }
 
     private void OnCuestionarioRespondidoHistorial(TalentManagement.Shared.DTOs.Cuestionarios.CuestionarioRespondidoDto n)
@@ -536,14 +511,14 @@
         cargando = false;
     }
 
-    private async Task CargarAprobadas()
+    private async Task CargarCompletadas()
     {
         if (!AuthInfo.ColaboradorId.HasValue) return;
         try
         {
             // Una sola llamada al servidor en lugar de N+1 requests
             var ids = await CuestionarioService.GetCapacitacionesAprobadasAsync(AuthInfo.ColaboradorId.Value);
-            capacitacionesAprobadas = ids.ToHashSet();
+            capacitacionesCompletadas = ids.ToHashSet();
         }
         catch { }
     }
@@ -588,6 +563,23 @@
         if (tipoAsignacion != "area") form.AreaId = null;
         if (tipoAsignacion != "colaborador") form.ColaboradorId = null;
 
+        if (form.DuracionHoras <= 0)
+        {
+            await toast.Show("La duración de la capacitación debe ser mayor a cero.", "error");
+            return;
+        }
+
+        // Validar fecha límite no anterior a fecha inicio
+        var fechaInicioValidacion = editandoId.HasValue 
+            ? (capacitaciones?.FirstOrDefault(c => c.Id == editandoId.Value)?.FechaInicio ?? DateTime.Today) 
+            : DateTime.Today;
+
+        if (form.FechaFin.Date < fechaInicioValidacion.Date)
+        {
+            await toast.Show("La fecha límite no puede ser anterior a la fecha de inicio.", "error");
+            return;
+        }
+
         guardando = true;
         bool ok = editandoId.HasValue
             ? await ApiService.UpdateAsync(editandoId.Value, form) is not null
@@ -595,7 +587,7 @@
         guardando = false;
 
         if (ok) { CerrarModal(); await Cargar(); await toast.Show(editandoId.HasValue ? "Capacitación actualizada." : "Capacitación creada."); }
-        else await toast.Show("Error al guardar.", "error");
+        else await toast.Show("Error al guardar o validar en servidor.", "error");
     }
 
     private void PedirConfirmacion(int id) { eliminandoId = id; confirmVisible = true; }

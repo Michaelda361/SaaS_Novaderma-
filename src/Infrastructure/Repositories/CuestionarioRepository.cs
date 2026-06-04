@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using TalentManagement.Application.Interfaces;
 using TalentManagement.Domain.Entities;
 using TalentManagement.Infrastructure.Persistence;
@@ -42,6 +42,9 @@ public class CuestionarioRepository(AppDbContext context) : ICuestionarioReposit
             existing.Titulo = cuestionario.Titulo;
             existing.Descripcion = cuestionario.Descripcion;
             existing.PuntajeAprobacion = cuestionario.PuntajeAprobacion;
+            existing.AprobacionPorCorrectas = cuestionario.AprobacionPorCorrectas;
+            existing.MinCorrectas = cuestionario.MinCorrectas;
+            existing.IntentosPermitidos = cuestionario.IntentosPermitidos;
 
             foreach (var p in cuestionario.Preguntas)
             {
@@ -62,9 +65,23 @@ public class CuestionarioRepository(AppDbContext context) : ICuestionarioReposit
         await context.SaveChangesAsync();
     }
 
-    public async Task<RespuestaCuestionario?> GetRespuestaAsync(int cuestionarioId, int inscripcionId) =>
+    public async Task<RespuestaCuestionario?> GetRespuestaAsync(int cuestionarioId, int inscripcionId)
+    {
+        var respuestas = await context.RespuestasCuestionario
+            .Where(r => r.CuestionarioId == cuestionarioId && r.InscripcionId == inscripcionId)
+            .ToListAsync();
+
+        if (!respuestas.Any()) return null;
+
+        var aprobada = respuestas.FirstOrDefault(r => r.Aprobado);
+        return aprobada ?? respuestas.OrderByDescending(r => r.FechaRespuesta).First();
+    }
+
+    public async Task<List<RespuestaCuestionario>> GetRespuestasAsync(int cuestionarioId, int inscripcionId) =>
         await context.RespuestasCuestionario
-            .FirstOrDefaultAsync(r => r.CuestionarioId == cuestionarioId && r.InscripcionId == inscripcionId);
+            .Where(r => r.CuestionarioId == cuestionarioId && r.InscripcionId == inscripcionId)
+            .OrderBy(r => r.FechaRespuesta)
+            .ToListAsync();
 
     public async Task<RespuestaCuestionario> SaveRespuestaAsync(RespuestaCuestionario respuesta)
     {
@@ -87,11 +104,47 @@ public class CuestionarioRepository(AppDbContext context) : ICuestionarioReposit
 
     public async Task<List<int>> GetCapacitacionesAprobadasPorColaboradorAsync(int colaboradorId)
     {
-        // Una sola query: JOIN Inscripciones → RespuestasCuestionario filtrando aprobadas
-        return await context.RespuestasCuestionario
-            .Where(r => r.Aprobado && r.Inscripcion.ColaboradorId == colaboradorId)
-            .Select(r => r.Inscripcion.CapacitacionId)
-            .Distinct()
+        var respuestas = await context.RespuestasCuestionario
+            .Include(r => r.Cuestionario)
+            .Where(r => r.Inscripcion.ColaboradorId == colaboradorId)
             .ToListAsync();
+
+        var completadas = new List<int>();
+
+        var grupos = respuestas.GroupBy(r => r.CuestionarioId);
+        foreach (var grupo in grupos)
+        {
+            var intentosRealizados = grupo.Count();
+            var cuestionario = grupo.First().Cuestionario;
+            var intentosPermitidos = cuestionario?.IntentosPermitidos ?? 1;
+
+            var aprobado = grupo.Any(r => r.Aprobado);
+            if (aprobado || intentosRealizados >= intentosPermitidos)
+            {
+                completadas.Add(grupo.First().Inscripcion.CapacitacionId);
+            }
+        }
+
+        return completadas.Distinct().ToList();
+    }
+
+    public async Task<int> ContarRespuestasCapacitacionAsync(int capacitacionId)
+    {
+        var cuestionario = await context.Cuestionarios
+            .FirstOrDefaultAsync(c => c.CapacitacionId == capacitacionId);
+
+        if (cuestionario is null) return 0;
+
+        var intentosPermitidos = cuestionario.IntentosPermitidos;
+
+        var respuestas = await context.RespuestasCuestionario
+            .Where(r => r.CuestionarioId == cuestionario.Id && r.Inscripcion.Activo)
+            .ToListAsync();
+
+        var totalFinalizados = respuestas
+            .GroupBy(r => r.InscripcionId)
+            .Count(grupo => grupo.Any(r => r.Aprobado) || grupo.Count() >= intentosPermitidos);
+
+        return totalFinalizados;
     }
 }

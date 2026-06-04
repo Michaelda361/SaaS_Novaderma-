@@ -147,6 +147,7 @@
                         <th>Asistió</th>
                         <th>Calificación</th>
                         <th>Cuestionario</th>
+                        <th>Fecha de Finalización</th>
                         <th>Observaciones</th>
                         <th></th>
                     </tr>
@@ -181,9 +182,18 @@
                                 }
                                 else
                                 {
-                                    <span class="@(i.Calificacion >= 7 ? "text-success" : i.Calificacion.HasValue ? "text-danger" : "")">
-                                        @(i.Calificacion.HasValue ? i.Calificacion.Value.ToString("0.##") : "-")
-                                    </span>
+                                    @if (respondio && res is not null)
+                                    {
+                                        <span class="@(res.Aprobado ? "text-success" : "text-danger")">
+                                            @($"{res.Correctas} / {res.TotalPreguntas}")
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="@(i.Calificacion >= 7 ? "text-success" : i.Calificacion.HasValue ? "text-danger" : "")">
+                                            @(i.Calificacion.HasValue ? i.Calificacion.Value.ToString("0.##") : "-")
+                                        </span>
+                                    }
                                 }
                             </td>
                             <td>
@@ -199,6 +209,16 @@
                                 else
                                 {
                                     <span class="text-muted text-sm">Sin responder</span>
+                                }
+                            </td>
+                            <td class="text-sm">
+                                @if (respondio && res is not null)
+                                {
+                                    @(res.FechaFinalizacion?.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ?? "—")
+                                }
+                                else
+                                {
+                                    @("—")
                                 }
                             </td>
                             <td>
@@ -281,7 +301,7 @@
             </div>
         }
     }
-    else if (resultadoPropio is not null)
+    else if (resultadoPropio is not null && !respondiendo)
     {
         <!-- Ya respondió — mostrar resultado -->
         <div class="cuest-resultado">
@@ -290,18 +310,55 @@
                 @resultadoPropio.Puntaje.ToString("0.#")%
             </div>
             <div class="text-muted text-sm" style="margin-top:.35rem;">
-                @resultadoPropio.Correctas de @resultadoPropio.TotalPreguntas correctas · Mínimo: @resultadoPropio.PuntajeAprobacion%
+                @resultadoPropio.Correctas de @resultadoPropio.TotalPreguntas correctas · Mínimo: 
+                @if (resultadoPropio.AprobacionPorCorrectas)
+                {
+                    @($"{resultadoPropio.MinCorrectas} correctas")
+                }
+                else
+                {
+                    @($"{resultadoPropio.PuntajeAprobacion}%")
+                }
             </div>
             <div style="margin-top:.875rem;">
                 <span class="badge @(resultadoPropio.Aprobado ? "badge-success" : "badge-danger")" style="font-size:.875rem;padding:.35rem .875rem;">
                     @(resultadoPropio.Aprobado ? "✅ Aprobado" : "❌ No aprobado")
                 </span>
             </div>
+
+            <div class="text-muted text-sm" style="margin-top: 1rem; border-top: 1px dashed var(--border); padding-top: 1rem;">
+                <span>Intentos realizados: <strong>@resultadoPropio.IntentosRealizados</strong> de <strong>@resultadoPropio.IntentosMaximos</strong></span>
+                @if (resultadoPropio.IntentosMaximos > 0)
+                {
+                    <span style="display: block; margin-top: 0.25rem;">
+                        Intentos restantes: <strong>@(Math.Max(0, resultadoPropio.IntentosMaximos - resultadoPropio.IntentosRealizados))</strong>
+                    </span>
+                }
+            </div>
+
+            @if (resultadoPropio.PuedeResponderOtroIntento)
+            {
+                <div style="margin-top: 1.25rem;">
+                    <button class="btn btn-primary" @onclick="IniciarCuestionario">
+                        🔄 Realizar otro intento
+                    </button>
+                </div>
+            }
         </div>
         @if (PuedeGestionar)
         {
             <div style="padding:.75rem 1.5rem;border-top:1px solid var(--border);background:var(--bg);">
-                <p class="text-xs text-muted">📊 @cuestionario.Titulo · @cuestionario.Preguntas.Count pregunta(s) · Mínimo @cuestionario.PuntajeAprobacion%</p>
+                <p class="text-xs text-muted">
+                    📊 @cuestionario.Titulo · @cuestionario.Preguntas.Count pregunta(s) · Mínimo: 
+                    @if (cuestionario.AprobacionPorCorrectas)
+                    {
+                        @($"{cuestionario.MinCorrectas} correctas")
+                    }
+                    else
+                    {
+                        @($"{cuestionario.PuntajeAprobacion}%")
+                    }
+                </p>
             </div>
         }
     }
@@ -326,7 +383,19 @@
                             <div class="text-sm text-muted" style="margin-top:.2rem;">@cuestionario.Descripcion</div>
                         }
                         <div class="text-sm text-muted" style="margin-top:.35rem;">
-                            @cuestionario.Preguntas.Count pregunta(s) · Mínimo @cuestionario.PuntajeAprobacion% para aprobar
+                            @cuestionario.Preguntas.Count pregunta(s) · Mínimo: 
+                            @if (cuestionario.AprobacionPorCorrectas)
+                            {
+                                @($"{cuestionario.MinCorrectas} correctas")
+                            }
+                            else
+                            {
+                                @($"{cuestionario.PuntajeAprobacion}%")
+                            }
+                            para aprobar
+                        </div>
+                        <div class="text-sm text-muted" style="margin-top: 0.25rem;">
+                            Intentos permitidos: <strong>@cuestionario.IntentosPermitidos</strong>
                         </div>
                     </div>
                     <button class="btn btn-primary" @onclick="IniciarCuestionario">Comenzar →</button>
@@ -651,8 +720,42 @@
                     <input class="form-control" @bind="cForm.Descripcion" placeholder="Instrucciones..." />
                 </div>
                 <div class="form-group">
-                    <label>Puntaje mínimo para aprobar (%)</label>
-                    <input type="number" min="1" max="100" class="form-control" @bind="cForm.PuntajeAprobacion" style="width:100px" />
+                    <label>Modo de aprobación</label>
+                    <div style="display:flex;gap:.75rem;flex-wrap:wrap;align-items:center;">
+                        <label class="form-check" style="display:flex;align-items:center;gap:.4rem;">
+                            <input type="radio" name="modoAprobacion" checked="@(!cForm.AprobacionPorCorrectas)" @onchange="() => cForm.AprobacionPorCorrectas = false" />
+                            <span>Puntaje (%)</span>
+                        </label>
+                        <label class="form-check" style="display:flex;align-items:center;gap:.4rem;">
+                            <input type="radio" name="modoAprobacion" checked="@(cForm.AprobacionPorCorrectas)" @onchange="() => cForm.AprobacionPorCorrectas = true" />
+                            <span>Correctas</span>
+                        </label>
+                    </div>
+                </div>
+                <div class="form-group">
+                    @if (cForm.AprobacionPorCorrectas)
+                    {
+                        <label>Mínimo de correctas para aprobar</label>
+                        <input type="number" min="1" class="form-control" @bind="cForm.MinCorrectas" style="width:100px" />
+                    }
+                    else
+                    {
+                        <label>Puntaje mínimo para aprobar (%)</label>
+                        <input type="number" min="1" max="100" class="form-control" @bind="cForm.PuntajeAprobacion" style="width:100px" />
+                    }
+                </div>
+                <div class="form-group">
+                    <label>Cantidad máxima de intentos</label>
+                    <input type="number" min="1" class="form-control" @bind="cForm.IntentosPermitidos" style="width:100px" />
+                    <span class="text-muted" style="font-size: 0.85rem; display: block; margin-top: 0.25rem;">
+                        💡 El colaborador podrá responder el cuestionario hasta el número de intentos configurado.
+                    </span>
+                    @if (cForm.IntentosPermitidos < 1)
+                    {
+                        <span class="text-danger" style="font-size: 0.85rem; display: block; margin-top: 0.25rem;">
+                            La cantidad de intentos permitidos debe ser al menos 1.
+                        </span>
+                    }
                 </div>
 
                 <div style="margin-top:1rem;">
@@ -982,6 +1085,9 @@
                 Titulo = cuestionario.Titulo,
                 Descripcion = cuestionario.Descripcion,
                 PuntajeAprobacion = cuestionario.PuntajeAprobacion,
+                AprobacionPorCorrectas = cuestionario.AprobacionPorCorrectas,
+                MinCorrectas = cuestionario.MinCorrectas,
+                IntentosPermitidos = cuestionario.IntentosPermitidos,
                 CapacitacionId = Id,
                 Preguntas = cuestionario.Preguntas.Select(p => new CreatePreguntaDto
                 {
@@ -1002,6 +1108,9 @@
             {
                 CapacitacionId = Id,
                 PuntajeAprobacion = 70,
+                AprobacionPorCorrectas = false,
+                MinCorrectas = 1,
+                IntentosPermitidos = 1,
                 Preguntas = [new CreatePreguntaDto
                 {
                     Enunciado = "",
@@ -1072,6 +1181,18 @@
             }
         }
 
+        if (cForm.AprobacionPorCorrectas && cForm.MinCorrectas > cForm.Preguntas.Count)
+        {
+            await toast.Show($"El mínimo de correctas no puede ser mayor que la cantidad de preguntas ({cForm.Preguntas.Count}).", "warning");
+            return;
+        }
+
+        if (cForm.IntentosPermitidos < 1)
+        {
+            await toast.Show("La cantidad de intentos permitidos debe ser al menos 1.", "warning");
+            return;
+        }
+
         guardandoCuestionario = true;
         bool ok;
         if (cuestionario is null)
@@ -1128,9 +1249,12 @@
 
         if (resultadoPropio is not null)
         {
+            var regla = resultadoPropio.AprobacionPorCorrectas
+                ? $"mínimo {resultadoPropio.MinCorrectas} correctas"
+                : $"mínimo {resultadoPropio.PuntajeAprobacion}%";
             var msg = resultadoPropio.Aprobado
                 ? $"🎉 ¡Aprobaste! {resultadoPropio.Puntaje:0.#}% — {resultadoPropio.Correctas}/{resultadoPropio.TotalPreguntas} correctas"
-                : $"❌ No aprobaste. {resultadoPropio.Puntaje:0.#}% — mínimo {resultadoPropio.PuntajeAprobacion}%";
+                : $"❌ No aprobaste. {resultadoPropio.Puntaje:0.#}% — {regla}";
             await toast.Show(msg, resultadoPropio.Aprobado ? "success" : "error");
         }
         else

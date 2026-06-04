@@ -5,6 +5,8 @@ namespace TalentManagement.Application.Interfaces;
 public interface ICapacitacionRepository
 {
     Task<IEnumerable<Capacitacion>> GetAllAsync();
+    Task<IEnumerable<Capacitacion>> GetActivasAsync();
+    Task<IEnumerable<Capacitacion>> GetFinalizadasAsync();
     Task<IEnumerable<Capacitacion>> GetByAreaAsync(int areaId);
     Task<IEnumerable<Capacitacion>> GetByColaboradorAsync(int colaboradorId);
     Task<Capacitacion?> GetByIdAsync(int id);

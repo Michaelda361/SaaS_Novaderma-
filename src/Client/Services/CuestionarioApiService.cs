@@ -37,7 +37,7 @@ public class CuestionarioApiService(HttpClient http)
         http.GetFromJsonAsync<ResultadoCuestionarioDto>($"{Base}/{cuestionarioId}/resultado/{inscripcionId}");
 
     /// <summary>
-    /// Endpoint batch: devuelve IDs de capacitaciones aprobadas por el colaborador en una sola llamada.
+    /// Endpoint batch: devuelve IDs de capacitaciones completadas por el colaborador en una sola llamada.
     /// Reemplaza el N+1 de CargarAprobadas.
     /// </summary>
     public async Task<List<int>> GetCapacitacionesAprobadasAsync(int colaboradorId)

@@ -70,8 +70,28 @@ public class ControlDocumentalController(
             camposSheet.Cell(row, 6).Value = campo.Orden;
             row++;
         }
-
         camposSheet.Columns().AdjustToContents();
+
+        var documentosSheet = workbook.AddWorksheet("Documentos");
+        var camposOrdenados = listado.Campos.OrderBy(c => c.Orden).ToList();
+        for (int colIndex = 0; colIndex < camposOrdenados.Count; colIndex++)
+        {
+            documentosSheet.Cell(1, colIndex + 1).Value = camposOrdenados[colIndex].Nombre;
+        }
+
+        var documentos = await service.GetDocumentosAsync(id, null, null, null, null, null);
+        var docRow = 2;
+        foreach (var doc in documentos)
+        {
+            for (int colIndex = 0; colIndex < camposOrdenados.Count; colIndex++)
+            {
+                var campo = camposOrdenados[colIndex];
+                var value = GetValorDynamic(doc, campo.CampoClave);
+                documentosSheet.Cell(docRow, colIndex + 1).Value = value;
+            }
+            docRow++;
+        }
+        documentosSheet.Columns().AdjustToContents();
 
         await using var stream = new MemoryStream();
         workbook.SaveAs(stream);
@@ -79,6 +99,100 @@ public class ControlDocumentalController(
 
         var fileName = SanitizeFileName(listado.Nombre) + ".xlsx";
         return File(stream.ToArray(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
+    }
+
+    private static string GetValorDynamic(DocumentoControlDto item, string campoClave)
+    {
+        if (item == null) return string.Empty;
+
+        var keyNorm = campoClave.Trim().ToLowerInvariant()
+            .Replace("á", "a")
+            .Replace("é", "e")
+            .Replace("í", "i")
+            .Replace("ó", "o")
+            .Replace("ú", "u")
+            .Replace("ü", "u")
+            .Replace("ñ", "n")
+            .Replace("ç", "c")
+            .Replace(" ", string.Empty);
+
+        switch (keyNorm)
+        {
+            case "codigo":
+                return item.Codigo;
+            case "nombre":
+                return item.Nombre;
+            case "procesoresponsable":
+            case "proceso":
+            case "lugardearchivo":
+            case "responsable":
+                return item.ProcesoResponsable;
+            case "version":
+                return item.Version;
+            case "fechadocumento":
+            case "fecha":
+            case "fechadedocumento":
+                return item.FechaDocumento.ToString("yyyy-MM-dd");
+            case "onedriveurl":
+            case "url":
+                return item.OneDriveUrl;
+            case "estado":
+                return item.Estado;
+            case "area":
+            case "areaid":
+            case "areanombre":
+                return item.AreaNombre ?? string.Empty;
+            case "uso":
+                return item.Uso ?? GetValorCamposPersonalizados(item.CamposPersonalizados, "uso") ?? string.Empty;
+            case "tiemporetencion":
+            case "retencion":
+            case "tiempoderetencion":
+                return item.TiempoRetencion ?? GetValorCamposPersonalizados(item.CamposPersonalizados, "tiemporetencion", "tiempoderetencion", "retencion") ?? string.Empty;
+            case "proteccion":
+                return item.Proteccion ?? GetValorCamposPersonalizados(item.CamposPersonalizados, "proteccion") ?? string.Empty;
+            case "recuperacion":
+                return item.Recuperacion ?? GetValorCamposPersonalizados(item.CamposPersonalizados, "recuperacion") ?? string.Empty;
+            case "disposicionfinal":
+            case "disposicion":
+                return item.DisposicionFinal ?? GetValorCamposPersonalizados(item.CamposPersonalizados, "disposicionfinal", "disposicion") ?? string.Empty;
+            case "observaciones":
+                return item.Observaciones ?? GetValorCamposPersonalizados(item.CamposPersonalizados, "observaciones") ?? string.Empty;
+            case "comentariocambio":
+            case "cambio":
+                return item.ComentarioCambio ?? GetValorCamposPersonalizados(item.CamposPersonalizados, "comentariocambio", "cambio") ?? string.Empty;
+            case "archivonombre":
+            case "archivo":
+                return item.ArchivoNombre ?? string.Empty;
+            default:
+                return GetValorCamposPersonalizados(item.CamposPersonalizados, campoClave) ?? string.Empty;
+        }
+    }
+
+    private static string? GetValorCamposPersonalizados(Dictionary<string, string?>? campos, params string[] clavesCandidatas)
+    {
+        if (campos == null || !campos.Any()) return null;
+        foreach (var clave in clavesCandidatas)
+        {
+            if (campos.TryGetValue(clave, out var val))
+            {
+                return val;
+            }
+            var keyMatch = campos.Keys.FirstOrDefault(k => string.Equals(k, clave, StringComparison.OrdinalIgnoreCase));
+            if (keyMatch != null)
+            {
+                return campos[keyMatch];
+            }
+        }
+        foreach (var clave in clavesCandidatas)
+        {
+            var keyNorm = clave.ToLowerInvariant();
+            var fuzzyMatch = campos.Keys.FirstOrDefault(k => k.ToLowerInvariant().Contains(keyNorm));
+            if (fuzzyMatch != null)
+            {
+                return campos[fuzzyMatch];
+            }
+        }
+        return null;
     }
 
     [HttpPost("listados-maestros/import")]
@@ -106,40 +220,56 @@ public class ControlDocumentalController(
             return BadRequest("El archivo debe tener extensión .xlsx.");
         }
 
+        Console.WriteLine($"[IMPORT DIAGNOSTIC] Archivo recibido: '{file.FileName}', Tamaño: {file.Length} bytes.");
+
         try
         {
             using var workbook = new XLWorkbook(file.OpenReadStream());
             var dto = ParseListadoMaestroWorkbook(workbook, file.FileName);
+            
+            Console.WriteLine($"[IMPORT DIAGNOSTIC] Registros listos para persistir. Listado: '{dto.Nombre}', Campos/Columnas: {dto.Campos.Count}, Documentos/Filas: {dto.Documentos.Count}.");
+
             var email = currentUser.GetEmail();
             var created = await service.ImportListadoAsync(dto, email);
+            
+            Console.WriteLine($"[IMPORT DIAGNOSTIC] Registros guardados exitosamente. Listado ID: {created.Id}, Nombre: '{created.Nombre}'.");
+
             return CreatedAtAction(nameof(GetListadoMaestro), new { id = created.Id }, created);
         }
         catch (ArgumentException ex)
         {
+            Console.WriteLine($"[IMPORT DIAGNOSTIC] Error de validación al importar listado: {ex.Message}");
             return BadRequest(ex.Message);
         }
         catch (Exception ex)
         {
+            Console.WriteLine($"[IMPORT DIAGNOSTIC] Error inesperado al importar listado: {ex.Message}");
             return BadRequest($"No se pudo leer el archivo XLSX: {ex.Message}");
         }
     }
 
     private static CreateListadoMaestroDto ParseListadoMaestroWorkbook(XLWorkbook workbook, string fileName)
     {
+        Console.WriteLine($"[IMPORT DIAGNOSTIC] Iniciando parsing del libro de Excel. Nombre de archivo: '{fileName}'. Hojas disponibles: {string.Join(", ", workbook.Worksheets.Select(w => w.Name))}");
+
         var dto = new CreateListadoMaestroDto
         {
             Nombre = Path.GetFileNameWithoutExtension(fileName) ?? "Listado importado"
         };
 
         ParseMetadataSheet(workbook, dto);
+        Console.WriteLine($"[IMPORT DIAGNOSTIC] Metadatos leídos. Nombre de listado a crear: '{dto.Nombre}', Descripción: '{dto.Descripcion ?? "ninguna"}'.");
 
         var (documentosSheet, documentosHeaderRow) = FindWorksheetWithDocumentHeaders(workbook);
         if (documentosSheet is null || documentosHeaderRow is null)
         {
-            throw new ArgumentException("No se encontró una hoja de documentos que contenga las columnas requeridas 'Codigo' y 'Nombre'.");
+            throw new ArgumentException("No se encontró una hoja de documentos válida que contenga columnas identificables como 'Codigo' y 'Nombre' en la primera fila.");
         }
 
+        Console.WriteLine($"[IMPORT DIAGNOSTIC] Hoja seleccionada para datos: '{documentosSheet.Name}'. Leyendo encabezados de la Fila 1.");
+
         var headerDefinitions = BuildHeaderDefinitions(documentosHeaderRow);
+        Console.WriteLine($"[IMPORT DIAGNOSTIC] Encabezados detectados en la Fila 1 ({headerDefinitions.Count} columnas): {string.Join(", ", headerDefinitions.Select(h => $"{h.OriginalName} ({h.Key} -> index {h.Index})"))}");
 
         var customHeaderMap = new Dictionary<int, string>();
         var usedClave = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -175,6 +305,8 @@ public class ControlDocumentalController(
 
         var headerMap = BuildHeaderMap(documentosHeaderRow);
         ParseDocumentoRows(documentosSheet, documentosHeaderRow, headerMap, headerDefinitions, customHeaderMap, dto);
+
+        Console.WriteLine($"[IMPORT DIAGNOSTIC] Fin de parsing. Total de columnas dinámicas generadas en DTO: {dto.Campos.Count}. Total de registros parsed en DTO: {dto.Documentos.Count}.");
 
         return dto;
     }
@@ -299,17 +431,23 @@ public class ControlDocumentalController(
         Dictionary<int, string> customHeaderMap,
         CreateListadoMaestroDto dto)
     {
+        var totalRowsUsed = sheet.RowsUsed().Count();
+        Console.WriteLine($"[IMPORT DIAGNOSTIC] Iniciando parsing de filas en '{sheet.Name}'. Filas usadas totales: {totalRowsUsed}. Fila de cabecera: {headerRow.RowNumber()}.");
+        Console.WriteLine($"[IMPORT DIAGNOSTIC] Total de filas detectadas con datos en la hoja: {totalRowsUsed - headerRow.RowNumber()}.");
+
         foreach (var row in sheet.RowsUsed().Where(r => r.RowNumber() > headerRow.RowNumber()))
         {
             var codigo = GetCellString(row, headerMap, "Codigo");
             if (string.IsNullOrWhiteSpace(codigo))
             {
+                Console.WriteLine($"[IMPORT DIAGNOSTIC] Fila {row.RowNumber()} omitida: Código de documento vacío o no mapeado.");
                 continue;
             }
 
             var nombreDocumento = GetCellString(row, headerMap, "Nombre");
             if (string.IsNullOrWhiteSpace(nombreDocumento))
             {
+                Console.WriteLine($"[IMPORT DIAGNOSTIC] Fila {row.RowNumber()} omitida: Nombre de documento vacío o no mapeado.");
                 continue;
             }
 
@@ -486,23 +624,23 @@ public class ControlDocumentalController(
     {
         return normalizedHeader switch
         {
-            var key when key == "codigo" => "codigo",
-            var key when key == "nombre" => "nombre",
-            var key when key == "procesoresponsable" || key == "lugardearchivo" || key == "proceso" || key == "responsable" => "procesoresponsable",
-            var key when key == "version" => "version",
-            var key when key == "estado" => "estado",
-            var key when key == "fechadocumento" || key == "fecha" || key == "fechadedocumento" => "fechadocumento",
-            var key when key == "uso" => "uso",
-            var key when key == "tiemporetencion" || key == "tiempoderetencion" || key == "retencion" => "tiemporetencion",
-            var key when key == "proteccion" => "proteccion",
-            var key when key == "recuperacion" => "recuperacion",
-            var key when key == "disposicionfinal" || key == "disposicion" => "disposicionfinal",
-            var key when key == "observaciones" => "observaciones",
-            var key when key == "onedriveurl" || key == "archivoonedrive" || key == "url" => "onedriveurl",
-            var key when key == "onedriveitemid" || key == "itemid" => "onedriveitemid",
-            var key when key == "archivonombre" || key == "archivo" || key == "nombrearchivo" || key == "nombredearchivo" => "archivonombre",
-            var key when key == "comentariocambio" || key == "comentariodecambio" || key == "cambio" => "comentariocambio",
-            var key when key == "area" || key == "areaid" => "area",
+            var key when key == "codigo" => "Codigo",
+            var key when key == "nombre" => "Nombre",
+            var key when key == "procesoresponsable" || key == "lugardearchivo" || key == "proceso" || key == "responsable" => "ProcesoResponsable",
+            var key when key == "version" => "Version",
+            var key when key == "estado" => "Estado",
+            var key when key == "fechadocumento" || key == "fecha" || key == "fechadedocumento" => "FechaDocumento",
+            var key when key == "uso" => "Uso",
+            var key when key == "tiemporetencion" || key == "tiempoderetencion" || key == "retencion" => "TiempoRetencion",
+            var key when key == "proteccion" => "Proteccion",
+            var key when key == "recuperacion" => "Recuperacion",
+            var key when key == "disposicionfinal" || key == "disposicion" => "DisposicionFinal",
+            var key when key == "observaciones" => "Observaciones",
+            var key when key == "onedriveurl" || key == "archivoonedrive" || key == "url" => "OneDriveUrl",
+            var key when key == "onedriveitemid" || key == "itemid" => "OneDriveItemId",
+            var key when key == "archivonombre" || key == "archivo" || key == "nombrearchivo" || key == "nombredearchivo" => "ArchivoNombre",
+            var key when key == "comentariocambio" || key == "comentariodecambio" || key == "cambio" => "ComentarioCambio",
+            var key when key == "area" || key == "areaid" => "Area",
             _ => null
         };
     }
@@ -565,6 +703,14 @@ public class ControlDocumentalController(
             }
         }
 
+        // Fuzzy match: check if any key in headerMap contains the normalized name, or vice versa
+        var fuzzyKey = headerMap.Keys.FirstOrDefault(k => k.Contains(normalized) || normalized.Contains(k));
+        if (fuzzyKey is not null)
+        {
+            index = headerMap[fuzzyKey];
+            return true;
+        }
+
         index = -1;
         return false;
     }
@@ -573,6 +719,10 @@ public class ControlDocumentalController(
     {
         return normalizedHeader switch
         {
+            var n when n == "codigo" =>
+                new[] { "codigo", "codigodedocumento", "cod", "reference" },
+            var n when n == "nombre" =>
+                new[] { "nombre", "nombrededocumento", "nombredearchivo", "titulo", "title", "name" },
             var n when n == "procesoresponsable" =>
                 new[] { "procesoresponsable", "lugardearchivo", "proceso", "responsable" },
             var n when n == "fechadocumento" =>
@@ -639,7 +789,7 @@ public class ControlDocumentalController(
             var originalName = GetHeaderText(cell);
             if (string.IsNullOrWhiteSpace(originalName))
             {
-                originalName = $"Columna {column}";
+                continue;
             }
 
             headers.Add((
@@ -676,10 +826,21 @@ public class ControlDocumentalController(
 
         foreach (var worksheet in workbook.Worksheets)
         {
-            foreach (var row in worksheet.RowsUsed().Take(20))
+            for (int r = 1; r <= 20; r++)
             {
+                var row = worksheet.Row(r);
+                if (row is null || row.IsEmpty())
+                {
+                    continue;
+                }
+
                 var headerMap = BuildHeaderMap(row);
-                if (!headerMap.ContainsKey(NormalizeHeaderKey("Codigo")) || !headerMap.ContainsKey(NormalizeHeaderKey("Nombre")))
+                
+                // Check using TryGetCellIndex (which covers exact, synonyms, and fuzzy matching!)
+                var hasCodigo = TryGetCellIndex(headerMap, "Codigo", out _);
+                var hasNombre = TryGetCellIndex(headerMap, "Nombre", out _);
+
+                if (!hasCodigo || !hasNombre)
                 {
                     continue;
                 }
@@ -692,6 +853,12 @@ public class ControlDocumentalController(
                     bestHeader = row;
                 }
             }
+        }
+
+        if (bestSheet is null && workbook.Worksheets.Any())
+        {
+            bestSheet = workbook.Worksheets.First();
+            bestHeader = bestSheet.Row(1);
         }
 
         return (bestSheet, bestHeader);

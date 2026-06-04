@@ -22,6 +22,12 @@ public class CapacitacionRepository(AppDbContext context) : ICapacitacionReposit
     public async Task<IEnumerable<Capacitacion>> GetAllAsync() =>
         await WithIncludes().Where(c => !c.Finalizada).AsNoTracking().ToListAsync();
 
+    public async Task<IEnumerable<Capacitacion>> GetActivasAsync() =>
+        await WithIncludes().Where(c => !c.Finalizada && !c.Activo == false).AsNoTracking().ToListAsync();
+
+    public async Task<IEnumerable<Capacitacion>> GetFinalizadasAsync() =>
+        await WithIncludes().Where(c => c.Finalizada).AsNoTracking().ToListAsync();
+
     public async Task<IEnumerable<Capacitacion>> GetByAreaAsync(int areaId) =>
         await WithIncludes().Where(c => c.AreaId == areaId && !c.Finalizada).AsNoTracking().ToListAsync();
 
@@ -40,7 +46,12 @@ public class CapacitacionRepository(AppDbContext context) : ICapacitacionReposit
 
     public async Task<Capacitacion> UpdateAsync(Capacitacion capacitacion)
     {
-        context.Capacitaciones.Update(capacitacion);
+        var local = context.Capacitaciones.Local.FirstOrDefault(entry => entry.Id == capacitacion.Id);
+        if (local is not null)
+        {
+            context.Entry(local).State = EntityState.Detached;
+        }
+        context.Entry(capacitacion).State = EntityState.Modified;
         await context.SaveChangesAsync();
         return capacitacion;
     }

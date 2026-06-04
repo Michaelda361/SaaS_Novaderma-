@@ -441,11 +441,20 @@ namespace TalentManagement.Infrastructure.Migrations
                     b.Property<bool>("Activo")
                         .HasColumnType("bit");
 
+                    b.Property<bool>("AprobacionPorCorrectas")
+                        .HasColumnType("bit");
+
                     b.Property<int>("CapacitacionId")
                         .HasColumnType("int");
 
                     b.Property<string>("Descripcion")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("IntentosPermitidos")
+                        .HasColumnType("int");
+
+                    b.Property<int>("MinCorrectas")
+                        .HasColumnType("int");
 
                     b.Property<int>("PuntajeAprobacion")
                         .HasColumnType("int");

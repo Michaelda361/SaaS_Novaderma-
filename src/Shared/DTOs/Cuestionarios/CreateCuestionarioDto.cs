@@ -12,6 +12,14 @@ public class CreateCuestionarioDto
     [Range(1, 100, ErrorMessage = "El puntaje debe ser entre 1 y 100")]
     public int PuntajeAprobacion { get; set; } = 70;
 
+    public bool AprobacionPorCorrectas { get; set; }
+
+    [Range(1, 1000, ErrorMessage = "El mínimo de correctas debe ser al menos 1")]
+    public int MinCorrectas { get; set; } = 1;
+
+    [Range(1, 100, ErrorMessage = "La cantidad de intentos permitidos debe ser entre 1 y 100")]
+    public int IntentosPermitidos { get; set; } = 1;
+
     [Required]
     public int CapacitacionId { get; set; }
 

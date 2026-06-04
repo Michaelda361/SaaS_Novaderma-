@@ -22,17 +22,28 @@ public class CapacitacionesController(
     public async Task<IActionResult> GetAll()
     {
         if (await currentUser.EsAdminAsync())
-            return Ok(await service.GetAllAsync());
+            return Ok(await service.GetActivasAsync());
 
         var miId = await currentUser.GetColaboradorIdAsync();
         if (miId is null) return Ok(new List<TalentManagement.Shared.DTOs.Capacitaciones.CapacitacionDto>());
 
         // Obtener las inscripciones del colaborador y devolver las capacitaciones asociadas
         var inscripciones = await inscripcionService.GetByColaboradorAsync(miId.Value);
-        var tareas = inscripciones.Select(i => service.GetByIdAsync(i.CapacitacionId));
-        var caps = await Task.WhenAll(tareas);
-        var lista = caps.Where(c => c is not null).GroupBy(c => c!.Id).Select(g => g.First()!).ToList();
+        var lista = new List<CapacitacionDto>();
+        foreach (var inscripcion in inscripciones)
+        {
+            var cap = await service.GetByIdAsync(inscripcion.CapacitacionId);
+            if (cap is not null && !lista.Any(c => c.Id == cap.Id))
+                lista.Add(cap);
+        }
         return Ok(lista);
+    }
+
+    [HttpGet("finalizadas")]
+    public async Task<IActionResult> GetFinalizadas()
+    {
+        if (!await currentUser.EsAdminAsync()) return Forbid();
+        return Ok(await service.GetFinalizadasAsync());
     }
 
     [HttpGet("area/{areaId:int}")]
@@ -45,9 +56,13 @@ public class CapacitacionesController(
         if (miId is null) return Ok(new List<TalentManagement.Shared.DTOs.Capacitaciones.CapacitacionDto>());
 
         var inscripciones = await inscripcionService.GetByColaboradorAsync(miId.Value);
-        var tareas = inscripciones.Select(i => service.GetByIdAsync(i.CapacitacionId));
-        var caps = await Task.WhenAll(tareas);
-        var lista = caps.Where(c => c is not null && c.AreaId == areaId).GroupBy(c => c!.Id).Select(g => g.First()!).ToList();
+        var lista = new List<CapacitacionDto>();
+        foreach (var inscripcion in inscripciones)
+        {
+            var cap = await service.GetByIdAsync(inscripcion.CapacitacionId);
+            if (cap is not null && cap.AreaId == areaId && !lista.Any(c => c.Id == cap.Id))
+                lista.Add(cap);
+        }
         return Ok(lista);
     }
 
@@ -59,9 +74,13 @@ public class CapacitacionesController(
 
         // Devolver las capacitaciones en las que el colaborador está inscrito
         var inscripciones = await inscripcionService.GetByColaboradorAsync(colaboradorId);
-        var tareas = inscripciones.Select(i => service.GetByIdAsync(i.CapacitacionId));
-        var caps = await Task.WhenAll(tareas);
-        var lista = caps.Where(c => c is not null).GroupBy(c => c!.Id).Select(g => g.First()!).ToList();
+        var lista = new List<CapacitacionDto>();
+        foreach (var inscripcion in inscripciones)
+        {
+            var cap = await service.GetByIdAsync(inscripcion.CapacitacionId);
+            if (cap is not null && !lista.Any(c => c.Id == cap.Id))
+                lista.Add(cap);
+        }
         return Ok(lista);
     }
 
@@ -88,16 +107,30 @@ public class CapacitacionesController(
     public async Task<IActionResult> Create([FromBody] CreateCapacitacionDto dto)
     {
         if (!await currentUser.PuedeGestionarPlantillasAsync()) return Forbid();
-        var created = await service.CreateAsync(dto);
-        return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
+        try
+        {
+            var created = await service.CreateAsync(dto);
+            return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
     }
 
     [HttpPut("{id:int}")]
     public async Task<IActionResult> Update(int id, [FromBody] CreateCapacitacionDto dto)
     {
         if (!await currentUser.PuedeGestionarPlantillasAsync()) return Forbid();
-        var result = await service.UpdateAsync(id, dto);
-        return result is null ? NotFound() : Ok(result);
+        try
+        {
+            var result = await service.UpdateAsync(id, dto);
+            return result is null ? NotFound() : Ok(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
     }
 
     [HttpDelete("{id:int}")]
