@@ -16,13 +16,8 @@ public class CreateListadoMaestroDto
 
 public class TemplateDocumentoDto
 {
-    [Required(ErrorMessage = "El código del documento es obligatorio")]
     public string Codigo { get; set; } = string.Empty;
-
-    [Required(ErrorMessage = "El nombre del documento es obligatorio")]
     public string Nombre { get; set; } = string.Empty;
-
-    [Required(ErrorMessage = "El proceso responsable es obligatorio")]
     public string ProcesoResponsable { get; set; } = string.Empty;
 
     public string Version { get; set; } = "1.0";

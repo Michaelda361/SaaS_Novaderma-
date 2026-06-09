@@ -90,6 +90,13 @@ public class ControlDocumentalRepository(AppDbContext context) : IControlDocumen
             .IgnoreQueryFilters()
             .FirstOrDefaultAsync(d => d.ListadoMaestroId == listadoId && d.Codigo == codigo);
 
+    public async Task<DocumentoControl?> GetDocumentoByCodigoYNombreAsync(int listadoId, string codigo, string nombre) =>
+        await context.DocumentosControl
+            .Include(d => d.ListadoMaestro)
+            .Include(d => d.Area)
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(d => d.ListadoMaestroId == listadoId && d.Codigo == codigo && d.Nombre == nombre);
+
     public async Task<DocumentoControl> CreateDocumentoAsync(DocumentoControl documento)
     {
         context.DocumentosControl.Add(documento);
@@ -99,7 +106,31 @@ public class ControlDocumentalRepository(AppDbContext context) : IControlDocumen
 
     public async Task<DocumentoControl> UpdateDocumentoAsync(DocumentoControl documento)
     {
-        context.DocumentosControl.Update(documento);
+        var trackedEntry = context.ChangeTracker.Entries<DocumentoControl>()
+            .FirstOrDefault(e => e.Entity.Id == documento.Id);
+
+        if (trackedEntry != null)
+        {
+            if (trackedEntry.Entity != documento)
+            {
+                // Copy values to the tracked instance
+                context.Entry(trackedEntry.Entity).CurrentValues.SetValues(documento);
+                
+                // Ensure Activo and foreign keys are explicitly updated
+                trackedEntry.Entity.Activo = documento.Activo;
+                
+                documento = trackedEntry.Entity;
+            }
+            else
+            {
+                trackedEntry.State = EntityState.Modified;
+            }
+        }
+        else
+        {
+            context.DocumentosControl.Update(documento);
+        }
+
         await context.SaveChangesAsync();
         return documento;
     }

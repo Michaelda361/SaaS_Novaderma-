@@ -43,6 +43,12 @@ public class ControlDocumentalController(
             return NotFound();
         }
 
+        Console.WriteLine($"[EXPORT DIAGNOSTIC] Encabezados recuperados para exportación: {listado.Campos.Count} columnas registradas en la base de datos.");
+        foreach (var campo in listado.Campos.OrderBy(c => c.Orden))
+        {
+            Console.WriteLine($"[EXPORT DIAGNOSTIC] Campo: Clave='{campo.CampoClave}', Nombre='{campo.Nombre}', Tipo='{campo.Tipo}', Requerido={campo.Requerido}");
+        }
+
         using var workbook = new XLWorkbook();
         var listadoSheet = workbook.AddWorksheet("Listado");
         listadoSheet.Cell(1, 1).Value = "Nombre";
@@ -80,6 +86,8 @@ public class ControlDocumentalController(
         }
 
         var documentos = await service.GetDocumentosAsync(id, null, null, null, null, null);
+        Console.WriteLine($"[EXPORT DIAGNOSTIC] Registros recuperados para exportación: {documentos.Count} documentos.");
+
         var docRow = 2;
         foreach (var doc in documentos)
         {
@@ -93,6 +101,8 @@ public class ControlDocumentalController(
         }
         documentosSheet.Columns().AdjustToContents();
 
+        Console.WriteLine($"[EXPORT DIAGNOSTIC] Exportación completada. Hojas escritas: 'Listado', 'Campos' ({row - 2} registros de columna), 'Documentos' ({docRow - 2} documentos). Cantidad de columnas exportadas: {camposOrdenados.Count}.");
+
         await using var stream = new MemoryStream();
         workbook.SaveAs(stream);
         stream.Seek(0, SeekOrigin.Begin);
@@ -104,6 +114,17 @@ public class ControlDocumentalController(
     private static string GetValorDynamic(DocumentoControlDto item, string campoClave)
     {
         if (item == null) return string.Empty;
+
+        if (item.CamposPersonalizados != null && item.CamposPersonalizados.TryGetValue(campoClave, out var customVal))
+        {
+            return customVal ?? string.Empty;
+        }
+
+        var valFuzzy = GetValorCamposPersonalizados(item.CamposPersonalizados, campoClave);
+        if (valFuzzy != null)
+        {
+            return valFuzzy;
+        }
 
         var keyNorm = campoClave.Trim().ToLowerInvariant()
             .Replace("á", "a")
@@ -124,7 +145,6 @@ public class ControlDocumentalController(
                 return item.Nombre;
             case "procesoresponsable":
             case "proceso":
-            case "lugardearchivo":
             case "responsable":
                 return item.ProcesoResponsable;
             case "version":
@@ -294,55 +314,31 @@ public class ControlDocumentalController(
 
         foreach (var header in headerDefinitions)
         {
-            var isFixed = IsFixedColumn(header.Key);
             string campoClave;
+            var campoExistente = dto.Campos.FirstOrDefault(c => 
+                string.Equals(c.CampoClave, header.Key, StringComparison.OrdinalIgnoreCase) || 
+                string.Equals(NormalizeHeaderKey(c.Nombre), header.Key, StringComparison.OrdinalIgnoreCase));
 
-            if (isFixed)
+            if (campoExistente is not null)
             {
-                campoClave = MapHeaderToFieldKey(header.Key) ?? header.Key;
-                if (!usedClave.Contains(campoClave))
-                {
-                    usedClave.Add(campoClave);
-                    // Agregar el campo predeterminado
-                    dto.Campos.Add(new DocumentoControlCampoDto
-                    {
-                        CampoClave = campoClave,
-                        Nombre = string.IsNullOrWhiteSpace(header.OriginalName) ? header.Key : header.OriginalName,
-                        Tipo = MapHeaderToTipo(header.Key),
-                        Requerido = IsFieldRequiredByDefault(campoClave),
-                        EsPredeterminado = true,
-                        Orden = orden++
-                    });
-                }
+                campoClave = campoExistente.CampoClave;
             }
             else
             {
-                // Es un campo personalizado. Verificar si ya fue definido en la hoja 'Campos'
-                var campoExistente = dto.Campos.FirstOrDefault(c => 
-                    string.Equals(c.CampoClave, header.Key, StringComparison.OrdinalIgnoreCase) || 
-                    string.Equals(NormalizeHeaderKey(c.Nombre), header.Key, StringComparison.OrdinalIgnoreCase));
-
-                if (campoExistente is not null)
+                campoClave = GetUniqueCampoClave(header.Key, usedClave);
+                var tipo = InferFieldType(documentosSheet, header.Index, documentosHeaderRow.RowNumber() + 1);
+                dto.Campos.Add(new DocumentoControlCampoDto
                 {
-                    campoClave = campoExistente.CampoClave;
-                }
-                else
-                {
-                    campoClave = GetUniqueCampoClave(header.Key, usedClave);
-                    var tipo = InferFieldType(documentosSheet, header.Index, documentosHeaderRow.RowNumber() + 1);
-                    dto.Campos.Add(new DocumentoControlCampoDto
-                    {
-                        CampoClave = campoClave,
-                        Nombre = string.IsNullOrWhiteSpace(header.OriginalName) ? header.Key : header.OriginalName,
-                        Tipo = tipo,
-                        Requerido = false,
-                        EsPredeterminado = false,
-                        Orden = orden++
-                    });
-                }
-
-                customHeaderMap[header.Index] = campoClave;
+                    CampoClave = campoClave,
+                    Nombre = string.IsNullOrWhiteSpace(header.OriginalName) ? header.Key : header.OriginalName,
+                    Tipo = tipo,
+                    Requerido = false,
+                    EsPredeterminado = false,
+                    Orden = orden++
+                });
             }
+
+            customHeaderMap[header.Index] = campoClave;
         }
 
         var headerMap = BuildHeaderMap(documentosHeaderRow);
@@ -468,6 +464,8 @@ public class ControlDocumentalController(
         }
     }
 
+
+
     private static void ParseDocumentoRows(
         IXLWorksheet sheet,
         IXLRow headerRow,
@@ -484,47 +482,6 @@ public class ControlDocumentalController(
 
         foreach (var row in sheet.RowsUsed().Where(r => r.RowNumber() > headerRowNumber))
         {
-            var codigo = GetCellString(row, headerMap, "Codigo", headerRowNumber);
-            if (string.IsNullOrWhiteSpace(codigo))
-            {
-                Console.WriteLine($"[IMPORT DIAGNOSTIC] Fila {row.RowNumber()} omitida: Código de documento vacío o no mapeado.");
-                continue;
-            }
-
-            var nombreDocumento = GetCellString(row, headerMap, "Nombre", headerRowNumber);
-            if (string.IsNullOrWhiteSpace(nombreDocumento))
-            {
-                Console.WriteLine($"[IMPORT DIAGNOSTIC] Fila {row.RowNumber()} omitida: Nombre de documento vacío o no mapeado.");
-                continue;
-            }
-
-            var proceso = GetCellString(row, headerMap, "ProcesoResponsable", headerRowNumber);
-            if (string.IsNullOrWhiteSpace(proceso))
-            {
-                proceso = GetCellString(row, headerMap, "Lugar de archivo", headerRowNumber);
-            }
-
-            if (string.IsNullOrWhiteSpace(proceso))
-            {
-                proceso = "No asignado";
-            }
-
-            var version = GetCellString(row, headerMap, "Version", headerRowNumber);
-            var estado = GetCellString(row, headerMap, "Estado", headerRowNumber);
-            var fechaDocumento = GetCellDateTime(row, headerMap, "FechaDocumento", headerRowNumber)
-                ?? GetCellDateTime(row, headerMap, "Fecha", headerRowNumber);
-            var oneDriveUrl = GetCellString(row, headerMap, "OneDriveUrl", headerRowNumber);
-            var oneDriveItemId = GetCellString(row, headerMap, "OneDrive Item ID", headerRowNumber);
-            var archivoNombre = GetCellString(row, headerMap, "ArchivoNombre", headerRowNumber);
-            var uso = GetCellString(row, headerMap, "Uso", headerRowNumber);
-            var tiempoRetencion = GetCellString(row, headerMap, "TiempoRetencion", headerRowNumber);
-            var proteccion = GetCellString(row, headerMap, "Proteccion", headerRowNumber);
-            var recuperacion = GetCellString(row, headerMap, "Recuperacion", headerRowNumber);
-            var disposicionFinal = GetCellString(row, headerMap, "DisposicionFinal", headerRowNumber);
-            var observaciones = GetCellString(row, headerMap, "Observaciones", headerRowNumber);
-            var comentarioCambio = GetCellString(row, headerMap, "ComentarioCambio", headerRowNumber);
-            var area = GetCellString(row, headerMap, "Area", headerRowNumber);
-
             var customValues = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
             foreach (var header in headerDefinitions)
             {
@@ -536,20 +493,65 @@ public class ControlDocumentalController(
                         continue;
                     }
                     var value = FormatCellValue(cell);
-                    if (!string.IsNullOrWhiteSpace(value))
-                    {
-                        customValues[campoClave] = value;
-                    }
+                    // Preserve empty values as empty strings instead of discarding them
+                    customValues[campoClave] = value;
                 }
             }
+
+            // Only skip row if it is completely empty of data in all mapped cells
+            if (customValues.Values.All(string.IsNullOrWhiteSpace))
+            {
+                Console.WriteLine($"[IMPORT DIAGNOSTIC] Fila {row.RowNumber()} omitida por estar vacía.");
+                continue;
+            }
+
+            // Helper to get value by synonym search in customValues
+            string GetValBySynonym(string mainKey, string fallbackValue)
+            {
+                foreach (var header in headerDefinitions)
+                {
+                    if (string.Equals(header.Key, mainKey, StringComparison.OrdinalIgnoreCase) || 
+                        GetHeaderSynonyms(mainKey).Contains(header.Key, StringComparer.OrdinalIgnoreCase))
+                    {
+                        if (customHeaderMap.TryGetValue(header.Index, out var campoClave) &&
+                            customValues.TryGetValue(campoClave, out var cellVal) &&
+                            !string.IsNullOrWhiteSpace(cellVal))
+                        {
+                            return cellVal;
+                        }
+                    }
+                }
+                return fallbackValue;
+            }
+
+            var codigo = GetValBySynonym("codigo", "ROW-" + row.RowNumber() + "-" + Guid.NewGuid().ToString("N")[..6]);
+            var nombreDocumento = GetValBySynonym("nombre", "Fila " + row.RowNumber());
+            var proceso = GetValBySynonym("procesoresponsable", "No asignado");
+            var version = GetValBySynonym("version", "1.0");
+            var estado = GetValBySynonym("estado", "Borrador");
+            var oneDriveUrl = GetValBySynonym("onedriveurl", "https://onedrive.live.com/placeholder");
+            var oneDriveItemId = GetValBySynonym("onedriveitemid", null!);
+            var archivoNombre = GetValBySynonym("archivonombre", null!);
+            var uso = GetValBySynonym("uso", null!);
+            var tiempoRetencion = GetValBySynonym("tiemporetencion", null!);
+            var proteccion = GetValBySynonym("proteccion", null!);
+            var recuperacion = GetValBySynonym("recuperacion", null!);
+            var disposicionFinal = GetValBySynonym("disposicionfinal", null!);
+            var observaciones = GetValBySynonym("observaciones", null!);
+            var comentarioCambio = GetValBySynonym("comentariocambio", null!);
+            var area = GetValBySynonym("area", null!);
+
+            var fechaDocumento = GetCellDateTime(row, headerMap, "FechaDocumento", headerRowNumber)
+                ?? GetCellDateTime(row, headerMap, "Fecha", headerRowNumber)
+                ?? DateTime.UtcNow;
 
             dto.Documentos.Add(new TemplateDocumentoDto
             {
                 Codigo = codigo,
                 Nombre = nombreDocumento,
                 ProcesoResponsable = proceso,
-                Version = string.IsNullOrWhiteSpace(version) ? "1.0" : version,
-                Estado = string.IsNullOrWhiteSpace(estado) ? "Borrador" : estado,
+                Version = version,
+                Estado = estado,
                 FechaDocumento = fechaDocumento,
                 OneDriveUrl = oneDriveUrl,
                 OneDriveItemId = oneDriveItemId,
@@ -561,7 +563,7 @@ public class ControlDocumentalController(
                 DisposicionFinal = disposicionFinal,
                 Observaciones = observaciones,
                 ComentarioCambio = comentarioCambio,
-                Area = string.IsNullOrWhiteSpace(area) ? null : area,
+                Area = area,
                 CamposPersonalizados = customValues
             });
         }
@@ -797,7 +799,7 @@ public class ControlDocumentalController(
             var n when n == "nombre" =>
                 new[] { "nombre", "nombrededocumento", "nombredearchivo", "titulo", "title", "name", "nombredeldocumento" },
             var n when n == "procesoresponsable" =>
-                new[] { "procesoresponsable", "lugardearchivo", "proceso", "responsable" },
+                new[] { "procesoresponsable", "proceso", "responsable" },
             var n when n == "version" =>
                 new[] { "version", "revision" },
             var n when n == "estado" =>

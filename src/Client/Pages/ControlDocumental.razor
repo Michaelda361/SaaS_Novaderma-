@@ -23,32 +23,76 @@
         <p class="page-subtitle">Registra, busca y audita documentos OneDrive.</p>
     </div>
     <div class="page-actions">
+        @if (selectedListadoId.HasValue)
+        {
+            <button class="btn btn-primary" @onclick="AbrirNuevoDocumento" disabled="@importingListado">
+                + Nuevo registro
+            </button>
+            
+            @if (AuthInfo.EsAdmin || AuthInfo.EsJefe)
+            {
+                <InputFile OnChange="OnArchivoListadoSeleccionado" id="import-file-input" style="display: none;" disabled="@importingListado" />
+                <label for="import-file-input" class="btn btn-secondary" style="cursor: pointer; display: inline-flex; align-items: center; margin-bottom: 0; opacity: @(importingListado ? 0.6 : 1); pointer-events: @(importingListado ? "none" : "auto");">
+                    @if (importingListado)
+                    {
+                        <span class="spinner" style="width:14px;height:14px;border-width:2px;margin-right:.4rem;display:inline-block;vertical-align:middle;border-radius:50%;border:2px solid #ccc;border-top-color:#0078d4;animation:spin 1s linear infinite;"></span>
+                        <span>Importando...</span>
+                    }
+                    else
+                    {
+                        <span>📥 Importar</span>
+                    }
+                </label>
+            }
+            
+            <button class="btn btn-secondary" @onclick="ExportListado" disabled="@importingListado">
+                📤 Exportar
+            </button>
+        }
         @if (AuthInfo.EsAdmin || AuthInfo.EsJefe)
         {
-            <button class="btn btn-primary" @onclick="AbrirNuevoDocumento">
-                + Nuevo documento
-            </button>
-            <button class="btn btn-ghost" @onclick="TogglePendingRequests">
+            <button class="btn btn-ghost" @onclick="TogglePendingRequests" disabled="@importingListado">
                 📝 Solicitudes pendientes (@pendingSolicitudes.Count)
             </button>
         }
     </div>
 </div>
 
-
-<div class="card" style="margin-bottom:1rem;">
-    <div class="filter-bar">
-        <select class="form-control" @bind="selectedAreaId" @bind:after="Filtrar">
-            <option value="0">Todas las áreas</option>
-            @foreach (var area in areas)
+<div class="card" style="margin-bottom:1rem; padding: 1rem;">
+    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem;">
+        <!-- Selector de Listado Maestro -->
+        <div style="display:flex; align-items:center; gap:0.75rem; flex:1; min-width:280px;">
+            <label style="font-weight:600; margin-bottom:0; white-space:nowrap; color:var(--text-primary);">Listado Maestro:</label>
+            <select class="form-control" value="@selectedListadoId" @onchange="OnListadoChanged" style="max-width:350px;">
+                <option value="">Seleccione un listado...</option>
+                @foreach (var listado in listados)
+                {
+                    <option value="@listado.Id">@listado.Nombre</option>
+                }
+            </select>
+        </div>
+        
+        <!-- Acciones del Listado -->
+        <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
+            @if (AuthInfo.EsAdmin || AuthInfo.EsJefe)
             {
-                <option value="@area.Id">@area.Nombre</option>
+                <button class="btn btn-secondary" @onclick="AbrirNuevoListado" title="Crear un nuevo listado maestro vacío">
+                    ⚙️ Nuevo Listado
+                </button>
+                @if (selectedListadoId.HasValue)
+                {
+                    <button class="btn btn-secondary" @onclick="AbrirEditarListado" title="Editar columnas y configuración del listado">
+                        ✏️ Configurar Columnas
+                    </button>
+                    <button class="btn btn-secondary" @onclick="AbrirPermisos" title="Configurar permisos de acceso para colaboradores">
+                        👥 Permisos
+                    </button>
+                    <button class="btn btn-danger" @onclick="EliminarListadoSeleccionado" title="Eliminar el listado maestro seleccionado">
+                        🗑️ Eliminar
+                    </button>
+                }
             }
-        </select>
-        <input type="text" class="form-control" placeholder="Buscar por nombre, código o proceso" @bind="filterBusqueda" @bind:after="Filtrar" />
-        <input type="text" class="form-control" placeholder="Código" @bind="filterCodigo" @bind:after="Filtrar" />
-        <input type="text" class="form-control" placeholder="Proceso responsable" @bind="filterProceso" @bind:after="Filtrar" />
-        <input type="text" class="form-control" placeholder="Estado" @bind="filterEstado" @bind:after="Filtrar" />
+        </div>
     </div>
 </div>
 
@@ -159,16 +203,51 @@
     {
         <div class="loading"><div class="spinner"></div> Cargando...</div>
     }
+    else if (!selectedListadoId.HasValue)
+    {
+        <div class="empty-state">
+            <div class="empty-state-icon">📂</div>
+            <h3>Ningún listado seleccionado</h3>
+            <p>Selecciona un listado maestro en la parte superior para visualizar sus documentos y registros.</p>
+            @if (AuthInfo.EsAdmin || AuthInfo.EsJefe)
+            {
+                <div style="margin-top: 1rem; display: flex; gap: 0.5rem; justify-content: center; align-items: center;">
+                    <button class="btn btn-primary" @onclick="AbrirNuevoListado">Crear nuevo listado</button>
+                    <InputFile OnChange="OnArchivoListadoSeleccionado" id="import-file-input-empty" style="display: none;" />
+                    <label for="import-file-input-empty" class="btn btn-secondary" style="cursor: pointer; display: inline-flex; align-items: center; margin-bottom: 0;">
+                        <span>📥 Importar listado</span>
+                    </label>
+                </div>
+            }
+        </div>
+    }
     else if (!documentos.Any())
     {
         <div class="empty-state">
             <div class="empty-state-icon">📄</div>
-            <h3>No hay documentos</h3>
-            <p>No se encontraron documentos para este listado con los filtros actuales.</p>
+            <h3>No hay registros</h3>
+            <p>Este listado maestro no contiene registros actualmente.</p>
+            @if (AuthInfo.EsAdmin || AuthInfo.EsJefe)
+            {
+                <div style="margin-top: 1rem; display: flex; gap: 0.5rem; justify-content: center;">
+                    <button class="btn btn-primary" @onclick="AbrirNuevoDocumento">+ Nuevo registro</button>
+                </div>
+            }
         </div>
     }
     else
     {
+        <div class="filter-bar" style="margin-bottom: 1rem; display: flex; gap: 0.5rem; justify-content: flex-start; align-items: center; flex-wrap: wrap;">
+            <div style="position: relative; flex: 1; max-width: 350px;">
+                <input type="text" class="form-control" placeholder="Buscar documento..." @bind="searchText" @bind:event="oninput" style="padding-left: 2.25rem; width: 100%;" />
+                <span style="position: absolute; left: 0.75rem; top: 50%; transform: translateY(-50%); color: var(--text-muted); pointer-events: none;">🔍</span>
+            </div>
+            @if (!string.IsNullOrWhiteSpace(searchText))
+            {
+                <button class="btn btn-ghost btn-sm" @onclick="() => searchText = string.Empty">Limpiar</button>
+            }
+        </div>
+
         <div class="table-wrapper">
             <table>
                 <thead>
@@ -181,38 +260,118 @@
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach (var item in documentos)
+                    @{
+                        var filtered = GetFilteredDocumentos().ToList();
+                        var totalRecords = filtered.Count;
+                        var totalPages = (int)Math.Ceiling((double)totalRecords / PageSize);
+                        if (totalPages < 1) totalPages = 1;
+                        if (currentPage > totalPages) currentPage = totalPages;
+                        if (currentPage < 1) currentPage = 1;
+                        
+                        var pagedItems = filtered.Skip((currentPage - 1) * PageSize).Take(PageSize).ToList();
+                    }
+                    @if (!pagedItems.Any())
                     {
                         <tr>
-                            @foreach (var campo in listadoCampos.OrderBy(c => c.Orden))
-                            {
-                                <td>
-                                    @if (campo.CampoClave == "OneDriveUrl")
-                                    {
-                                        <a href="@item.OneDriveUrl" target="_blank" rel="noopener noreferrer" style="color: var(--color-primary); text-decoration: underline; display: inline-flex; align-items: center; gap: 0.25rem;">
-                                            🔗 @(string.IsNullOrWhiteSpace(item.ArchivoNombre) ? "Ver archivo" : item.ArchivoNombre)
-                                        </a>
-                                    }
-                                    else if (campo.CampoClave == "Estado")
-                                    {
-                                        <span class="badge @GetEstadoClass(item.Estado)">@item.Estado</span>
-                                    }
-                                    else
-                                    {
-                                        @GetValorDynamic(item, campo.CampoClave)
-                                    }
-                                </td>
-                            }
-                            <td>
-                                <div class="flex gap-1">
-                                    <button class="btn btn-ghost btn-sm" @onclick="() => EditarDocumento(item.Id)">✏️ @(AuthInfo.EsSoloColaborador ? "Actualizar" : "Editar")</button>
-                                    <button class="btn btn-ghost btn-sm" @onclick="() => VerAuditoria(item.Id)">🕘 Auditoría</button>
-                                </div>
+                            <td colspan="@(listadoCampos.Count + 1)" style="text-align: center; padding: 3rem; color: var(--text-muted);">
+                                <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">🔍</div>
+                                <strong>No se encontraron documentos</strong>
+                                <div style="font-size: 0.9rem; margin-top: 0.25rem;">Intenta con otros términos de búsqueda o limpia el filtro.</div>
                             </td>
                         </tr>
                     }
+                    else
+                    {
+                        @foreach (var item in pagedItems)
+                        {
+                            <tr>
+                                @foreach (var campo in listadoCampos.OrderBy(c => c.Orden))
+                                {
+                                    <td>
+                                        @if (campo.CampoClave == "OneDriveUrl")
+                                        {
+                                            @if (IsValidUrl(item.OneDriveUrl))
+                                            {
+                                                <a href="@item.OneDriveUrl" target="_blank" rel="noopener noreferrer" style="color: var(--color-primary); text-decoration: underline; display: inline-flex; align-items: center; gap: 0.25rem;">
+                                                    🔗 @(string.IsNullOrWhiteSpace(item.ArchivoNombre) ? "Ver archivo" : item.ArchivoNombre)
+                                                </a>
+                                            }
+                                            else
+                                            {
+                                                @item.OneDriveUrl
+                                            }
+                                        }
+                                        else if (campo.CampoClave == "Estado")
+                                        {
+                                            <span class="badge @GetEstadoClass(item.Estado)">@item.Estado</span>
+                                        }
+                                        else
+                                        {
+                                            @GetValorDynamic(item, campo.CampoClave)
+                                        }
+                                    </td>
+                                }
+                                <td>
+                                    <div class="flex gap-1">
+                                        <button class="btn btn-ghost btn-sm" @onclick="() => EditarDocumento(item.Id)">✏️ @(AuthInfo.EsSoloColaborador ? "Actualizar" : "Editar")</button>
+                                        <button class="btn btn-ghost btn-sm" @onclick="() => VerAuditoria(item.Id)">🕘 Auditoría</button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    }
                 </tbody>
             </table>
+        </div>
+
+        <!-- Paginación Premium -->
+        <div class="pagination-container" style="display: flex; justify-content: space-between; align-items: center; margin-top: 1rem; padding: 0.5rem 1.25rem; background: var(--surface-card, #ffffff); border-radius: 8px; border: 1px solid var(--border-color, #e2e8f0); flex-wrap: wrap; gap: 1rem;">
+            <div class="pagination-info" style="font-size: 0.875rem; color: var(--text-secondary, #64748b);">
+                Mostrando página <strong>@currentPage</strong> de <strong>@totalPages</strong> (Total: <strong>@totalRecords</strong> registros)
+            </div>
+            <div class="pagination-controls" style="display: flex; gap: 0.35rem; align-items: center;">
+                <button class="btn btn-outline btn-sm pagination-btn" disabled="@(currentPage <= 1)" @onclick="() => currentPage--" style="font-weight: 500; min-width: 80px;">
+                    ◀ Anterior
+                </button>
+
+                @{
+                    int startPage = Math.Max(1, currentPage - 2);
+                    int endPage = Math.Min(totalPages, currentPage + 2);
+                    
+                    if (startPage > 1)
+                    {
+                        <button class="btn btn-outline btn-sm pagination-btn" @onclick="() => currentPage = 1" style="min-width: 32px;">1</button>
+                        if (startPage > 2)
+                        {
+                            <span style="padding: 0 0.25rem; color: var(--text-muted, #94a3b8); font-size: 0.875rem;">...</span>
+                        }
+                    }
+
+                    for (int i = startPage; i <= endPage; i++)
+                    {
+                        var pageNumber = i;
+                        var isCurrent = pageNumber == currentPage;
+                        <button class="btn btn-sm pagination-btn @(isCurrent ? "btn-primary active" : "btn-outline")"
+                                @onclick="() => currentPage = pageNumber"
+                                style="min-width: 32px; @(isCurrent ? "background: var(--color-primary, #3b82f6); color: #ffffff; border-color: var(--color-primary, #3b82f6); font-weight: 600;" : "")">
+                            @pageNumber
+                        </button>
+                    }
+
+                    if (endPage < totalPages)
+                    {
+                        if (endPage < totalPages - 1)
+                        {
+                            <span style="padding: 0 0.25rem; color: var(--text-muted, #94a3b8); font-size: 0.875rem;">...</span>
+                        }
+                        <button class="btn btn-outline btn-sm pagination-btn" @onclick="() => currentPage = totalPages" style="min-width: 32px;">@totalPages</button>
+                    }
+                }
+
+                <button class="btn btn-outline btn-sm pagination-btn" disabled="@(currentPage >= totalPages)" @onclick="() => currentPage++" style="font-weight: 500; min-width: 80px;">
+                    Siguiente ▶
+                </button>
+            </div>
         </div>
     }
 </div>
@@ -229,149 +388,102 @@
                 <EditForm Model="form" OnValidSubmit="GuardarDocumento">
                     <DataAnnotationsValidator />
                     <input type="hidden" value="@form.ListadoMaestroId" />
-                    @if (HasCampo("Codigo") || HasCampo("Nombre") || HasCampo("ProcesoResponsable"))
+
+                    @foreach (var campo in listadoCampos.OrderBy(c => c.Orden))
                     {
-                        <div class="form-row">
-                            @if (HasCampo("Codigo"))
+                        var keyNorm = campo.CampoClave.Trim().ToLowerInvariant();
+
+                        <div class="form-group" style="margin-bottom: 1rem;">
+                            <label style="font-weight: 600; display: block; margin-bottom: 0.25rem;">
+                                @campo.Nombre @if (campo.Requerido) { <span class="text-danger">*</span> }
+                            </label>
+
+                            @if (keyNorm == "area")
                             {
-                                <div class="form-group">
-                                    <label>@GetCampoLabel("Codigo", "Código") *</label>
-                                    <InputText class="form-control" @bind-Value="form.Codigo" />
-                                    <ValidationMessage For="() => form.Codigo" />
+                                <InputSelect class="form-control" @bind-Value="form.AreaId">
+                                    <option value="">Sin área específica</option>
+                                    @foreach (var area in areas)
+                                    {
+                                        <option value="@area.Id">@area.Nombre</option>
+                                    }
+                                </InputSelect>
+                            }
+                            else if (keyNorm == "onedriveurl")
+                            {
+                                <div class="one-drive-row" style="display: flex; gap: 0.5rem;">
+                                    <InputText class="form-control" @bind-Value="form.OneDriveUrl" placeholder="URL de OneDrive" style="flex: 1;" />
+                                    <button type="button" class="btn btn-secondary" @onclick="() => showOneDriveBrowser = true">Buscar OneDrive</button>
                                 </div>
+                                <ValidationMessage For="() => form.OneDriveUrl" />
+                                @if (!string.IsNullOrWhiteSpace(form.ArchivoNombre))
+                                {
+                                    <small class="text-muted" style="display: block; margin-top: 0.25rem;">Archivo seleccionado: @form.ArchivoNombre</small>
+                                }
                             }
-                            @if (HasCampo("Nombre"))
+                            else if (keyNorm == "estado")
                             {
-                                <div class="form-group">
-                                    <label>@GetCampoLabel("Nombre", "Nombre") *</label>
-                                    <InputText class="form-control" @bind-Value="form.Nombre" />
-                                    <ValidationMessage For="() => form.Nombre" />
-                                </div>
+                                <InputSelect class="form-control" @bind-Value="form.Estado">
+                                    <option value="">Selecciona estado...</option>
+                                    <option value="Borrador">Borrador</option>
+                                    <option value="Revision">Revisión</option>
+                                    <option value="Aprobado">Aprobado</option>
+                                    <option value="Publicado">Publicado</option>
+                                </InputSelect>
+                                <ValidationMessage For="() => form.Estado" />
                             }
-                            @if (HasCampo("ProcesoResponsable"))
+                            else if (keyNorm == "codigo")
                             {
-                                <div class="form-group">
-                                    <label>@GetCampoLabel("ProcesoResponsable", "Proceso responsable") *</label>
-                                    <InputText class="form-control" @bind-Value="form.ProcesoResponsable" />
-                                    <ValidationMessage For="() => form.ProcesoResponsable" />
-                                </div>
+                                <InputText class="form-control" @bind-Value="form.Codigo" />
+                                <ValidationMessage For="() => form.Codigo" />
                             }
-                        </div>
-                    }
-                    @if (HasCampo("Version") || HasCampo("FechaDocumento"))
-                    {
-                        <div class="form-row">
-                            @if (HasCampo("Version"))
+                            else if (keyNorm == "nombre")
                             {
-                                <div class="form-group">
-                                    <label>@GetCampoLabel("Version", "Versión")</label>
-                                    <InputText class="form-control" @bind-Value="form.Version" />
-                                </div>
+                                <InputText class="form-control" @bind-Value="form.Nombre" />
+                                <ValidationMessage For="() => form.Nombre" />
                             }
-                            @if (HasCampo("FechaDocumento"))
+                            else if (keyNorm == "procesoresponsable")
                             {
-                                <div class="form-group">
-                                    <label>@GetCampoLabel("FechaDocumento", "Fecha de documento") *</label>
-                                    <InputDate class="form-control" @bind-Value="form.FechaDocumento" />
-                                    <ValidationMessage For="() => form.FechaDocumento" />
-                                </div>
+                                <InputText class="form-control" @bind-Value="form.ProcesoResponsable" />
+                                <ValidationMessage For="() => form.ProcesoResponsable" />
                             }
-                        </div>
-                    }
-                    @if (HasCampo("OneDriveUrl"))
-                    {
-                        <div class="form-group">
-                            <label>@GetCampoLabel("OneDriveUrl", "Archivo OneDrive") *</label>
-                            <div class="one-drive-row">
-                                <InputText class="form-control" @bind-Value="form.OneDriveUrl" placeholder="URL de OneDrive" />
-                                <button type="button" class="btn btn-ghost" @onclick="() => showOneDriveBrowser = true">Buscar OneDrive</button>
-                            </div>
-                            <ValidationMessage For="() => form.OneDriveUrl" />
-                            @if (!string.IsNullOrWhiteSpace(form.ArchivoNombre))
+                            else if (keyNorm == "fechadocumento")
                             {
-                                <small class="text-muted">Archivo seleccionado: @form.ArchivoNombre</small>
+                                <InputDate class="form-control" @bind-Value="form.FechaDocumento" />
+                                <ValidationMessage For="() => form.FechaDocumento" />
                             }
-                        </div>
-                    }
-                    @if (HasCampo("Estado") || HasCampo("Area"))
-                    {
-                        <div class="form-row">
-                            @if (HasCampo("Estado"))
+                            else
                             {
-                                <div class="form-group">
-                                    <label>@GetCampoLabel("Estado", "Estado") *</label>
-                                    <InputSelect class="form-control" @bind-Value="form.Estado">
-                                        <option value="">Selecciona estado...</option>
-                                        <option value="Borrador">Borrador</option>
-                                        <option value="Revision">Revisión</option>
-                                        <option value="Aprobado">Aprobado</option>
-                                        <option value="Publicado">Publicado</option>
-                                    </InputSelect>
-                                    <ValidationMessage For="() => form.Estado" />
-                                </div>
-                            }
-                            @if (HasCampo("Area"))
-                            {
-                                <div class="form-group">
-                                    <label>Área (opcional)</label>
-                                    <InputSelect class="form-control" @bind-Value="form.AreaId">
-                                        <option value="">Sin área específica</option>
-                                        @foreach (var area in areas)
+                                @if (campo.Tipo == "Lista")
+                                {
+                                    <select class="form-control" value="@form.CamposPersonalizados[campo.CampoClave]" @onchange="@(e => form.CamposPersonalizados[campo.CampoClave] = e.Value?.ToString())">
+                                        <option value="">Selecciona...</option>
+                                        @foreach (var opcion in campo.Opciones?.Split(',').Select(o => o.Trim()).Where(o => !string.IsNullOrWhiteSpace(o)) ?? Enumerable.Empty<string>())
                                         {
-                                            <option value="@area.Id">@area.Nombre</option>
+                                            <option value="@opcion">@opcion</option>
                                         }
-                                    </InputSelect>
-                                </div>
+                                    </select>
+                                }
+                                else if (campo.Tipo == "Fecha")
+                                {
+                                    <input type="date" class="form-control" value="@form.CamposPersonalizados[campo.CampoClave]" @onchange="@(e => form.CamposPersonalizados[campo.CampoClave] = e.Value?.ToString())" />
+                                }
+                                else if (campo.Tipo == "Numero")
+                                {
+                                    <input type="number" class="form-control" value="@form.CamposPersonalizados[campo.CampoClave]" @onchange="@(e => form.CamposPersonalizados[campo.CampoClave] = e.Value?.ToString())" />
+                                }
+                                else
+                                {
+                                    <input type="text" class="form-control" value="@form.CamposPersonalizados[campo.CampoClave]" @onchange="@(e => form.CamposPersonalizados[campo.CampoClave] = e.Value?.ToString())" />
+                                }
                             }
                         </div>
                     }
 
-                    @if (listadoCampos.Any(c => !c.EsPredeterminado))
-                    {
-                        <div class="form-group">
-                            <h4>Campos adicionales</h4>
-                            @foreach (var campo in listadoCampos.Where(c => !c.EsPredeterminado))
-                            {
-                                <div class="form-group">
-                                    <label>@campo.Nombre@if (campo.Requerido) { <span class="text-danger">*</span> }</label>
-                                    @if (campo.Tipo == "Lista")
-                                    {
-                                        <select class="form-control" value="@form.CamposPersonalizados[campo.CampoClave]" @onchange="@(e => form.CamposPersonalizados[campo.CampoClave] = e.Value?.ToString())">
-                                            <option value="">Selecciona...</option>
-                                            @foreach (var opcion in campo.Opciones?.Split(',').Select(o => o.Trim()).Where(o => !string.IsNullOrWhiteSpace(o)) ?? Enumerable.Empty<string>())
-                                            {
-                                                <option value="@opcion">@opcion</option>
-                                            }
-                                        </select>
-                                    }
-                                    else if (campo.Tipo == "Fecha")
-                                    {
-                                        <input type="date" class="form-control" value="@form.CamposPersonalizados[campo.CampoClave]" @onchange="@(e => form.CamposPersonalizados[campo.CampoClave] = e.Value?.ToString())" />
-                                    }
-                                    else if (campo.Tipo == "Numero")
-                                    {
-                                        <input type="number" class="form-control" value="@form.CamposPersonalizados[campo.CampoClave]" @onchange="@(e => form.CamposPersonalizados[campo.CampoClave] = e.Value?.ToString())" />
-                                    }
-                                    else
-                                    {
-                                        <input type="text" class="form-control" value="@form.CamposPersonalizados[campo.CampoClave]" @onchange="@(e => form.CamposPersonalizados[campo.CampoClave] = e.Value?.ToString())" />
-                                    }
-                                </div>
-                            }
-                        </div>
-                    }
-
-                    <div class="form-group">
-                        <label>Comentario de cambio</label>
+                    <div class="form-group" style="margin-bottom: 1rem;">
+                        <label style="font-weight: 600; display: block; margin-bottom: 0.25rem;">Comentario de cambio</label>
                         <InputTextArea class="form-control" @bind-Value="form.ComentarioCambio" Rows="3" />
                     </div>
-                    @if (HasCampo("Observaciones"))
-                    {
-                        <div class="form-group">
-                            <label>Observaciones</label>
-                            <InputTextArea class="form-control" @bind-Value="form.Observaciones" Rows="3" />
-                        </div>
-                    }
+
                     @if (editing && AuthInfo.EsSoloColaborador)
                     {
                         <div class="alert alert-info" style="margin-bottom:1rem;">
@@ -625,9 +737,17 @@
                                             <td>
                                                 @if (campo.CampoClave == "OneDriveUrl")
                                                 {
-                                                    <a href="@GetSnapshotValue(BuildSnapshot(auditDocumentDetail), "OneDrive URL")" target="_blank" rel="noopener noreferrer" style="color: var(--color-primary); text-decoration: underline;">
-                                                        🔗 @(string.IsNullOrWhiteSpace(GetSnapshotValue(BuildSnapshot(auditDocumentDetail), "Archivo")) ? "Ver archivo" : GetSnapshotValue(BuildSnapshot(auditDocumentDetail), "Archivo"))
-                                                    </a>
+                                                    var urlVal = GetSnapshotValue(BuildSnapshot(auditDocumentDetail), "OneDrive URL");
+                                                    @if (IsValidUrl(urlVal))
+                                                    {
+                                                        <a href="@urlVal" target="_blank" rel="noopener noreferrer" style="color: var(--color-primary); text-decoration: underline;">
+                                                            🔗 @(string.IsNullOrWhiteSpace(GetSnapshotValue(BuildSnapshot(auditDocumentDetail), "Archivo")) ? "Ver archivo" : GetSnapshotValue(BuildSnapshot(auditDocumentDetail), "Archivo"))
+                                                        </a>
+                                                    }
+                                                    else
+                                                    {
+                                                        @urlVal
+                                                    }
                                                 }
                                                 else if (campo.CampoClave == "Estado")
                                                 {
@@ -685,9 +805,17 @@
                                                     <td>
                                                         @if (campo.CampoClave == "OneDriveUrl")
                                                         {
-                                                            <a href="@GetSnapshotValue(version.Campos, "OneDrive URL")" target="_blank" rel="noopener noreferrer" style="color: var(--color-primary); text-decoration: underline;">
-                                                                🔗 @(string.IsNullOrWhiteSpace(GetSnapshotValue(version.Campos, "Archivo")) ? "Ver archivo" : GetSnapshotValue(version.Campos, "Archivo"))
-                                                            </a>
+                                                            var urlVal = GetSnapshotValue(version.Campos, "OneDrive URL");
+                                                            @if (IsValidUrl(urlVal))
+                                                            {
+                                                                <a href="@urlVal" target="_blank" rel="noopener noreferrer" style="color: var(--color-primary); text-decoration: underline;">
+                                                                    🔗 @(string.IsNullOrWhiteSpace(GetSnapshotValue(version.Campos, "Archivo")) ? "Ver archivo" : GetSnapshotValue(version.Campos, "Archivo"))
+                                                                </a>
+                                                            }
+                                                            else
+                                                            {
+                                                                @urlVal
+                                                            }
                                                         }
                                                         else if (campo.CampoClave == "Estado")
                                                         {
@@ -817,6 +945,22 @@
     private string filterCodigo = string.Empty;
     private string filterProceso = string.Empty;
     private string filterEstado = string.Empty;
+    private int currentPage = 1;
+    private const int PageSize = 10;
+
+    private string _searchText = string.Empty;
+    private string searchText
+    {
+        get => _searchText;
+        set
+        {
+            if (_searchText != value)
+            {
+                _searchText = value;
+                currentPage = 1;
+            }
+        }
+    }
 
     private CreateDocumentoControlDto form = new();
     private CreateListadoMaestroDto listadoForm = new();
@@ -974,7 +1118,18 @@
             areas = await AreaApi.GetAllAsync() ?? [];
             colaboradores = await ColaboradorApi.GetAllAsync() ?? [];
             listados = await ControlDocumentalApi.GetListadosMaestrosAsync() ?? [];
-            selectedListadoId = listados.FirstOrDefault()?.Id;
+
+            // Cargar listado seleccionado desde localStorage si está disponible
+            var storedVal = await JS.InvokeAsync<string>("localStorage.getItem", "novahub_selected_listado_id");
+            if (int.TryParse(storedVal, out var storedId) && listados.Any(l => l.Id == storedId))
+            {
+                selectedListadoId = storedId;
+            }
+            else
+            {
+                selectedListadoId = listados.FirstOrDefault()?.Id;
+            }
+
             if (selectedListadoId.HasValue)
             {
                 await LoadListadoCamposAsync(selectedListadoId.Value);
@@ -999,6 +1154,35 @@
         }
     }
 
+    private async Task OnListadoChanged(ChangeEventArgs e)
+    {
+        searchText = string.Empty;
+        currentPage = 1;
+        var val = e.Value?.ToString();
+        if (int.TryParse(val, out var id))
+        {
+            selectedListadoId = id;
+            try
+            {
+                await JS.InvokeVoidAsync("localStorage.setItem", "novahub_selected_listado_id", id.ToString());
+            }
+            catch { }
+            await LoadListadoCamposAsync(id);
+        }
+        else
+        {
+            selectedListadoId = null;
+            try
+            {
+                await JS.InvokeVoidAsync("localStorage.removeItem", "novahub_selected_listado_id");
+            }
+            catch { }
+            listadoCampos = [];
+            documentos = [];
+        }
+        await Filtrar();
+    }
+
     private async Task Filtrar()
     {
         loading = true;
@@ -1011,11 +1195,11 @@
 
         documentos = await ControlDocumentalApi.GetDocumentosAsync(
             selectedListadoId.Value,
-            selectedAreaId > 0 ? selectedAreaId : null,
-            string.IsNullOrWhiteSpace(filterBusqueda) ? null : filterBusqueda,
-            string.IsNullOrWhiteSpace(filterCodigo) ? null : filterCodigo,
-            string.IsNullOrWhiteSpace(filterProceso) ? null : filterProceso,
-            string.IsNullOrWhiteSpace(filterEstado) ? null : filterEstado);
+            null,
+            null,
+            null,
+            null,
+            null);
         loading = false;
     }
 
@@ -1515,6 +1699,11 @@
 
                 listados.Add(created);
                 selectedListadoId = created.Id;
+                try
+                {
+                    await JS.InvokeVoidAsync("localStorage.setItem", "novahub_selected_listado_id", created.Id.ToString());
+                }
+                catch { }
                 await toast.Show("Listado maestro creado correctamente.");
             }
 
@@ -1585,6 +1774,11 @@
             {
                 listados = await ControlDocumentalApi.GetListadosMaestrosAsync() ?? [];
                 selectedListadoId = created.Id;
+                try
+                {
+                    await JS.InvokeVoidAsync("localStorage.setItem", "novahub_selected_listado_id", created.Id.ToString());
+                }
+                catch { }
                 await toast.Show("Listado importado correctamente.");
                 await LoadListadoCamposAsync(created.Id);
                 await Filtrar();
@@ -1641,10 +1835,20 @@
         selectedListadoId = listados.FirstOrDefault()?.Id;
         if (selectedListadoId.HasValue)
         {
+            try
+            {
+                await JS.InvokeVoidAsync("localStorage.setItem", "novahub_selected_listado_id", selectedListadoId.Value.ToString());
+            }
+            catch { }
             await LoadListadoCamposAsync(selectedListadoId.Value);
         }
         else
         {
+            try
+            {
+                await JS.InvokeVoidAsync("localStorage.removeItem", "novahub_selected_listado_id");
+            }
+            catch { }
             listadoCampos = GetDefaultCampoPlantilla();
             documentos = [];
         }
@@ -1858,14 +2062,45 @@
         return listadoCampos.Any(c => string.Equals(c.CampoClave, campoClave, StringComparison.OrdinalIgnoreCase));
     }
 
+    private bool IsValidUrl(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return false;
+        return Uri.TryCreate(value, UriKind.Absolute, out var uriResult) 
+               && (uriResult.Scheme == Uri.UriSchemeHttp || uriResult.Scheme == Uri.UriSchemeHttps);
+    }
+
+    private IEnumerable<DocumentoControlDto> GetFilteredDocumentos()
+    {
+        if (string.IsNullOrWhiteSpace(searchText))
+        {
+            return documentos;
+        }
+
+        var searchTrimmed = searchText.Trim();
+        return documentos.Where(item =>
+            (item.Nombre != null && item.Nombre.Contains(searchTrimmed, StringComparison.OrdinalIgnoreCase)) ||
+            (item.Codigo != null && item.Codigo.Contains(searchTrimmed, StringComparison.OrdinalIgnoreCase)) ||
+            (item.Version != null && item.Version.Contains(searchTrimmed, StringComparison.OrdinalIgnoreCase)) ||
+            (item.Estado != null && item.Estado.Contains(searchTrimmed, StringComparison.OrdinalIgnoreCase)) ||
+            (item.ProcesoResponsable != null && item.ProcesoResponsable.Contains(searchTrimmed, StringComparison.OrdinalIgnoreCase)) ||
+            (item.OneDriveUrl != null && item.OneDriveUrl.Contains(searchTrimmed, StringComparison.OrdinalIgnoreCase)) ||
+            (item.ArchivoNombre != null && item.ArchivoNombre.Contains(searchTrimmed, StringComparison.OrdinalIgnoreCase)) ||
+            (item.Uso != null && item.Uso.Contains(searchTrimmed, StringComparison.OrdinalIgnoreCase)) ||
+            (item.TiempoRetencion != null && item.TiempoRetencion.Contains(searchTrimmed, StringComparison.OrdinalIgnoreCase)) ||
+            (item.Proteccion != null && item.Proteccion.Contains(searchTrimmed, StringComparison.OrdinalIgnoreCase)) ||
+            (item.Recuperacion != null && item.Recuperacion.Contains(searchTrimmed, StringComparison.OrdinalIgnoreCase)) ||
+            (item.DisposicionFinal != null && item.DisposicionFinal.Contains(searchTrimmed, StringComparison.OrdinalIgnoreCase)) ||
+            (item.Observaciones != null && item.Observaciones.Contains(searchTrimmed, StringComparison.OrdinalIgnoreCase)) ||
+            (item.CamposPersonalizados != null && item.CamposPersonalizados.Values.Any(v => v != null && v.Contains(searchTrimmed, StringComparison.OrdinalIgnoreCase)))
+        );
+    }
+
     private async Task LoadListadoCamposAsync(int listadoId)
     {
         var listado = await ControlDocumentalApi.GetListadoMaestroAsync(listadoId);
         listadoCampos = listado is null
-            ? GetDefaultCampoPlantilla()
-            : listado.Campos.Any()
-                ? listado.Campos.OrderBy(c => c.Orden).ToList()
-                : GetDefaultCampoPlantilla();
+            ? new List<DocumentoControlCampoDto>()
+            : listado.Campos.OrderBy(c => c.Orden).ToList();
     }
 
     private void InitializeCamposPersonalizados()
@@ -1971,6 +2206,17 @@
     {
         if (item == null) return string.Empty;
 
+        if (item.CamposPersonalizados != null && item.CamposPersonalizados.TryGetValue(campoClave, out var customVal))
+        {
+            return customVal ?? string.Empty;
+        }
+
+        var valFuzzy = GetValorCamposPersonalizados(item.CamposPersonalizados, campoClave);
+        if (valFuzzy != null)
+        {
+            return valFuzzy;
+        }
+
         var keyNorm = campoClave.Trim().ToLowerInvariant()
             .Replace("á", "a")
             .Replace("é", "e")
@@ -1990,7 +2236,6 @@
                 return item.Nombre;
             case "procesoresponsable":
             case "proceso":
-            case "lugardearchivo":
             case "responsable":
                 return item.ProcesoResponsable;
             case "version":

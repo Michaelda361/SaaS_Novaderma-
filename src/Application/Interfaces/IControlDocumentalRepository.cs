@@ -15,6 +15,7 @@ public interface IControlDocumentalRepository
         string? estado);
     Task<DocumentoControl?> GetDocumentoByIdAsync(int id);
     Task<DocumentoControl?> GetDocumentoByCodigoAsync(int listadoId, string codigo);
+    Task<DocumentoControl?> GetDocumentoByCodigoYNombreAsync(int listadoId, string codigo, string nombre);
     Task<DocumentoControl> CreateDocumentoAsync(DocumentoControl documento);
     Task<DocumentoControl> UpdateDocumentoAsync(DocumentoControl documento);
     Task<bool> ExisteSolicitudCambioPendienteAsync(int documentoControlId, int colaboradorId);

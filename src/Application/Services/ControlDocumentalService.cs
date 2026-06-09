@@ -48,7 +48,11 @@ public class ControlDocumentalService(
     public async Task<ListadoMaestroDto?> GetListadoAsync(int id)
     {
         var listado = await repository.GetListadoByIdAsync(id);
-        return listado is null ? null : MapToListadoDto(listado);
+        if (listado is null) return null;
+        var dto = MapToListadoDto(listado);
+        var campos = (await repository.GetCamposPorListadoAsync(id)).ToList();
+        dto.Campos = campos.Select(MapToCampoDto).ToList();
+        return dto;
     }
 
     public async Task<List<DocumentoControlDto>> GetDocumentosAsync(
@@ -56,7 +60,9 @@ public class ControlDocumentalService(
         string? proceso, string? estado)
     {
         var docs = await repository.GetDocumentosAsync(listadoId, areaId, busqueda, codigo, proceso, estado);
-        return docs.Select(MapToDto).ToList();
+        var docList = docs.ToList();
+        Console.WriteLine($"[RETRIEVAL DIAGNOSTIC] Registros recuperados para visualización: {docList.Count} documentos obtenidos para el listado ID {listadoId}.");
+        return docList.Select(MapToDto).ToList();
     }
 
     public async Task<DocumentoControlDetalleDto?> GetDocumentoAsync(int id)
@@ -72,7 +78,7 @@ public class ControlDocumentalService(
         if (creador is null || (creador.Rol != Domain.Enums.RolUsuario.Admin && creador.Rol != Domain.Enums.RolUsuario.Jefe))
             throw new UnauthorizedAccessException("No tiene permisos para crear listados maestros.");
 
-        Console.WriteLine($"[PERSISTENCE DIAGNOSTIC] Registros enviados a persistencia para creación: {dto.Documentos?.Count ?? 0} documentos y {dto.Campos?.Count ?? 0} columnas.");
+        Console.WriteLine($"[PERSISTENCE DIAGNOSTIC] Registros enviados a persistencia para creación: {dto.Documentos?.Count ?? 0} documentos and {dto.Campos?.Count ?? 0} columnas.");
 
         var listado = new ListadoMaestro
         {
@@ -88,14 +94,6 @@ public class ControlDocumentalService(
             foreach (var campoDto in dto.Campos)
             {
                 var campo = MapToCampoDefinicion(campoDto, created.Id);
-                await repository.CreateCampoAsync(campo);
-            }
-        }
-        else
-        {
-            var predeterminados = GenerateDefaultCampoDefiniciones(created.Id);
-            foreach (var campo in predeterminados)
-            {
                 await repository.CreateCampoAsync(campo);
             }
         }
@@ -165,13 +163,7 @@ public class ControlDocumentalService(
             await SyncImportDocumentsAsync(updated.Id, dto.Documentos, usuarioEmail);
         }
 
-        if ((existing.Campos is null || !existing.Campos.Any()) && (dto.Campos is null || !dto.Campos.Any()))
-        {
-            var predeterminados = GenerateDefaultCampoDefiniciones(updated.Id);
-            foreach (var campo in predeterminados)
-                await repository.CreateCampoAsync(campo);
-        }
-        else if (dto.Campos is not null && dto.Campos.Any())
+        if (dto.Campos is not null && dto.Campos.Any())
         {
             var existentes = existing.Campos?.ToDictionary(c => c.CampoClave, StringComparer.OrdinalIgnoreCase) ?? new Dictionary<string, DocumentoControlCampoDefinicion>(StringComparer.OrdinalIgnoreCase);
             var solicitados = dto.Campos.ToDictionary(c => c.CampoClave, StringComparer.OrdinalIgnoreCase);
@@ -226,8 +218,35 @@ public class ControlDocumentalService(
         return updated ?? await CreateListadoAsync(dto, usuarioEmail);
     }
 
-    private async Task SyncImportDocumentsAsync(int listadoId, IEnumerable<TemplateDocumentoDto> documentos, string usuarioEmail)
+    private static bool IsPlaceholderCode(string? code)
     {
+        if (string.IsNullOrWhiteSpace(code)) return true;
+        var norm = code.Trim().ToUpperInvariant();
+        return norm == "N.A" || norm == "N/A" || norm == "NA" || norm == "NO APLICA" || norm == "N/D" || norm == "ND";
+    }    private async Task SyncImportDocumentsAsync(int listadoId, IEnumerable<TemplateDocumentoDto> documentos, string usuarioEmail)
+    {
+        Console.WriteLine($"[PERSISTENCE DIAGNOSTIC] Iniciando sincronización limpia para listado ID {listadoId}. Importando {documentos.Count()} registros.");
+
+        // 1. Desactivar todos los documentos actuales para evitar mezclas con importaciones anteriores
+        var activeDbDocs = (await repository.GetDocumentosAsync(listadoId, null, null, null, null, null))
+            .Where(d => d.Activo)
+            .ToList();
+
+        foreach (var dbDoc in activeDbDocs)
+        {
+            var docEntity = await repository.GetDocumentoByIdAsync(dbDoc.Id);
+            if (docEntity is not null)
+            {
+                docEntity.Activo = false;
+                await repository.UpdateDocumentoAsync(docEntity);
+                
+                var log = await BuildAuditLogAsync(docEntity.Id, docEntity.Nombre, "Eliminado", "Eliminado por nueva importación (sobrescritura limpia)", usuarioEmail, docEntity, null);
+                await auditRepository.CreateAsync(log);
+            }
+        }
+
+        // 2. Crear todos los nuevos registros
+        int createdCount = 0;
         var areas = await areaRepository.GetAllAsync();
         var areasByName = areas.ToDictionary(a => a.Nombre.Trim(), a => a.Id, StringComparer.OrdinalIgnoreCase);
         int? GetAreaId(string? areaName)
@@ -236,61 +255,28 @@ public class ControlDocumentalService(
             return areasByName.TryGetValue(areaName.Trim(), out var id) ? id : null;
         }
 
-        Console.WriteLine($"[PERSISTENCE DIAGNOSTIC] Iniciando sincronización de {documentos.Count()} documentos en la base de datos para listado ID {listadoId}.");
-
-        var importedCodigos = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
         foreach (var docDto in documentos)
         {
-            var codigo = docDto.Codigo.Trim();
-            importedCodigos.Add(codigo);
-            var existingDoc = await repository.GetDocumentoByCodigoAsync(listadoId, codigo);
-
-            if (existingDoc is not null)
+            var newDoc = new DocumentoControl
             {
-                MapTemplateToDocumento(docDto, existingDoc, GetAreaId(docDto.Area));
-                existingDoc.Activo = true;
+                ListadoMaestroId = listadoId,
+                Activo = true
+            };
+            MapTemplateToDocumento(docDto, newDoc, GetAreaId(docDto.Area));
 
-                await repository.UpdateDocumentoAsync(existingDoc);
-                Console.WriteLine($"[PERSISTENCE DIAGNOSTIC] Registro/Documento existente actualizado y guardado en base de datos: Código='{existingDoc.Codigo}', Nombre='{existingDoc.Nombre}', ID={existingDoc.Id}");
+            // EF navigation properties null to avoid conflicts
+            newDoc.ListadoMaestro = null!;
+            newDoc.Area = null!;
 
-                var log = await BuildAuditLogAsync(existingDoc.Id, existingDoc.Nombre, "Actualizado", docDto.ComentarioCambio, usuarioEmail, existingDoc, null);
-                await auditRepository.CreateAsync(log);
-            }
-            else
-            {
-                var newDoc = new DocumentoControl
-                {
-                    ListadoMaestroId = listadoId,
-                    Activo = true
-                };
-                MapTemplateToDocumento(docDto, newDoc, GetAreaId(docDto.Area));
+            var createdDoc = await repository.CreateDocumentoAsync(newDoc);
+            createdCount++;
+            Console.WriteLine($"[PERSISTENCE DIAGNOSTIC] Documento creado: Código='{createdDoc.Codigo}', Nombre='{createdDoc.Nombre}', ID={createdDoc.Id}");
 
-                var createdDoc = await repository.CreateDocumentoAsync(newDoc);
-                Console.WriteLine($"[PERSISTENCE DIAGNOSTIC] Registro/Documento nuevo creado y guardado en base de datos: Código='{createdDoc.Codigo}', Nombre='{createdDoc.Nombre}', ID={createdDoc.Id}");
-
-                var log = await BuildAuditLogAsync(createdDoc.Id, createdDoc.Nombre, "Creado", docDto.ComentarioCambio, usuarioEmail, createdDoc, null);
-                await auditRepository.CreateAsync(log);
-            }
+            var log = await BuildAuditLogAsync(createdDoc.Id, createdDoc.Nombre, "Creado", docDto.ComentarioCambio ?? "Importado mediante archivo Excel", usuarioEmail, createdDoc, null);
+            await auditRepository.CreateAsync(log);
         }
 
-        var dbDocs = await repository.GetDocumentosAsync(listadoId, null, null, null, null, null);
-        foreach (var dbDoc in dbDocs)
-        {
-            if (!importedCodigos.Contains(dbDoc.Codigo))
-            {
-                var docEntity = await repository.GetDocumentoByIdAsync(dbDoc.Id);
-                if (docEntity is not null)
-                {
-                    docEntity.Activo = false;
-                    await repository.UpdateDocumentoAsync(docEntity);
-                    Console.WriteLine($"[PERSISTENCE DIAGNOSTIC] Registro/Documento desactivado en base de datos: Código='{docEntity.Codigo}', Nombre='{docEntity.Nombre}', ID={docEntity.Id}");
-
-                    var log = await BuildAuditLogAsync(docEntity.Id, docEntity.Nombre, "Eliminado", "Eliminado durante la importación (sincronización)", usuarioEmail, docEntity, null);
-                    await auditRepository.CreateAsync(log);
-                }
-            }
-        }
+        Console.WriteLine($"[PERSISTENCE DIAGNOSTIC] Sincronización completada. Creados: {createdCount}.");
     }
 
     private static string NormalizeFieldName(string name)
