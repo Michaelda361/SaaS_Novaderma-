@@ -21,6 +21,9 @@ public interface IControlDocumentalService
     Task<List<SolicitudCambioDocumentoControlDto>> GetSolicitudesCambioPendientesAsync(string usuarioEmail);
     Task<List<SolicitudCambioDocumentoControlDto>> GetSolicitudesCambioPorDocumentoAsync(int documentoId, string usuarioEmail);
     Task<int> CountSolicitudesCambioPendientesAsync(string usuarioEmail);
+    Task IniciarRevisionSolicitudAsync(int solicitudId, string usuarioEmail);
+    Task UpdateBorradorDocumentoAsync(int solicitudId, UpdateDocumentoControlDto borrador, string usuarioEmail);
+    Task EnviarAAprobacionAsync(int solicitudId, string usuarioEmail);
     Task AprobarSolicitudCambioAsync(int solicitudId, string usuarioEmail);
     Task RechazarSolicitudCambioAsync(int solicitudId, string motivo, string usuarioEmail);
     Task<List<ListadoMaestroPermisoDto>> GetListadoPermisosAsync(int listadoId);
@@ -31,6 +34,6 @@ public interface IControlDocumentalService
     Task<bool> DeleteListadoAsync(int id, string usuarioEmail);
     Task<ListadoMaestroDto?> GetListadoAsync(int id);
     Task<ListadoMaestroDto> ImportListadoAsync(CreateListadoMaestroDto dto, string usuarioEmail);
-    Task<List<AuditLogDto>> GetHistorialAsync(int documentoId);
+    Task<List<DocumentoControlDto>> GetHistorialAsync(int documentoId);
 }
 

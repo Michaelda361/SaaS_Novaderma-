@@ -55,7 +55,7 @@ public class ControlDocumentalRepository(AppDbContext context) : IControlDocumen
         int listadoId, int? areaId, string? busqueda, string? codigo,
         string? proceso, string? estado)
     {
-        var query = Documentos().Where(d => d.ListadoMaestroId == listadoId);
+        var query = Documentos().Where(d => d.ListadoMaestroId == listadoId && d.Estado == "Vigente");
 
         if (areaId.HasValue)
             query = query.Where(d => d.AreaId == areaId);
@@ -277,4 +277,27 @@ public class ControlDocumentalRepository(AppDbContext context) : IControlDocumen
             .OrderBy(p => p.ListadoMaestroId)
             .AsNoTracking()
             .ToListAsync();
+
+    public async Task DeleteDocumentoAsync(DocumentoControl documento)
+    {
+        context.DocumentosControl.Remove(documento);
+        await context.SaveChangesAsync();
+    }
+
+    public async Task<IEnumerable<DocumentoControl>> GetDocumentosIgnoreFiltersAsync(int documentoId)
+    {
+        var list = await context.DocumentosControl
+            .IgnoreQueryFilters()
+            .Include(d => d.ListadoMaestro)
+            .Include(d => d.Area)
+            .Include(d => d.Solicitante)
+            .Include(d => d.Editor)
+            .Include(d => d.Aprobador)
+            .Where(d => d.Id == documentoId || d.DocumentoOriginalId == documentoId)
+            .ToListAsync();
+
+        return list
+            .OrderByDescending(d => d.Estado == "Vigente")
+            .ThenByDescending(d => d.Id);
+    }
 }

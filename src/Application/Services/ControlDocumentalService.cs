@@ -336,7 +336,7 @@ public class ControlDocumentalService(
         dest.Proteccion = (src.Proteccion ?? GetValoresPersonalizados(src.CamposPersonalizados, "proteccion"))?.Trim();
         dest.Recuperacion = (src.Recuperacion ?? GetValoresPersonalizados(src.CamposPersonalizados, "recuperacion"))?.Trim();
         dest.DisposicionFinal = (src.DisposicionFinal ?? GetValoresPersonalizados(src.CamposPersonalizados, "disposicionfinal", "disposicion"))?.Trim();
-        dest.Estado = string.IsNullOrWhiteSpace(src.Estado) ? "Borrador" : src.Estado.Trim();
+        dest.Estado = "Vigente";
         dest.Observaciones = (src.Observaciones ?? GetValoresPersonalizados(src.CamposPersonalizados, "observaciones"))?.Trim();
         dest.ComentarioCambio = src.ComentarioCambio?.Trim();
         dest.AreaId = areaId;
@@ -550,6 +550,149 @@ public class ControlDocumentalService(
         return await repository.CountSolicitudesCambioPendientesPorAreaAsync(areaId);
     }
 
+    public async Task IniciarRevisionSolicitudAsync(int solicitudId, string usuarioEmail)
+    {
+        var revisor = await TryResolverColaboradorAsync(usuarioEmail)
+            ?? throw new UnauthorizedAccessException("No tiene permisos para revisar solicitudes.");
+
+        var solicitud = await repository.GetSolicitudCambioByIdAsync(solicitudId)
+            ?? throw new KeyNotFoundException("Solicitud de cambio no encontrada.");
+
+        if (solicitud.EstadoPropuesta != EstadoPropuesta.PendienteRevision)
+            throw new InvalidOperationException("La solicitud no está en estado pendiente de revisión.");
+
+        var tienePermiso = revisor.Rol == RolUsuario.Admin || 
+                           await ValidarPermisoAsync(solicitud.DocumentoControl.ListadoMaestroId, revisor.Id, "editar");
+
+        if (!tienePermiso)
+        {
+            var (esJefe, areaId) = await EsJefeDeAreaAsync(revisor.Id);
+            if (!esJefe || (revisor.Rol == RolUsuario.Jefe && solicitud.DocumentoControl.AreaId != areaId))
+                throw new UnauthorizedAccessException("No tienes permisos para revisar esta solicitud.");
+        }
+
+        var originalDoc = await repository.GetDocumentoByIdAsync(solicitud.DocumentoControlId)
+            ?? throw new KeyNotFoundException("Documento original no encontrado.");
+
+        var borrador = new DocumentoControl
+        {
+            ListadoMaestroId = originalDoc.ListadoMaestroId,
+            Codigo = originalDoc.Codigo,
+            Nombre = originalDoc.Nombre,
+            ProcesoResponsable = originalDoc.ProcesoResponsable,
+            Version = originalDoc.Version,
+            FechaDocumento = originalDoc.FechaDocumento,
+            OneDriveUrl = originalDoc.OneDriveUrl,
+            OneDriveItemId = originalDoc.OneDriveItemId,
+            ArchivoNombre = originalDoc.ArchivoNombre,
+            Uso = originalDoc.Uso,
+            TiempoRetencion = originalDoc.TiempoRetencion,
+            Proteccion = originalDoc.Proteccion,
+            Recuperacion = originalDoc.Recuperacion,
+            DisposicionFinal = originalDoc.DisposicionFinal,
+            Estado = "Borrador",
+            Observaciones = originalDoc.Observaciones,
+            ComentarioCambio = originalDoc.ComentarioCambio,
+            DatosPersonalizados = originalDoc.DatosPersonalizados,
+            AreaId = originalDoc.AreaId,
+            DocumentoOriginalId = originalDoc.Id,
+            Activo = true
+        };
+
+        var createdBorrador = await repository.CreateDocumentoAsync(borrador);
+
+        solicitud.EstadoPropuesta = EstadoPropuesta.EnEdicion;
+        solicitud.RevisorId = revisor.Id;
+        solicitud.FechaRevision = DateTime.UtcNow;
+        solicitud.BorradorDocumentoId = createdBorrador.Id;
+
+        await repository.UpdateSolicitudCambioAsync(solicitud);
+
+        var log = await BuildAuditLogAsync(originalDoc.Id, originalDoc.Nombre, "SolicitudRevisionIniciada", $"Revisión iniciada por {revisor.Nombre} {revisor.Apellido}. Se creó el borrador ID {createdBorrador.Id}.", usuarioEmail, originalDoc, null);
+        await auditRepository.CreateAsync(log);
+    }
+
+    public async Task UpdateBorradorDocumentoAsync(int solicitudId, UpdateDocumentoControlDto borradorDto, string usuarioEmail)
+    {
+        var editor = await TryResolverColaboradorAsync(usuarioEmail)
+            ?? throw new UnauthorizedAccessException("No tiene permisos para editar.");
+
+        var solicitud = await repository.GetSolicitudCambioByIdAsync(solicitudId)
+            ?? throw new KeyNotFoundException("Solicitud de cambio no encontrada.");
+
+        if (solicitud.EstadoPropuesta != EstadoPropuesta.EnEdicion)
+            throw new InvalidOperationException("La solicitud no está en fase de edición.");
+
+        if (!solicitud.BorradorDocumentoId.HasValue)
+            throw new InvalidOperationException("No hay un borrador asociado a esta solicitud.");
+
+        var tienePermiso = editor.Rol == RolUsuario.Admin || 
+                           solicitud.EditorId == editor.Id || 
+                           solicitud.SolicitanteId == editor.Id ||
+                           await ValidarPermisoAsync(solicitud.DocumentoControl.ListadoMaestroId, editor.Id, "editar");
+
+        if (!tienePermiso)
+        {
+            var (esJefe, areaId) = await EsJefeDeAreaAsync(editor.Id);
+            if (!esJefe || (editor.Rol == RolUsuario.Jefe && solicitud.DocumentoControl.AreaId != areaId))
+                throw new UnauthorizedAccessException("No tienes permisos para editar este borrador.");
+        }
+
+        var borrador = await repository.GetDocumentoByIdAsync(solicitud.BorradorDocumentoId.Value)
+            ?? throw new KeyNotFoundException("Borrador no encontrado.");
+
+        await ValidateCamposPersonalizados(borradorDto.ListadoMaestroId, borradorDto.CamposPersonalizados);
+
+        borrador.ListadoMaestroId = borradorDto.ListadoMaestroId;
+        borrador.Codigo = borradorDto.Codigo.Trim();
+        borrador.Nombre = borradorDto.Nombre.Trim();
+        borrador.ProcesoResponsable = borradorDto.ProcesoResponsable.Trim();
+        borrador.Version = string.IsNullOrWhiteSpace(borradorDto.Version) ? borrador.Version : borradorDto.Version.Trim();
+        borrador.FechaDocumento = borradorDto.FechaDocumento;
+        borrador.OneDriveUrl = borradorDto.OneDriveUrl.Trim();
+        borrador.OneDriveItemId = borradorDto.OneDriveItemId?.Trim();
+        borrador.ArchivoNombre = borradorDto.ArchivoNombre?.Trim();
+        borrador.Uso = borradorDto.Uso?.Trim();
+        borrador.TiempoRetencion = borradorDto.TiempoRetencion?.Trim();
+        borrador.Proteccion = borradorDto.Proteccion?.Trim();
+        borrador.Recuperacion = borradorDto.Recuperacion?.Trim();
+        borrador.DisposicionFinal = borradorDto.DisposicionFinal?.Trim();
+        borrador.Observaciones = borradorDto.Observaciones?.Trim();
+        borrador.ComentarioCambio = borradorDto.ComentarioCambio?.Trim();
+        borrador.AreaId = borradorDto.AreaId;
+        borrador.DatosPersonalizados = borradorDto.CamposPersonalizados is null
+            ? null
+            : JsonSerializer.Serialize(borradorDto.CamposPersonalizados);
+
+        await repository.UpdateDocumentoAsync(borrador);
+
+        if (solicitud.EditorId != editor.Id)
+        {
+            solicitud.EditorId = editor.Id;
+            await repository.UpdateSolicitudCambioAsync(solicitud);
+        }
+    }
+
+    public async Task EnviarAAprobacionAsync(int solicitudId, string usuarioEmail)
+    {
+        var editor = await TryResolverColaboradorAsync(usuarioEmail)
+            ?? throw new UnauthorizedAccessException("No tiene permisos para realizar esta acción.");
+
+        var solicitud = await repository.GetSolicitudCambioByIdAsync(solicitudId)
+            ?? throw new KeyNotFoundException("Solicitud de cambio no encontrada.");
+
+        if (solicitud.EstadoPropuesta != EstadoPropuesta.EnEdicion)
+            throw new InvalidOperationException("La solicitud no está en fase de edición.");
+
+        solicitud.EstadoPropuesta = EstadoPropuesta.PendienteAprobacion;
+        solicitud.FechaEdicion = DateTime.UtcNow;
+
+        await repository.UpdateSolicitudCambioAsync(solicitud);
+
+        var log = await BuildAuditLogAsync(solicitud.DocumentoControlId, solicitud.DocumentoControl?.Nombre ?? "—", "SolicitudEnviadaAAprobacion", "Edición del borrador finalizada. Enviado a aprobación.", usuarioEmail, solicitud.DocumentoControl ?? new DocumentoControl { Id = solicitud.DocumentoControlId, Nombre = "—" }, null);
+        await auditRepository.CreateAsync(log);
+    }
+
     public async Task AprobarSolicitudCambioAsync(int solicitudId, string usuarioEmail)
     {
         var aprobador = await TryResolverColaboradorAsync(usuarioEmail);
@@ -559,10 +702,9 @@ public class ControlDocumentalService(
         var solicitud = await repository.GetSolicitudCambioByIdAsync(solicitudId)
             ?? throw new KeyNotFoundException("Solicitud de cambio no encontrada.");
 
-        if (solicitud.EstadoPropuesta != EstadoPropuesta.PendienteRevision)
-            throw new InvalidOperationException("La solicitud ya fue resuelta.");
+        if (solicitud.EstadoPropuesta != EstadoPropuesta.PendienteAprobacion && solicitud.EstadoPropuesta != EstadoPropuesta.PendienteRevision)
+            throw new InvalidOperationException("La solicitud no está lista para aprobación.");
 
-        // Verificar permisos basados en ListadoMaestroPermiso o rol
         var tienePermisoAprobar = aprobador.Rol == RolUsuario.Admin || 
                                  await ValidarPermisoAsync(solicitud.DocumentoControl.ListadoMaestroId, aprobador.Id, "aprobar");
 
@@ -576,12 +718,86 @@ public class ControlDocumentalService(
         var documento = await repository.GetDocumentoByIdAsync(solicitud.DocumentoControlId)
             ?? throw new KeyNotFoundException("Documento no encontrado.");
 
-        var propuesta = JsonSerializer.Deserialize<UpdateDocumentoControlDto>(solicitud.DatosPropuestos);
-        if (propuesta is null)
-            throw new InvalidOperationException("Los datos de la solicitud son inválidos.");
+        UpdateDocumentoControlDto? propuesta = null;
+        DocumentoControl? borradorToDelete = null;
+
+        if (solicitud.BorradorDocumentoId.HasValue)
+        {
+            var borrador = await repository.GetDocumentoByIdAsync(solicitud.BorradorDocumentoId.Value);
+            if (borrador != null)
+            {
+                borradorToDelete = borrador;
+                propuesta = new UpdateDocumentoControlDto
+                {
+                    ListadoMaestroId = borrador.ListadoMaestroId,
+                    Codigo = borrador.Codigo,
+                    Nombre = borrador.Nombre,
+                    ProcesoResponsable = borrador.ProcesoResponsable,
+                    Version = borrador.Version,
+                    FechaDocumento = borrador.FechaDocumento,
+                    OneDriveUrl = borrador.OneDriveUrl,
+                    OneDriveItemId = borrador.OneDriveItemId,
+                    ArchivoNombre = borrador.ArchivoNombre,
+                    Uso = borrador.Uso,
+                    TiempoRetencion = borrador.TiempoRetencion,
+                    Proteccion = borrador.Proteccion,
+                    Recuperacion = borrador.Recuperacion,
+                    DisposicionFinal = borrador.DisposicionFinal,
+                    Estado = "Vigente",
+                    Observaciones = borrador.Observaciones,
+                    ComentarioCambio = borrador.ComentarioCambio,
+                    AreaId = borrador.AreaId,
+                    CamposPersonalizados = string.IsNullOrWhiteSpace(borrador.DatosPersonalizados)
+                        ? new Dictionary<string, string?>()
+                        : JsonSerializer.Deserialize<Dictionary<string, string?>>(borrador.DatosPersonalizados)
+                };
+            }
+        }
+
+        if (propuesta == null)
+        {
+            propuesta = JsonSerializer.Deserialize<UpdateDocumentoControlDto>(solicitud.DatosPropuestos)
+                ?? throw new InvalidOperationException("Los datos de la solicitud son inválidos.");
+        }
 
         await ValidateCamposPersonalizados(propuesta.ListadoMaestroId, propuesta.CamposPersonalizados);
 
+        // 1. Clone current Vigente document as Historical (Activo = false)
+        var historicalClone = new DocumentoControl
+        {
+            ListadoMaestroId = documento.ListadoMaestroId,
+            Codigo = documento.Codigo,
+            Nombre = documento.Nombre,
+            ProcesoResponsable = documento.ProcesoResponsable,
+            Version = documento.Version,
+            FechaDocumento = documento.FechaDocumento,
+            OneDriveUrl = documento.OneDriveUrl,
+            OneDriveItemId = documento.OneDriveItemId,
+            ArchivoNombre = documento.ArchivoNombre,
+            Uso = documento.Uso,
+            TiempoRetencion = documento.TiempoRetencion,
+            Proteccion = documento.Proteccion,
+            Recuperacion = documento.Recuperacion,
+            DisposicionFinal = documento.DisposicionFinal,
+            Estado = "Histórica",
+            Observaciones = documento.Observaciones,
+            ComentarioCambio = documento.ComentarioCambio,
+            DatosPersonalizados = documento.DatosPersonalizados,
+            AreaId = documento.AreaId,
+            DocumentoOriginalId = documento.Id,
+            Activo = false,
+            
+            SolicitanteId = documento.SolicitanteId,
+            EditorId = documento.EditorId,
+            AprobadorId = documento.AprobadorId,
+            FechaPublicacion = documento.FechaPublicacion,
+            MotivoCambio = documento.MotivoCambio,
+            DescripcionDetallada = documento.DescripcionDetallada
+        };
+
+        await repository.CreateDocumentoAsync(historicalClone);
+
+        // 2. Update Vigente document in place
         var original = CloneForDiff(documento);
 
         documento.ListadoMaestroId = propuesta.ListadoMaestroId;
@@ -598,7 +814,7 @@ public class ControlDocumentalService(
         documento.Proteccion = propuesta.Proteccion?.Trim();
         documento.Recuperacion = propuesta.Recuperacion?.Trim();
         documento.DisposicionFinal = propuesta.DisposicionFinal?.Trim();
-        documento.Estado = propuesta.Estado.Trim();
+        documento.Estado = "Vigente";
         documento.Observaciones = propuesta.Observaciones?.Trim();
         documento.ComentarioCambio = solicitud.ComentarioSolicitud;
         documento.AreaId = propuesta.AreaId;
@@ -606,14 +822,31 @@ public class ControlDocumentalService(
             ? documento.DatosPersonalizados
             : JsonSerializer.Serialize(propuesta.CamposPersonalizados);
 
+        documento.SolicitanteId = solicitud.SolicitanteId;
+        documento.EditorId = solicitud.EditorId ?? solicitud.SolicitanteId;
+        documento.AprobadorId = aprobador.Id;
+        documento.FechaPublicacion = DateTime.UtcNow;
+        documento.MotivoCambio = solicitud.MotivoCambio ?? solicitud.ComentarioSolicitud;
+        documento.DescripcionDetallada = solicitud.DescripcionDetallada;
+
         var updated = await repository.UpdateDocumentoAsync(documento);
         var cambios = BuildDiff(original, updated);
 
+        // 3. Update request status and clean up borrador
         solicitud.EstadoPropuesta = EstadoPropuesta.Aprobada;
         solicitud.AprobadorId = aprobador.Id;
         solicitud.FechaResolucion = DateTime.UtcNow;
 
-        await repository.UpdateSolicitudCambioAsync(solicitud);
+        if (borradorToDelete != null)
+        {
+            solicitud.BorradorDocumentoId = null;
+            await repository.UpdateSolicitudCambioAsync(solicitud);
+            await repository.DeleteDocumentoAsync(borradorToDelete);
+        }
+        else
+        {
+            await repository.UpdateSolicitudCambioAsync(solicitud);
+        }
 
         var log = await BuildAuditLogAsync(updated.Id, updated.Nombre, "SolicitudCambioAprobada", solicitud.ComentarioSolicitud, usuarioEmail, updated, cambios);
         await auditRepository.CreateAsync(log);
@@ -628,7 +861,7 @@ public class ControlDocumentalService(
         var solicitud = await repository.GetSolicitudCambioByIdAsync(solicitudId)
             ?? throw new KeyNotFoundException("Solicitud de cambio no encontrada.");
 
-        if (solicitud.EstadoPropuesta != EstadoPropuesta.PendienteRevision)
+        if (solicitud.EstadoPropuesta == EstadoPropuesta.Aprobada || solicitud.EstadoPropuesta == EstadoPropuesta.Rechazada)
             throw new InvalidOperationException("La solicitud ya fue resuelta.");
 
         var (esJefe, areaId) = await EsJefeDeAreaAsync(aprobador.Id);
@@ -643,7 +876,23 @@ public class ControlDocumentalService(
         solicitud.ComentarioResolucion = motivo?.Trim();
         solicitud.FechaResolucion = DateTime.UtcNow;
 
+        DocumentoControl? borradorToDelete = null;
+        if (solicitud.BorradorDocumentoId.HasValue)
+        {
+            var borrador = await repository.GetDocumentoByIdAsync(solicitud.BorradorDocumentoId.Value);
+            if (borrador != null)
+            {
+                borradorToDelete = borrador;
+                solicitud.BorradorDocumentoId = null;
+            }
+        }
+
         await repository.UpdateSolicitudCambioAsync(solicitud);
+
+        if (borradorToDelete != null)
+        {
+            await repository.DeleteDocumentoAsync(borradorToDelete);
+        }
 
         var documento = await repository.GetDocumentoByIdAsync(solicitud.DocumentoControlId);
         var log = await BuildAuditLogAsync(solicitud.DocumentoControlId, documento?.Nombre ?? "—", "SolicitudCambioRechazada", motivo, usuarioEmail, documento ?? new DocumentoControl { Id = solicitud.DocumentoControlId, Nombre = "—" }, null);
@@ -674,24 +923,21 @@ public class ControlDocumentalService(
         DatosPropuestos = solicitud.DatosPropuestos,
         AprobadorId = solicitud.AprobadorId,
         AprobadorNombre = solicitud.Aprobador?.Nombre + " " + solicitud.Aprobador?.Apellido,
-        EditorNombre = solicitud.Editor?.Nombre + " " + solicitud.Editor?.Apellido
+        EditorNombre = solicitud.Editor?.Nombre + " " + solicitud.Editor?.Apellido,
+        
+        RevisorId = solicitud.RevisorId,
+        RevisorNombre = solicitud.Revisor != null ? $"{solicitud.Revisor.Nombre} {solicitud.Revisor.Apellido}" : null,
+        FechaRevision = solicitud.FechaRevision,
+        ObservacionesRevision = solicitud.ObservacionesRevision,
+        MotivoCambio = solicitud.MotivoCambio,
+        DescripcionDetallada = solicitud.DescripcionDetallada,
+        BorradorDocumentoId = solicitud.BorradorDocumentoId
     };
 
-    public async Task<List<AuditLogDto>> GetHistorialAsync(int documentoId)
+    public async Task<List<DocumentoControlDto>> GetHistorialAsync(int documentoId)
     {
-        var logs = await auditRepository.GetByEntidadAsync(EntidadTipo, documentoId);
-        return logs.Select(l => new AuditLogDto
-        {
-            Id = l.Id,
-            EntidadTipo = l.EntidadTipo,
-            EntidadId = l.EntidadId,
-            EntidadNombre = l.EntidadNombre,
-            Accion = l.Accion,
-            ColaboradorNombre = l.ColaboradorNombre,
-            FechaHora = l.FechaHora,
-            Observaciones = l.Observaciones,
-            CamposModificados = l.CamposModificados
-        }).ToList();
+        var docs = await repository.GetDocumentosIgnoreFiltersAsync(documentoId);
+        return docs.Select(MapToDto).ToList();
     }
 
     private async Task<AuditLog> BuildAuditLogAsync(
@@ -818,7 +1064,18 @@ public class ControlDocumentalService(
         ArchivoNombre = d.ArchivoNombre,
         CamposPersonalizados = string.IsNullOrWhiteSpace(d.DatosPersonalizados)
             ? new Dictionary<string, string?>()
-            : JsonSerializer.Deserialize<Dictionary<string, string?>>(d.DatosPersonalizados) ?? new Dictionary<string, string?>()
+            : JsonSerializer.Deserialize<Dictionary<string, string?>>(d.DatosPersonalizados) ?? new Dictionary<string, string?>(),
+
+        DocumentoOriginalId = d.DocumentoOriginalId,
+        SolicitanteId = d.SolicitanteId,
+        SolicitanteNombre = d.Solicitante != null ? $"{d.Solicitante.Nombre} {d.Solicitante.Apellido}" : null,
+        EditorId = d.EditorId,
+        EditorNombre = d.Editor != null ? $"{d.Editor.Nombre} {d.Editor.Apellido}" : null,
+        AprobadorId = d.AprobadorId,
+        AprobadorNombre = d.Aprobador != null ? $"{d.Aprobador.Nombre} {d.Aprobador.Apellido}" : null,
+        FechaPublicacion = d.FechaPublicacion,
+        MotivoCambio = d.MotivoCambio,
+        DescripcionDetallada = d.DescripcionDetallada
     };
 
     private static DocumentoControlDetalleDto MapToDetalleDto(DocumentoControl d) => new()
@@ -847,7 +1104,18 @@ public class ControlDocumentalService(
         ListadoMaestroDescripcion = d.ListadoMaestro?.Descripcion,
         CamposPersonalizados = string.IsNullOrWhiteSpace(d.DatosPersonalizados)
             ? new Dictionary<string, string?>()
-            : JsonSerializer.Deserialize<Dictionary<string, string?>>(d.DatosPersonalizados) ?? new Dictionary<string, string?>()
+            : JsonSerializer.Deserialize<Dictionary<string, string?>>(d.DatosPersonalizados) ?? new Dictionary<string, string?>(),
+
+        DocumentoOriginalId = d.DocumentoOriginalId,
+        SolicitanteId = d.SolicitanteId,
+        SolicitanteNombre = d.Solicitante != null ? $"{d.Solicitante.Nombre} {d.Solicitante.Apellido}" : null,
+        EditorId = d.EditorId,
+        EditorNombre = d.Editor != null ? $"{d.Editor.Nombre} {d.Editor.Apellido}" : null,
+        AprobadorId = d.AprobadorId,
+        AprobadorNombre = d.Aprobador != null ? $"{d.Aprobador.Nombre} {d.Aprobador.Apellido}" : null,
+        FechaPublicacion = d.FechaPublicacion,
+        MotivoCambio = d.MotivoCambio,
+        DescripcionDetallada = d.DescripcionDetallada
     };
 
     private static ListadoMaestroDto MapToListadoDto(ListadoMaestro listado) => new()

@@ -98,12 +98,12 @@ public class ControlDocumentalApiService(HttpClient http)
         return await http.PostAsync($"{Base}/listados-maestros/import", content);
     }
 
-    public async Task<List<AuditLogDto>> GetHistorialAsync(int documentoId)
+    public async Task<List<DocumentoControlDto>> GetHistorialAsync(int documentoId)
     {
         var response = await http.GetAsync($"{Base}/documentos/{documentoId}/auditoria");
         if (!response.IsSuccessStatusCode) return [];
         await using var stream = await response.Content.ReadAsStreamAsync();
-        return await System.Text.Json.JsonSerializer.DeserializeAsync<List<AuditLogDto>>(stream, JsonOptions) ?? [];
+        return await System.Text.Json.JsonSerializer.DeserializeAsync<List<DocumentoControlDto>>(stream, JsonOptions) ?? [];
     }
 
     public async Task<List<SolicitudCambioDocumentoControlDto>> GetSolicitudesPendientesAsync()
@@ -137,6 +137,21 @@ public class ControlDocumentalApiService(HttpClient http)
     public async Task<HttpResponseMessage> RechazarSolicitudCambioAsync(int solicitudId, RechazarSolicitudCambioDto dto)
     {
         return await http.PostAsJsonAsync($"{Base}/solicitudes/{solicitudId}/rechazar", dto);
+    }
+
+    public async Task<HttpResponseMessage> IniciarRevisionSolicitudAsync(int solicitudId)
+    {
+        return await http.PostAsync($"{Base}/solicitudes/{solicitudId}/iniciar-revision", null);
+    }
+
+    public async Task<HttpResponseMessage> UpdateBorradorDocumentoAsync(int solicitudId, UpdateDocumentoControlDto dto)
+    {
+        return await http.PutAsJsonAsync($"{Base}/solicitudes/{solicitudId}/borrador", dto);
+    }
+
+    public async Task<HttpResponseMessage> EnviarAAprobacionAsync(int solicitudId)
+    {
+        return await http.PostAsync($"{Base}/solicitudes/{solicitudId}/enviar-aprobacion", null);
     }
 
     // ────── Métodos de Permisos ──────

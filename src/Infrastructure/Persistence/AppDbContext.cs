@@ -171,6 +171,34 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .HasForeignKey(d => d.AreaId)
             .OnDelete(DeleteBehavior.Restrict);
 
+        modelBuilder.Entity<DocumentoControl>()
+            .HasOne(d => d.DocumentoOriginal)
+            .WithMany()
+            .HasForeignKey(d => d.DocumentoOriginalId)
+            .OnDelete(DeleteBehavior.Restrict)
+            .IsRequired(false);
+
+        modelBuilder.Entity<DocumentoControl>()
+            .HasOne(d => d.Solicitante)
+            .WithMany()
+            .HasForeignKey(d => d.SolicitanteId)
+            .OnDelete(DeleteBehavior.Restrict)
+            .IsRequired(false);
+
+        modelBuilder.Entity<DocumentoControl>()
+            .HasOne(d => d.Editor)
+            .WithMany()
+            .HasForeignKey(d => d.EditorId)
+            .OnDelete(DeleteBehavior.Restrict)
+            .IsRequired(false);
+
+        modelBuilder.Entity<DocumentoControl>()
+            .HasOne(d => d.Aprobador)
+            .WithMany()
+            .HasForeignKey(d => d.AprobadorId)
+            .OnDelete(DeleteBehavior.Restrict)
+            .IsRequired(false);
+
         // Evitar advertencias de EF Core por filtros globales en entidades relacionadas
         modelBuilder.Entity<ListadoMaestroPermiso>().HasQueryFilter(p => true);
         modelBuilder.Entity<SolicitudCambioDocumentoControl>().HasQueryFilter(s => true);
@@ -207,6 +235,20 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .WithMany()
             .HasForeignKey(s => s.AprobadorId)
             .OnDelete(DeleteBehavior.Restrict)
+            .IsRequired(false);
+
+        modelBuilder.Entity<SolicitudCambioDocumentoControl>()
+            .HasOne(s => s.Revisor)
+            .WithMany()
+            .HasForeignKey(s => s.RevisorId)
+            .OnDelete(DeleteBehavior.Restrict)
+            .IsRequired(false);
+
+        modelBuilder.Entity<SolicitudCambioDocumentoControl>()
+            .HasOne(s => s.BorradorDocumento)
+            .WithMany()
+            .HasForeignKey(s => s.BorradorDocumentoId)
+            .OnDelete(DeleteBehavior.SetNull)
             .IsRequired(false);
 
         // FK sin cascade para evitar ciclos con Colaborador

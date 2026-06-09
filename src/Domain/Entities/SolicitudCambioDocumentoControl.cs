@@ -28,4 +28,18 @@ public class SolicitudCambioDocumentoControl
     public DateTime FechaCreacion { get; set; } = DateTime.UtcNow;
     public DateTime? FechaEdicion { get; set; }
     public DateTime? FechaResolucion { get; set; }
+
+    // Revisor y observaciones de revisión
+    public int? RevisorId { get; set; }
+    public Colaborador? Revisor { get; set; }
+    public DateTime? FechaRevision { get; set; }
+    public string? ObservacionesRevision { get; set; }
+
+    // Detalles obligatorios de la solicitud
+    public string MotivoCambio { get; set; } = string.Empty;
+    public string DescripcionDetallada { get; set; } = string.Empty;
+
+    // Enlace al borrador creado para edición
+    public int? BorradorDocumentoId { get; set; }
+    public DocumentoControl? BorradorDocumento { get; set; }
 }

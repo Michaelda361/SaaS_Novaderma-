@@ -44,41 +44,11 @@ public class ControlDocumentalController(
         }
 
         Console.WriteLine($"[EXPORT DIAGNOSTIC] Encabezados recuperados para exportación: {listado.Campos.Count} columnas registradas en la base de datos.");
-        foreach (var campo in listado.Campos.OrderBy(c => c.Orden))
-        {
-            Console.WriteLine($"[EXPORT DIAGNOSTIC] Campo: Clave='{campo.CampoClave}', Nombre='{campo.Nombre}', Tipo='{campo.Tipo}', Requerido={campo.Requerido}");
-        }
 
         using var workbook = new XLWorkbook();
-        var listadoSheet = workbook.AddWorksheet("Listado");
-        listadoSheet.Cell(1, 1).Value = "Nombre";
-        listadoSheet.Cell(1, 2).Value = listado.Nombre;
-        listadoSheet.Cell(2, 1).Value = "Descripción";
-        listadoSheet.Cell(2, 2).Value = listado.Descripcion ?? string.Empty;
-        listadoSheet.Columns().AdjustToContents();
-
-        var camposSheet = workbook.AddWorksheet("Campos");
-        camposSheet.Cell(1, 1).Value = "CampoClave";
-        camposSheet.Cell(1, 2).Value = "Nombre";
-        camposSheet.Cell(1, 3).Value = "Tipo";
-        camposSheet.Cell(1, 4).Value = "Requerido";
-        camposSheet.Cell(1, 5).Value = "Opciones";
-        camposSheet.Cell(1, 6).Value = "Orden";
-
-        var row = 2;
-        foreach (var campo in listado.Campos.OrderBy(c => c.Orden))
-        {
-            camposSheet.Cell(row, 1).Value = campo.CampoClave;
-            camposSheet.Cell(row, 2).Value = campo.Nombre;
-            camposSheet.Cell(row, 3).Value = campo.Tipo;
-            camposSheet.Cell(row, 4).Value = campo.Requerido ? "TRUE" : "FALSE";
-            camposSheet.Cell(row, 5).Value = campo.Opciones ?? string.Empty;
-            camposSheet.Cell(row, 6).Value = campo.Orden;
-            row++;
-        }
-        camposSheet.Columns().AdjustToContents();
-
-        var documentosSheet = workbook.AddWorksheet("Documentos");
+        var sheetName = SanitizeSheetName(listado.Nombre);
+        var documentosSheet = workbook.AddWorksheet(sheetName);
+        
         var camposOrdenados = listado.Campos.OrderBy(c => c.Orden).ToList();
         for (int colIndex = 0; colIndex < camposOrdenados.Count; colIndex++)
         {
@@ -101,7 +71,7 @@ public class ControlDocumentalController(
         }
         documentosSheet.Columns().AdjustToContents();
 
-        Console.WriteLine($"[EXPORT DIAGNOSTIC] Exportación completada. Hojas escritas: 'Listado', 'Campos' ({row - 2} registros de columna), 'Documentos' ({docRow - 2} documentos). Cantidad de columnas exportadas: {camposOrdenados.Count}.");
+        Console.WriteLine($"[EXPORT DIAGNOSTIC] Exportación completada. Hoja '{sheetName}' escrita con {docRow - 2} documentos. Cantidad de columnas exportadas: {camposOrdenados.Count}.");
 
         await using var stream = new MemoryStream();
         workbook.SaveAs(stream);
@@ -498,8 +468,14 @@ public class ControlDocumentalController(
                 }
             }
 
-            // Only skip row if it is completely empty of data in all mapped cells
-            if (customValues.Values.All(string.IsNullOrWhiteSpace))
+            // Only skip row if it is completely empty of data in all mapped cells.
+            // Also strip non-breaking spaces (\u00A0) and other invisible Unicode characters
+            // that Excel may store in visually-empty cells.
+            static bool IsEffectivelyEmpty(string? v)
+                => string.IsNullOrWhiteSpace(v) ||
+                   string.IsNullOrEmpty(v?.Trim().Trim('\u00A0', '\u200B', '\uFEFF', '\t'));
+
+            if (customValues.Count == 0 || customValues.Values.All(IsEffectivelyEmpty))
             {
                 Console.WriteLine($"[IMPORT DIAGNOSTIC] Fila {row.RowNumber()} omitida por estar vacía.");
                 continue;
@@ -636,9 +612,12 @@ public class ControlDocumentalController(
                 continue;
             }
 
-            if (cell.TryGetValue<DateTime>(out _))
+            if (cell.DataType == XLDataType.DateTime)
             {
-                return "Fecha";
+                if (cell.TryGetValue<DateTime>(out _))
+                {
+                    return "Fecha";
+                }
             }
 
             if (cell.DataType == XLDataType.Number)
@@ -749,12 +728,15 @@ public class ControlDocumentalController(
             return null;
         }
 
-        if (effCell.TryGetValue<DateTime>(out var dateValue))
+        if (effCell.DataType == XLDataType.DateTime)
         {
-            return dateValue;
+            if (effCell.TryGetValue<DateTime>(out var dateValue))
+            {
+                return dateValue;
+            }
         }
 
-        if (DateTime.TryParse(effCell.GetString().Trim(), CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed))
+        if (DateTime.TryParse(effCell.GetString(), CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed))
         {
             return parsed;
         }
@@ -834,9 +816,12 @@ public class ControlDocumentalController(
             return string.Empty;
         }
 
-        if (cell.TryGetValue<DateTime>(out var dateValue))
+        if (cell.DataType == XLDataType.DateTime)
         {
-            return dateValue.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+            if (cell.TryGetValue<DateTime>(out var dateValue))
+            {
+                return dateValue.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+            }
         }
 
         if (cell.DataType == XLDataType.Number)
@@ -844,7 +829,7 @@ public class ControlDocumentalController(
             return cell.GetDouble().ToString(CultureInfo.InvariantCulture);
         }
 
-        return cell.GetString().Trim();
+        return cell.GetString();
     }
 
     private static IXLCell GetEffectiveCell(IXLCell cell)
@@ -901,12 +886,41 @@ public class ControlDocumentalController(
 
     private static (IXLWorksheet? Worksheet, IXLRow? HeaderRow) FindWorksheetWithDocumentHeaders(XLWorkbook workbook)
     {
+        // Priority 1: a sheet explicitly named 'Documentos' (our export format)
+        var documentosSheet = workbook.Worksheets
+            .FirstOrDefault(w => w.Name.Equals("Documentos", StringComparison.OrdinalIgnoreCase));
+        if (documentosSheet is not null)
+        {
+            // Its header is always row 1
+            var docRow = documentosSheet.Row(1);
+            Console.WriteLine($"[IMPORT DIAGNOSTIC] Found dedicated 'Documentos' sheet. Using row 1 as header.");
+            return (documentosSheet, docRow);
+        }
+
+        // Priority 2: any sheet whose first 20 rows contain BOTH 'Codigo'/'Código' AND 'Nombre'
+        // using EXACT and SYNONYM matching only — NO fuzzy substring matching to avoid false positives.
         IXLWorksheet? bestSheet = null;
         IXLRow? bestHeader = null;
         var bestScore = -1;
 
+        // Accepted exact normalized keys for Codigo
+        var codigoKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            { "codigo", "codigodedocumento", "cod", "reference", "ref" };
+        // Accepted exact normalized keys for Nombre
+        var nombreKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            { "nombre", "nombrededocumento", "nombredearchivo", "titulo", "title", "name", "nombredeldocumento" };
+
         foreach (var worksheet in workbook.Worksheets)
         {
+            // Skip sheets that look like metadata / field definition sheets
+            if (worksheet.Name.Equals("Listado", StringComparison.OrdinalIgnoreCase) ||
+                worksheet.Name.Equals("Campos", StringComparison.OrdinalIgnoreCase) ||
+                worksheet.Name.Equals("Meta", StringComparison.OrdinalIgnoreCase) ||
+                worksheet.Name.Equals("Metadata", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
             for (int r = 1; r <= 20; r++)
             {
                 var row = worksheet.Row(r);
@@ -916,16 +930,18 @@ public class ControlDocumentalController(
                 }
 
                 var headerMap = BuildHeaderMap(row);
-                
-                // Check using TryGetCellIndex (which covers exact, synonyms, and fuzzy matching!)
-                var hasCodigo = TryGetCellIndex(headerMap, "Codigo", out _);
-                var hasNombre = TryGetCellIndex(headerMap, "Nombre", out _);
+                if (!headerMap.Any()) continue;
+
+                // Use exact + synonym matching only — no fuzzy substring
+                bool hasCodigo = headerMap.Keys.Any(k => codigoKeys.Contains(k));
+                bool hasNombre = headerMap.Keys.Any(k => nombreKeys.Contains(k));
 
                 if (!hasCodigo || !hasNombre)
                 {
                     continue;
                 }
 
+                // Score: prefer sheets with more headers (more columns = more complete header row)
                 var score = headerMap.Count;
                 if (score > bestScore)
                 {
@@ -936,12 +952,16 @@ public class ControlDocumentalController(
             }
         }
 
-        if (bestSheet is null && workbook.Worksheets.Any())
+        if (bestSheet is not null)
         {
-            bestSheet = workbook.Worksheets.First();
-            bestHeader = bestSheet.Row(1);
+            Console.WriteLine($"[IMPORT DIAGNOSTIC] Found document header in sheet '{bestSheet.Name}' at row {bestHeader!.RowNumber()} with {bestScore} columns.");
+        }
+        else
+        {
+            Console.WriteLine($"[IMPORT DIAGNOSTIC] WARNING: No sheet with 'Codigo'+'Nombre' header columns found. Import will fail validation.");
         }
 
+        // Do NOT fall back silently — return null so the caller throws a clear error.
         return (bestSheet, bestHeader);
     }
 
@@ -1042,6 +1062,18 @@ public class ControlDocumentalController(
     {
         var invalidChars = Path.GetInvalidFileNameChars();
         return string.Concat(fileName.Where(c => !invalidChars.Contains(c))).Trim();
+    }
+
+    private static string SanitizeSheetName(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return "Sheet1";
+        var invalidChars = new[] { '\\', '/', '?', '*', '[', ']', ':' };
+        var sanitized = string.Concat(name.Where(c => !invalidChars.Contains(c)));
+        if (sanitized.Length > 31)
+        {
+            sanitized = sanitized.Substring(0, 31);
+        }
+        return string.IsNullOrWhiteSpace(sanitized) ? "Sheet1" : sanitized.Trim();
     }
 
     [HttpPost("listados-maestros")]
@@ -1289,6 +1321,80 @@ public class ControlDocumentalController(
         {
             var email = currentUser.GetEmail();
             await service.RechazarSolicitudCambioAsync(solicitudId, dto.MotivoRechazo, email);
+            return NoContent();
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return UnprocessableEntity(ex.Message);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(ex.Message);
+        }
+    }
+
+    [HttpPost("solicitudes/{solicitudId:int}/iniciar-revision")]
+    public async Task<IActionResult> IniciarRevisionSolicitud(int solicitudId)
+    {
+        try
+        {
+            var email = currentUser.GetEmail();
+            await service.IniciarRevisionSolicitudAsync(solicitudId, email);
+            return NoContent();
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return UnprocessableEntity(ex.Message);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(ex.Message);
+        }
+    }
+
+    [HttpPut("solicitudes/{solicitudId:int}/borrador")]
+    public async Task<IActionResult> UpdateBorradorDocumento(int solicitudId, [FromBody] UpdateDocumentoControlDto dto)
+    {
+        if (!ModelState.IsValid)
+        {
+            return BadRequest(ModelState);
+        }
+
+        try
+        {
+            var email = currentUser.GetEmail();
+            await service.UpdateBorradorDocumentoAsync(solicitudId, dto, email);
+            return NoContent();
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return UnprocessableEntity(ex.Message);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(ex.Message);
+        }
+    }
+
+    [HttpPost("solicitudes/{solicitudId:int}/enviar-aprobacion")]
+    public async Task<IActionResult> EnviarAAprobacion(int solicitudId)
+    {
+        try
+        {
+            var email = currentUser.GetEmail();
+            await service.EnviarAAprobacionAsync(solicitudId, email);
             return NoContent();
         }
         catch (UnauthorizedAccessException)

@@ -27,4 +27,16 @@ public class DocumentoControlDto
     public string? ComentarioCambio { get; set; }
     public string? ArchivoNombre { get; set; }
     public Dictionary<string, string?>? CamposPersonalizados { get; set; } = new Dictionary<string, string?>();
+
+    // Versioning and traceability fields
+    public int? DocumentoOriginalId { get; set; }
+    public int? SolicitanteId { get; set; }
+    public string? SolicitanteNombre { get; set; }
+    public int? EditorId { get; set; }
+    public string? EditorNombre { get; set; }
+    public int? AprobadorId { get; set; }
+    public string? AprobadorNombre { get; set; }
+    public DateTime? FechaPublicacion { get; set; }
+    public string? MotivoCambio { get; set; }
+    public string? DescripcionDetallada { get; set; }
 }

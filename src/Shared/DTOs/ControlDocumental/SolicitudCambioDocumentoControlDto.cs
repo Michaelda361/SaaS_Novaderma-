@@ -18,4 +18,17 @@ public class SolicitudCambioDocumentoControlDto
     public string? EditorNombre { get; set; }
     public int? AprobadorId { get; set; }
     public string? AprobadorNombre { get; set; }
+
+    // Revisor details
+    public int? RevisorId { get; set; }
+    public string? RevisorNombre { get; set; }
+    public DateTime? FechaRevision { get; set; }
+    public string? ObservacionesRevision { get; set; }
+
+    // Change request details
+    public string MotivoCambio { get; set; } = string.Empty;
+    public string DescripcionDetallada { get; set; } = string.Empty;
+
+    // Associated draft document
+    public int? BorradorDocumentoId { get; set; }
 }

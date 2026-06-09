@@ -1,42 +1,57 @@
 using System;
-using System.Collections.Generic;
-using Microsoft.Data.SqlClient;
+using System.Linq;
+using ClosedXML.Excel;
+using System.IO;
 
 class Program
 {
     static void Main()
     {
-        string connStr = "Server=localhost;Database=TalentManagementDB;Trusted_Connection=True;TrustServerCertificate=True;";
-        Console.WriteLine("Connecting to database: " + connStr);
+        var path = @"C:\Users\Laboratorios\Desktop\Libro1 prueba importacion.xlsx";
+        using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+        using var wb = new XLWorkbook(fs);
 
-        try
+        Console.WriteLine($"Sheets: {string.Join(", ", wb.Worksheets.Select(w => $"'{w.Name}'"))}");
+        Console.WriteLine();
+
+        foreach (var ws in wb.Worksheets)
         {
-            using var conn = new SqlConnection(connStr);
-            conn.Open();
-            Console.WriteLine("Connection successful!\n");
+            Console.WriteLine($"=== Sheet: '{ws.Name}' ===");
+            var usedRows = ws.RowsUsed().ToList();
+            Console.WriteLine($"RowsUsed(): {usedRows.Count}");
+            Console.WriteLine();
 
-            // Query audit logs for document ID 2090
-            string auditQuery = "SELECT Id, EntidadId, EntidadNombre, Accion, ColaboradorNombre, FechaHora, Observaciones FROM AuditLogs WHERE EntidadTipo = 'ControlDocumental' AND EntidadId BETWEEN 2090 AND 2100 ORDER BY Id ASC;";
-            using var cmd = new SqlCommand(auditQuery, conn);
-            using var reader = cmd.ExecuteReader();
-            Console.WriteLine("Audit Logs for documents 2090-2100:");
-            while (reader.Read())
+            // Show ONLY first 3 rows (header + 2 data)
+            foreach (var row in usedRows.Take(3))
             {
-                int id = reader.GetInt32(0);
-                int entidadId = reader.GetInt32(1);
-                string nombre = reader.GetString(2);
-                string accion = reader.GetString(3);
-                string colNombre = reader.GetString(4);
-                DateTime fecha = reader.GetDateTime(5);
-                string obs = reader.IsDBNull(6) ? "" : reader.GetString(6);
-
-                Console.WriteLine($"ID: {id} | {fecha:yyyy-MM-dd HH:mm:ss} | User: {colNombre} | Action: {accion} | Document ID: {entidadId} - '{nombre}' | Obs: {obs}");
+                var cells = row.CellsUsed().ToList();
+                Console.WriteLine($"Row {row.RowNumber()} ({cells.Count} cells):");
+                foreach (var c in cells)
+                    Console.WriteLine($"  [{c.Address.ColumnLetter}] = '{c.GetString()?.Trim()}'");
             }
-            reader.Close();
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine("Error: " + ex.Message);
+            Console.WriteLine();
+
+            // Count data records
+            int dataCount = usedRows.Skip(1).Count(row =>
+                row.CellsUsed().Any(c => !string.IsNullOrWhiteSpace(
+                    c.GetString()?.Trim()?.Trim('\u00A0', '\u200B', '\uFEFF'))));
+            Console.WriteLine($"Data records (rows 2+): {dataCount}");
+
+            // Check if Codigo and Nombre columns exist
+            if (usedRows.Any())
+            {
+                var headerRow = usedRows.First();
+                var headers = headerRow.CellsUsed()
+                    .Select(c => c.GetString()?.Trim().ToLowerInvariant()
+                        .Replace("á","a").Replace("é","e").Replace("í","i").Replace("ó","o").Replace("ú","u")
+                        .Replace(" ", ""))
+                    .ToList();
+                bool hasCodigo = headers.Any(h => h is "codigo" or "codigodedocumento" or "cod");
+                bool hasNombre = headers.Any(h => h is "nombre" or "nombrededocumento" or "titulo" or "name");
+                Console.WriteLine($"\nHas 'Codigo' column: {hasCodigo}");
+                Console.WriteLine($"Has 'Nombre' column: {hasNombre}");
+                Console.WriteLine($"Will import correctly: {hasCodigo && hasNombre}");
+            }
         }
     }
 }

@@ -30,4 +30,22 @@ public class DocumentoControl : BaseEntity
 
     public int? AreaId { get; set; }
     public Area? Area { get; set; }
+
+    // Relación autoreferenciada para versiones históricas y borradores
+    public int? DocumentoOriginalId { get; set; }
+    public DocumentoControl? DocumentoOriginal { get; set; }
+
+    // Trazabilidad del flujo documental
+    public int? SolicitanteId { get; set; }
+    public Colaborador? Solicitante { get; set; }
+    
+    public int? EditorId { get; set; }
+    public Colaborador? Editor { get; set; }
+    
+    public int? AprobadorId { get; set; }
+    public Colaborador? Aprobador { get; set; }
+    
+    public DateTime? FechaPublicacion { get; set; }
+    public string? MotivoCambio { get; set; }
+    public string? DescripcionDetallada { get; set; }
 }

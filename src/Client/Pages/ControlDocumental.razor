@@ -160,6 +160,7 @@
                                     <th>Código</th>
                                     <th>Solicitante</th>
                                     <th>Fecha</th>
+                                    <th>Estado</th>
                                     <th>Comentario</th>
                                     <th>Acciones</th>
                                 </tr>
@@ -172,16 +173,38 @@
                                         <td>@solicitud.DocumentoControlCodigo</td>
                                         <td>@solicitud.SolicitanteNombre</td>
                                         <td>@solicitud.FechaCreacion.ToLocalTime():g</td>
+                                        <td>
+                                            <span class="badge @GetEstadoPropuestaClass(solicitud.EstadoPropuesta)">@solicitud.EstadoPropuesta</span>
+                                        </td>
                                         <td>@solicitud.ComentarioSolicitud</td>
                                         <td>
-                                            <div class="flex gap-1">
-                                                <button class="btn btn-success btn-sm" @onclick="() => AprobarSolicitud(solicitud.Id)">Aprobar</button>
-                                                <button class="btn btn-danger btn-sm" @onclick="() => AbrirRechazarSolicitud(solicitud)">Rechazar</button>
+                                            <div class="flex gap-1 flex-wrap">
+                                                @if (solicitud.EstadoPropuesta == "PendienteRevision")
+                                                {
+                                                    <button class="btn btn-primary btn-sm" @onclick="() => IniciarRevision(solicitud.Id)">Iniciar revisión</button>
+                                                    <button class="btn btn-danger btn-sm" @onclick="() => AbrirRechazarSolicitud(solicitud)">Rechazar</button>
+                                                }
+                                                else if (solicitud.EstadoPropuesta == "EnEdicion")
+                                                {
+                                                    <button class="btn btn-info btn-sm" @onclick="() => EditarBorrador(solicitud)">✏️ Editar borrador</button>
+                                                    <button class="btn btn-success btn-sm" @onclick="() => EnviarAAprobacion(solicitud.Id)">Enviar a aprobación</button>
+                                                    <button class="btn btn-danger btn-sm" @onclick="() => AbrirRechazarSolicitud(solicitud)">Rechazar</button>
+                                                }
+                                                else if (solicitud.EstadoPropuesta == "PendienteAprobacion")
+                                                {
+                                                    <button class="btn btn-success btn-sm" @onclick="() => AprobarSolicitud(solicitud.Id)">Aprobar</button>
+                                                    <button class="btn btn-danger btn-sm" @onclick="() => AbrirRechazarSolicitud(solicitud)">Rechazar</button>
+                                                }
+                                                else
+                                                {
+                                                    <button class="btn btn-success btn-sm" @onclick="() => AprobarSolicitud(solicitud.Id)">Aprobar</button>
+                                                    <button class="btn btn-danger btn-sm" @onclick="() => AbrirRechazarSolicitud(solicitud)">Rechazar</button>
+                                                }
                                             </div>
                                         </td>
                                     </tr>
                                     <tr>
-                                        <td colspan="6" style="padding:0; border:none;">
+                                        <td colspan="7" style="padding:0; border:none;">
                                             <details style="padding:0.75rem 1rem; background:var(--surface-muted); border-top:1px solid var(--surface-border);">
                                                 <summary style="cursor:pointer; font-weight:600;">Ver datos propuestos</summary>
                                                 <pre style="white-space:pre-wrap; word-break:break-word; margin-top:0.75rem;">@GetFormattedJson(solicitud.DatosPropuestos)</pre>
@@ -715,67 +738,16 @@
                     }
                     else
                     {
-                        <div class="table-wrapper" style="margin-bottom:1.5rem;">
-                            <table>
-                                <thead>
-                                    <tr>
-                                        <th colspan="@(listadoCampos.Count + 1)" style="text-align:center;font-weight:700;background:var(--surface-hover);">Versión actual</th>
-                                    </tr>
-                                    <tr>
-                                        <th>Listado maestro</th>
-                                        @foreach (var campo in listadoCampos.OrderBy(c => c.Orden))
-                                        {
-                                            <th>@campo.Nombre</th>
-                                        }
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr>
-                                        <td>@GetSnapshotValue(BuildSnapshot(auditDocumentDetail), "Listado maestro")</td>
-                                        @foreach (var campo in listadoCampos.OrderBy(c => c.Orden))
-                                        {
-                                            <td>
-                                                @if (campo.CampoClave == "OneDriveUrl")
-                                                {
-                                                    var urlVal = GetSnapshotValue(BuildSnapshot(auditDocumentDetail), "OneDrive URL");
-                                                    @if (IsValidUrl(urlVal))
-                                                    {
-                                                        <a href="@urlVal" target="_blank" rel="noopener noreferrer" style="color: var(--color-primary); text-decoration: underline;">
-                                                            🔗 @(string.IsNullOrWhiteSpace(GetSnapshotValue(BuildSnapshot(auditDocumentDetail), "Archivo")) ? "Ver archivo" : GetSnapshotValue(BuildSnapshot(auditDocumentDetail), "Archivo"))
-                                                        </a>
-                                                    }
-                                                    else
-                                                    {
-                                                        @urlVal
-                                                    }
-                                                }
-                                                else if (campo.CampoClave == "Estado")
-                                                {
-                                                    <span class="badge @GetEstadoClass(GetSnapshotValue(BuildSnapshot(auditDocumentDetail), "Estado") ?? "")">
-                                                        @GetSnapshotValue(BuildSnapshot(auditDocumentDetail), "Estado")
-                                                    </span>
-                                                }
-                                                else
-                                                {
-                                                    @GetSnapshotValueForCampo(BuildSnapshot(auditDocumentDetail), campo.CampoClave)
-                                                }
-                                            </td>
-                                        }
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-
                         <div style="margin-bottom:.75rem;">
-                            <h4>Versiones anteriores</h4>
+                            <h4>Historial de versiones</h4>
                         </div>
 
                         @if (!versionesAnteriores.Any())
                         {
                             <div class="empty-state">
                                 <div class="empty-state-icon">🕘</div>
-                                <h3>Sin versiones anteriores</h3>
-                                <p>Aún no hay registros de versiones anteriores para este documento.</p>
+                                <h3>Sin historial de versiones</h3>
+                                <p>Aún no hay registros de versiones para este documento.</p>
                             </div>
                         }
                         else
@@ -785,7 +757,7 @@
                                     <thead>
                                         <tr>
                                             <th>Fecha / Usuario</th>
-                                            <th>Acción</th>
+                                            <th>Acción / Estado</th>
                                             <th>Listado maestro</th>
                                             @foreach (var campo in listadoCampos.OrderBy(c => c.Orden))
                                             {
@@ -798,7 +770,14 @@
                                         {
                                             <tr>
                                                 <td>@version.Descripcion</td>
-                                                <td>@version.Titulo</td>
+                                                <td>
+                                                    @{
+                                                        var isVigente = version.Titulo.Contains("(Vigente)");
+                                                        var badgeClass = isVigente ? "badge-success" : "badge-warning";
+                                                    }
+                                                    <span style="font-weight: 600;">@version.Titulo.Replace(" (Vigente)", "").Replace(" (Histórica)", "")</span>
+                                                    <span class="badge @badgeClass" style="margin-left: 0.25rem;">@(isVigente ? "Vigente" : "Histórica")</span>
+                                                </td>
                                                 <td>@GetSnapshotValue(version.Campos, "Listado maestro")</td>
                                                 @foreach (var campo in listadoCampos.OrderBy(c => c.Orden))
                                                 {
@@ -965,6 +944,7 @@
     private CreateDocumentoControlDto form = new();
     private CreateListadoMaestroDto listadoForm = new();
     private int? editingId;
+    private int? editingSolicitudId;
     private List<DocumentoControlCampoDto> listadoCampos = [];
     private bool importingListado = false;
     private bool showImportInstructions = false;
@@ -989,7 +969,7 @@
     private string solicitudMotivo = string.Empty;
     private string solicitudObservaciones = string.Empty;
     private bool guardandoSolicitudCambio = false;
-    private List<AuditLogDto> historial = [];
+    private List<DocumentoControlDto> historial = [];
     private DocumentoControlDetalleDto? auditDocumentDetail;
     private List<DocumentVersionSnapshot> versionesAnteriores = [];
 
@@ -1264,6 +1244,74 @@
         }
     }
 
+    private async Task IniciarRevision(int solicitudId)
+    {
+        processingSolicitud = true;
+        try
+        {
+            var response = await ControlDocumentalApi.IniciarRevisionSolicitudAsync(solicitudId);
+            if (response.IsSuccessStatusCode)
+            {
+                await toast.Show("Revisión iniciada. El borrador ha sido generado para edición.", "success");
+                await LoadPendingSolicitudesAsync();
+                await Filtrar();
+            }
+            else
+            {
+                var msg = await response.Content.ReadAsStringAsync();
+                await toast.Show(string.IsNullOrWhiteSpace(msg) ? "Error al iniciar revisión." : msg, "error");
+            }
+        }
+        catch (Exception ex)
+        {
+            await toast.Show($"Error: {ex.Message}", "error");
+        }
+        finally
+        {
+            processingSolicitud = false;
+        }
+    }
+
+    private async Task EnviarAAprobacion(int solicitudId)
+    {
+        processingSolicitud = true;
+        try
+        {
+            var response = await ControlDocumentalApi.EnviarAAprobacionAsync(solicitudId);
+            if (response.IsSuccessStatusCode)
+            {
+                await toast.Show("Borrador enviado a aprobación del Jefe/Admin.", "success");
+                await LoadPendingSolicitudesAsync();
+                await Filtrar();
+            }
+            else
+            {
+                var msg = await response.Content.ReadAsStringAsync();
+                await toast.Show(string.IsNullOrWhiteSpace(msg) ? "Error al enviar a aprobación." : msg, "error");
+            }
+        }
+        catch (Exception ex)
+        {
+            await toast.Show($"Error: {ex.Message}", "error");
+        }
+        finally
+        {
+            processingSolicitud = false;
+        }
+    }
+
+    private async Task EditarBorrador(SolicitudCambioDocumentoControlDto solicitud)
+    {
+        if (!solicitud.BorradorDocumentoId.HasValue)
+        {
+            await toast.Show("No se encontró un borrador para esta solicitud.", "error");
+            return;
+        }
+
+        editingSolicitudId = solicitud.Id;
+        await EditarDocumento(solicitud.BorradorDocumentoId.Value);
+    }
+
     private void OnNuevaSolicitudCambio(SolicitudCambioDocumentoControlDto s)
     {
         // Insertar al inicio y actualizar UI
@@ -1442,6 +1490,7 @@
     {
         editing = false;
         editingId = null;
+        editingSolicitudId = null;
         if (selectedListadoId.HasValue)
         {
             await LoadListadoCamposAsync(selectedListadoId.Value);
@@ -1472,7 +1521,7 @@
         await LoadListadoCamposAsync(detail.ListadoMaestroId);
 
         // Si el usuario es solo colaborador (sin permisos de edición), abrir modal de solicitud de cambio
-        if (AuthInfo.EsSoloColaborador)
+        if (AuthInfo.EsSoloColaborador && !editingSolicitudId.HasValue)
         {
             documentoParaSolicitud = detail;
             solicitudMotivo = string.Empty;
@@ -1540,7 +1589,15 @@
                     CamposPersonalizados = form.CamposPersonalizados
                 };
 
-                var response = await ControlDocumentalApi.UpdateDocumentoAsync(editingId.Value, updateDto);
+                HttpResponseMessage response;
+                if (editingSolicitudId.HasValue)
+                {
+                    response = await ControlDocumentalApi.UpdateBorradorDocumentoAsync(editingSolicitudId.Value, updateDto);
+                }
+                else
+                {
+                    response = await ControlDocumentalApi.UpdateDocumentoAsync(editingId.Value, updateDto);
+                }
 
                 if (response.StatusCode == HttpStatusCode.Forbidden)
                 {
@@ -1864,37 +1921,76 @@
 
     private List<DocumentVersionSnapshot> BuildVersionHistory(
         DocumentoControlDetalleDto? detalle,
-        List<AuditLogDto> logs)
+        List<DocumentoControlDto> versions)
     {
-        if (detalle is null || logs is null || !logs.Any())
+        if (versions is null || !versions.Any())
             return new List<DocumentVersionSnapshot>();
 
-        var snapshot = BuildSnapshot(detalle);
-        var versiones = new List<DocumentVersionSnapshot>();
+        var list = new List<DocumentVersionSnapshot>();
+        var relevantVersions = versions
+            .Where(v => v.Estado == "Vigente" || v.Estado == "Histórica")
+            .OrderByDescending(v => v.Estado == "Vigente") // Vigente comes first
+            .ThenByDescending(v => v.Id)                   // Then descending chronological order of clones
+            .ToList();
 
-        foreach (var log in logs.OrderByDescending(l => l.FechaHora))
+        foreach (var doc in relevantVersions)
         {
-            if (string.IsNullOrWhiteSpace(log.CamposModificados))
-                continue;
-
-            var cambios = ParseCamposModificados(log.CamposModificados);
-            var anterior = snapshot.ToDictionary(k => k.Key, v => v.Value, StringComparer.OrdinalIgnoreCase);
-
-            foreach (var cambio in cambios)
+            var campos = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
             {
-                var label = GetFieldLabel(cambio.Key);
-                anterior[label] = FormatFieldValue(cambio.Key, cambio.Value.Antes);
+                ["Listado maestro"] = doc.ListadoMaestroNombre,
+                ["Código"] = doc.Codigo,
+                ["Nombre"] = doc.Nombre,
+                ["Proceso responsable"] = doc.ProcesoResponsable,
+                ["Versión"] = doc.Version,
+                ["Fecha documento"] = doc.FechaDocumento.ToString("d"),
+                ["Ubicación"] = null,
+                ["OneDrive URL"] = doc.OneDriveUrl,
+                ["OneDrive Item ID"] = null,
+                ["Archivo"] = doc.ArchivoNombre,
+                ["Uso"] = doc.Uso,
+                ["Tiempo de retención"] = doc.TiempoRetencion,
+                ["Protección"] = doc.Proteccion,
+                ["Recuperación"] = doc.Recuperacion,
+                ["Disposición final"] = doc.DisposicionFinal,
+                ["Estado"] = doc.Estado,
+                ["Observaciones"] = doc.Observaciones,
+                ["Comentario de cambio"] = doc.ComentarioCambio,
+                ["Área"] = doc.AreaNombre
+            };
+
+            if (doc.CamposPersonalizados != null)
+            {
+                foreach (var campo in doc.CamposPersonalizados)
+                {
+                    if (!campos.ContainsKey(campo.Key))
+                    {
+                        campos[campo.Key] = campo.Value;
+                    }
+                }
+                if (doc.CamposPersonalizados.TryGetValue("Ubicación", out var ubicacion))
+                {
+                    campos["Ubicación"] = ubicacion;
+                }
             }
 
-            versiones.Add(new DocumentVersionSnapshot(
-                log.Accion,
-                $"{log.ColaboradorNombre} · {log.FechaHora.ToLocalTime():g}",
-                anterior));
+            var autor = doc.EditorNombre ?? doc.SolicitanteNombre ?? doc.AprobadorNombre ?? "Sistema";
+            var fecha = doc.FechaPublicacion?.ToLocalTime().ToString("g") ?? doc.FechaDocumento.ToLocalTime().ToString("g");
+            var desc = $"{autor} · {fecha}";
 
-            snapshot = anterior;
+            var titulo = $"Versión {doc.Version}";
+            if (!string.IsNullOrWhiteSpace(doc.Estado))
+            {
+                titulo += $" ({doc.Estado})";
+            }
+            if (!string.IsNullOrWhiteSpace(doc.MotivoCambio))
+            {
+                titulo += $" - {doc.MotivoCambio}";
+            }
+
+            list.Add(new DocumentVersionSnapshot(titulo, desc, campos));
         }
 
-        return versiones;
+        return list;
     }
 
     private static Dictionary<string, string?> BuildSnapshot(DocumentoControlDetalleDto detalle)
@@ -2023,6 +2119,7 @@
         showModal = false;
         editing = false;
         editingId = null;
+        editingSolicitudId = null;
     }
 
     private void AgregarCampoPlantilla()
@@ -2362,6 +2459,19 @@
         "Publicado" => "badge-success",
         "Aprobado" => "badge-info",
         "Revision" => "badge-warning",
+        "Vigente" => "badge-success",
+        "Borrador" => "badge-gray",
+        "Histórica" => "badge-warning",
+        _ => "badge-gray"
+    };
+
+    private string GetEstadoPropuestaClass(string estado) => estado switch
+    {
+        "PendienteRevision" => "badge-warning",
+        "EnEdicion" => "badge-info",
+        "PendienteAprobacion" => "badge-primary",
+        "Aprobada" => "badge-success",
+        "Rechazada" => "badge-danger",
         _ => "badge-gray"
     };
 }

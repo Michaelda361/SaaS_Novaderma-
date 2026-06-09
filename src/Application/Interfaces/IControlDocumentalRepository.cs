@@ -38,4 +38,6 @@ public interface IControlDocumentalRepository
     Task<DocumentoControlCampoDefinicion> UpdateCampoAsync(DocumentoControlCampoDefinicion campo);
     Task DeleteCampoAsync(DocumentoControlCampoDefinicion campo);
     Task<bool> DeleteListadoAsync(int id);
+    Task DeleteDocumentoAsync(DocumentoControl documento);
+    Task<IEnumerable<DocumentoControl>> GetDocumentosIgnoreFiltersAsync(int documentoId);
 }
