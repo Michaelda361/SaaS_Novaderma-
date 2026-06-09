@@ -1,4 +1,4 @@
-﻿@page "/certificados"
+@page "/certificados"
 @attribute [PageTitle("Certificados")]
 @attribute [Authorize]
 @inject CertificadoApiService ApiService
@@ -60,6 +60,10 @@
                             {
                                 <button class="btn btn-primary btn-sm" @onclick="@(() => DescargarPdf(cert.Id))">⬇ PDF</button>
                             }
+                            @if (c.TipoArchivoCertificado == "application/vnd.openxmlformats-officedocument.presentationml.presentation")
+                            {
+                                <button class="btn btn-secondary btn-sm" @onclick="@(() => DescargarPptx(cert.Id))" title="Descargar PPTX con variables aplicadas para abrir en PowerPoint y guardar como PDF">⬇ PPTX</button>
+                            }
                             @if (!c.TienePdf && c.CapacitacionId.HasValue)
                             {
                                 <button class="btn btn-ghost btn-sm" @onclick="@(() => RegenerarPdf(cert.Id))" title="Generar PDF desde plantilla">🔄 Generar PDF</button>
@@ -96,7 +100,7 @@ else
                     <td class="text-sm">@c.FechaEmision.ToString("dd/MM/yyyy")</td>
                     <td class="text-sm">@(c.FechaVencimiento?.ToString("dd/MM/yyyy") ?? "Sin vencimiento")</td>
                     <td>@if(c.EstaVencido){<span class="badge badge-danger">Vencido</span>}else if(c.VenceProximamente){<span class="badge badge-warning">Próximo</span>}else{<span class="badge badge-success">Vigente</span>}</td>
-                    <td><div class="flex gap-2">@if(c.TienePdf || c.CapacitacionId.HasValue){<button class="btn btn-primary btn-sm btn-icon" @onclick="@(() => DescargarPdf(cert.Id))">⬇ PDF</button>}@if(!string.IsNullOrEmpty(c.UrlDocumento)){<a href="@c.UrlDocumento" target="_blank" class="btn btn-ghost btn-sm btn-icon">📄</a>}<button class="btn btn-ghost btn-sm btn-icon" @onclick="@(() => AbrirEditar(cert))">✏️</button><button class="btn btn-danger btn-sm btn-icon" @onclick="@(() => PedirConfirmacion(cert))">🗑️</button></div></td>
+                    <td><div class="flex gap-2">@if(c.TienePdf || c.CapacitacionId.HasValue){<button class="btn btn-primary btn-sm btn-icon" @onclick="@(() => DescargarPdf(cert.Id))">⬇ PDF</button>}@if(c.TipoArchivoCertificado == "application/vnd.openxmlformats-officedocument.presentationml.presentation"){<button class="btn btn-secondary btn-sm btn-icon" @onclick="@(() => DescargarPptx(cert.Id))" title="Descargar PPTX con variables aplicadas">⬇ PPTX</button>}@if(!string.IsNullOrEmpty(c.UrlDocumento)){<a href="@c.UrlDocumento" target="_blank" class="btn btn-ghost btn-sm btn-icon">📄</a>}<button class="btn btn-ghost btn-sm btn-icon" @onclick="@(() => AbrirEditar(cert))">✏️</button><button class="btn btn-danger btn-sm btn-icon" @onclick="@(() => PedirConfirmacion(cert))">🗑️</button></div></td>
                 </tr>
             }
             </tbody></table></div>

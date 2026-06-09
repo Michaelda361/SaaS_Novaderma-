@@ -229,71 +229,102 @@
                 <EditForm Model="form" OnValidSubmit="GuardarDocumento">
                     <DataAnnotationsValidator />
                     <input type="hidden" value="@form.ListadoMaestroId" />
-                    <div class="form-row">
+                    @if (HasCampo("Codigo") || HasCampo("Nombre") || HasCampo("ProcesoResponsable"))
+                    {
+                        <div class="form-row">
+                            @if (HasCampo("Codigo"))
+                            {
+                                <div class="form-group">
+                                    <label>@GetCampoLabel("Codigo", "Código") *</label>
+                                    <InputText class="form-control" @bind-Value="form.Codigo" />
+                                    <ValidationMessage For="() => form.Codigo" />
+                                </div>
+                            }
+                            @if (HasCampo("Nombre"))
+                            {
+                                <div class="form-group">
+                                    <label>@GetCampoLabel("Nombre", "Nombre") *</label>
+                                    <InputText class="form-control" @bind-Value="form.Nombre" />
+                                    <ValidationMessage For="() => form.Nombre" />
+                                </div>
+                            }
+                            @if (HasCampo("ProcesoResponsable"))
+                            {
+                                <div class="form-group">
+                                    <label>@GetCampoLabel("ProcesoResponsable", "Proceso responsable") *</label>
+                                    <InputText class="form-control" @bind-Value="form.ProcesoResponsable" />
+                                    <ValidationMessage For="() => form.ProcesoResponsable" />
+                                </div>
+                            }
+                        </div>
+                    }
+                    @if (HasCampo("Version") || HasCampo("FechaDocumento"))
+                    {
+                        <div class="form-row">
+                            @if (HasCampo("Version"))
+                            {
+                                <div class="form-group">
+                                    <label>@GetCampoLabel("Version", "Versión")</label>
+                                    <InputText class="form-control" @bind-Value="form.Version" />
+                                </div>
+                            }
+                            @if (HasCampo("FechaDocumento"))
+                            {
+                                <div class="form-group">
+                                    <label>@GetCampoLabel("FechaDocumento", "Fecha de documento") *</label>
+                                    <InputDate class="form-control" @bind-Value="form.FechaDocumento" />
+                                    <ValidationMessage For="() => form.FechaDocumento" />
+                                </div>
+                            }
+                        </div>
+                    }
+                    @if (HasCampo("OneDriveUrl"))
+                    {
                         <div class="form-group">
-                            <label>@GetCampoLabel("Codigo", "Código") *</label>
-                            <InputText class="form-control" @bind-Value="form.Codigo" />
-                            <ValidationMessage For="() => form.Codigo" />
+                            <label>@GetCampoLabel("OneDriveUrl", "Archivo OneDrive") *</label>
+                            <div class="one-drive-row">
+                                <InputText class="form-control" @bind-Value="form.OneDriveUrl" placeholder="URL de OneDrive" />
+                                <button type="button" class="btn btn-ghost" @onclick="() => showOneDriveBrowser = true">Buscar OneDrive</button>
+                            </div>
+                            <ValidationMessage For="() => form.OneDriveUrl" />
+                            @if (!string.IsNullOrWhiteSpace(form.ArchivoNombre))
+                            {
+                                <small class="text-muted">Archivo seleccionado: @form.ArchivoNombre</small>
+                            }
                         </div>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label>@GetCampoLabel("Nombre", "Nombre") *</label>
-                            <InputText class="form-control" @bind-Value="form.Nombre" />
-                            <ValidationMessage For="() => form.Nombre" />
+                    }
+                    @if (HasCampo("Estado") || HasCampo("Area"))
+                    {
+                        <div class="form-row">
+                            @if (HasCampo("Estado"))
+                            {
+                                <div class="form-group">
+                                    <label>@GetCampoLabel("Estado", "Estado") *</label>
+                                    <InputSelect class="form-control" @bind-Value="form.Estado">
+                                        <option value="">Selecciona estado...</option>
+                                        <option value="Borrador">Borrador</option>
+                                        <option value="Revision">Revisión</option>
+                                        <option value="Aprobado">Aprobado</option>
+                                        <option value="Publicado">Publicado</option>
+                                    </InputSelect>
+                                    <ValidationMessage For="() => form.Estado" />
+                                </div>
+                            }
+                            @if (HasCampo("Area"))
+                            {
+                                <div class="form-group">
+                                    <label>Área (opcional)</label>
+                                    <InputSelect class="form-control" @bind-Value="form.AreaId">
+                                        <option value="">Sin área específica</option>
+                                        @foreach (var area in areas)
+                                        {
+                                            <option value="@area.Id">@area.Nombre</option>
+                                        }
+                                    </InputSelect>
+                                </div>
+                            }
                         </div>
-                        <div class="form-group">
-                            <label>@GetCampoLabel("ProcesoResponsable", "Proceso responsable") *</label>
-                            <InputText class="form-control" @bind-Value="form.ProcesoResponsable" />
-                            <ValidationMessage For="() => form.ProcesoResponsable" />
-                        </div>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label>@GetCampoLabel("Version", "Versión")</label>
-                            <InputText class="form-control" @bind-Value="form.Version" />
-                        </div>
-                        <div class="form-group">
-                            <label>@GetCampoLabel("FechaDocumento", "Fecha de documento") *</label>
-                            <InputDate class="form-control" @bind-Value="form.FechaDocumento" />
-                            <ValidationMessage For="() => form.FechaDocumento" />
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <label>@GetCampoLabel("OneDriveUrl", "Archivo OneDrive") *</label>
-                        <div class="one-drive-row">
-                            <InputText class="form-control" @bind-Value="form.OneDriveUrl" placeholder="URL de OneDrive" />
-                            <button type="button" class="btn btn-ghost" @onclick="() => showOneDriveBrowser = true">Buscar OneDrive</button>
-                        </div>
-                        <ValidationMessage For="() => form.OneDriveUrl" />
-                        @if (!string.IsNullOrWhiteSpace(form.ArchivoNombre))
-                        {
-                            <small class="text-muted">Archivo seleccionado: @form.ArchivoNombre</small>
-                        }
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label>@GetCampoLabel("Estado", "Estado") *</label>
-                            <InputSelect class="form-control" @bind-Value="form.Estado">
-                                <option value="">Selecciona estado...</option>
-                                <option value="Borrador">Borrador</option>
-                                <option value="Revision">Revisión</option>
-                                <option value="Aprobado">Aprobado</option>
-                                <option value="Publicado">Publicado</option>
-                            </InputSelect>
-                            <ValidationMessage For="() => form.Estado" />
-                        </div>
-                        <div class="form-group">
-                            <label>Área (opcional)</label>
-                            <InputSelect class="form-control" @bind-Value="form.AreaId">
-                                <option value="">Sin área específica</option>
-                                @foreach (var area in areas)
-                                {
-                                    <option value="@area.Id">@area.Nombre</option>
-                                }
-                            </InputSelect>
-                        </div>
-                    </div>
+                    }
 
                     @if (listadoCampos.Any(c => !c.EsPredeterminado))
                     {
@@ -334,10 +365,13 @@
                         <label>Comentario de cambio</label>
                         <InputTextArea class="form-control" @bind-Value="form.ComentarioCambio" Rows="3" />
                     </div>
-                    <div class="form-group">
-                        <label>Observaciones</label>
-                        <InputTextArea class="form-control" @bind-Value="form.Observaciones" Rows="3" />
-                    </div>
+                    @if (HasCampo("Observaciones"))
+                    {
+                        <div class="form-group">
+                            <label>Observaciones</label>
+                            <InputTextArea class="form-control" @bind-Value="form.Observaciones" Rows="3" />
+                        </div>
+                    }
                     @if (editing && AuthInfo.EsSoloColaborador)
                     {
                         <div class="alert alert-info" style="margin-bottom:1rem;">
@@ -1234,6 +1268,8 @@
             Version = "1.0",
             FechaDocumento = DateTime.Today,
             Estado = "Borrador",
+            ProcesoResponsable = HasCampo("ProcesoResponsable") ? string.Empty : "No asignado",
+            OneDriveUrl = HasCampo("OneDriveUrl") ? string.Empty : "https://onedrive.live.com/placeholder",
             CamposPersonalizados = new Dictionary<string, string?>()
         };
         InitializeCamposPersonalizados();
@@ -1815,6 +1851,11 @@
     private string GetCampoLabel(string campoClave, string nombrePredeterminado)
     {
         return listadoCampos.FirstOrDefault(c => c.CampoClave == campoClave)?.Nombre ?? nombrePredeterminado;
+    }
+
+    private bool HasCampo(string campoClave)
+    {
+        return listadoCampos.Any(c => string.Equals(c.CampoClave, campoClave, StringComparison.OrdinalIgnoreCase));
     }
 
     private async Task LoadListadoCamposAsync(int listadoId)

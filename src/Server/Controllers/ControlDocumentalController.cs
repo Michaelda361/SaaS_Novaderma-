@@ -257,50 +257,92 @@ public class ControlDocumentalController(
             Nombre = Path.GetFileNameWithoutExtension(fileName) ?? "Listado importado"
         };
 
+        // 1. Leer metadatos del listado
         ParseMetadataSheet(workbook, dto);
         Console.WriteLine($"[IMPORT DIAGNOSTIC] Metadatos leídos. Nombre de listado a crear: '{dto.Nombre}', Descripción: '{dto.Descripcion ?? "ninguna"}'.");
 
+        // 2. Intentar leer la hoja "Campos" si existe
+        var (camposSheet, camposHeaderRow) = FindWorksheetWithHeaders(workbook, "CampoClave", "Nombre");
+        if (camposSheet is not null && camposHeaderRow is not null)
+        {
+            Console.WriteLine($"[IMPORT DIAGNOSTIC] Hoja 'Campos' detectada en '{camposSheet.Name}'. Leyendo configuraciones de columnas.");
+            ParseCamposSheet(camposSheet, camposHeaderRow, dto);
+        }
+
+        // 3. Buscar la hoja de "Documentos"
         var (documentosSheet, documentosHeaderRow) = FindWorksheetWithDocumentHeaders(workbook);
         if (documentosSheet is null || documentosHeaderRow is null)
         {
             throw new ArgumentException("No se encontró una hoja de documentos válida que contenga columnas identificables como 'Codigo' y 'Nombre' en la primera fila.");
         }
 
-        Console.WriteLine($"[IMPORT DIAGNOSTIC] Hoja seleccionada para datos: '{documentosSheet.Name}'. Leyendo encabezados de la Fila 1.");
+        Console.WriteLine($"[IMPORT DIAGNOSTIC] Hoja seleccionada para datos: '{documentosSheet.Name}'. Leyendo encabezados.");
 
         var headerDefinitions = BuildHeaderDefinitions(documentosHeaderRow);
-        Console.WriteLine($"[IMPORT DIAGNOSTIC] Encabezados detectados en la Fila 1 ({headerDefinitions.Count} columnas): {string.Join(", ", headerDefinitions.Select(h => $"{h.OriginalName} ({h.Key} -> index {h.Index})"))}");
+        Console.WriteLine($"[IMPORT DIAGNOSTIC] Encabezados detectados ({headerDefinitions.Count} columnas): {string.Join(", ", headerDefinitions.Select(h => $"{h.OriginalName} ({h.Key} -> index {h.Index})"))}");
 
         var customHeaderMap = new Dictionary<int, string>();
         var usedClave = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var orden = 1;
+
+        // Registrar primero los campos ya definidos por la hoja 'Campos'
+        foreach (var campo in dto.Campos)
+        {
+            usedClave.Add(campo.CampoClave);
+        }
+
+        var orden = dto.Campos.Any() ? dto.Campos.Max(c => c.Orden) + 1 : 1;
 
         foreach (var header in headerDefinitions)
         {
             var isFixed = IsFixedColumn(header.Key);
-            var campoClave = isFixed ? MapHeaderToFieldKey(header.Key) ?? header.Key : GetUniqueCampoClave(header.Key, usedClave);
+            string campoClave;
 
-            if (isFixed && usedClave.Contains(campoClave))
+            if (isFixed)
             {
-                continue;
+                campoClave = MapHeaderToFieldKey(header.Key) ?? header.Key;
+                if (!usedClave.Contains(campoClave))
+                {
+                    usedClave.Add(campoClave);
+                    // Agregar el campo predeterminado
+                    dto.Campos.Add(new DocumentoControlCampoDto
+                    {
+                        CampoClave = campoClave,
+                        Nombre = string.IsNullOrWhiteSpace(header.OriginalName) ? header.Key : header.OriginalName,
+                        Tipo = MapHeaderToTipo(header.Key),
+                        Requerido = IsFieldRequiredByDefault(campoClave),
+                        EsPredeterminado = true,
+                        Orden = orden++
+                    });
+                }
             }
-            usedClave.Add(campoClave);
-
-            if (!isFixed)
+            else
             {
+                // Es un campo personalizado. Verificar si ya fue definido en la hoja 'Campos'
+                var campoExistente = dto.Campos.FirstOrDefault(c => 
+                    string.Equals(c.CampoClave, header.Key, StringComparison.OrdinalIgnoreCase) || 
+                    string.Equals(NormalizeHeaderKey(c.Nombre), header.Key, StringComparison.OrdinalIgnoreCase));
+
+                if (campoExistente is not null)
+                {
+                    campoClave = campoExistente.CampoClave;
+                }
+                else
+                {
+                    campoClave = GetUniqueCampoClave(header.Key, usedClave);
+                    var tipo = InferFieldType(documentosSheet, header.Index, documentosHeaderRow.RowNumber() + 1);
+                    dto.Campos.Add(new DocumentoControlCampoDto
+                    {
+                        CampoClave = campoClave,
+                        Nombre = string.IsNullOrWhiteSpace(header.OriginalName) ? header.Key : header.OriginalName,
+                        Tipo = tipo,
+                        Requerido = false,
+                        EsPredeterminado = false,
+                        Orden = orden++
+                    });
+                }
+
                 customHeaderMap[header.Index] = campoClave;
             }
-
-            var tipo = InferFieldType(documentosSheet, header.Index, documentosHeaderRow.RowNumber() + 1);
-            dto.Campos.Add(new DocumentoControlCampoDto
-            {
-                CampoClave = campoClave,
-                Nombre = string.IsNullOrWhiteSpace(header.OriginalName) ? header.Key : header.OriginalName,
-                Tipo = isFixed ? MapHeaderToTipo(header.Key) : tipo,
-                Requerido = isFixed && IsFieldRequiredByDefault(campoClave),
-                EsPredeterminado = isFixed,
-                Orden = orden++
-            });
         }
 
         var headerMap = BuildHeaderMap(documentosHeaderRow);
@@ -411,12 +453,15 @@ public class ControlDocumentalController(
                     || requeridoTexto.Equals("SÍ", StringComparison.OrdinalIgnoreCase)
                     || requeridoTexto.Equals("1", StringComparison.OrdinalIgnoreCase));
 
+            var isFixed = IsFixedColumn(NormalizeHeaderKey(clave));
+
             dto.Campos.Add(new DocumentoControlCampoDto
             {
                 CampoClave = clave,
                 Nombre = nombreCampo,
                 Tipo = string.IsNullOrWhiteSpace(tipo) ? "Texto" : tipo,
                 Requerido = requerido,
+                EsPredeterminado = isFixed,
                 Opciones = string.IsNullOrWhiteSpace(opciones) ? null : opciones,
                 Orden = orden
             });
@@ -435,26 +480,28 @@ public class ControlDocumentalController(
         Console.WriteLine($"[IMPORT DIAGNOSTIC] Iniciando parsing de filas en '{sheet.Name}'. Filas usadas totales: {totalRowsUsed}. Fila de cabecera: {headerRow.RowNumber()}.");
         Console.WriteLine($"[IMPORT DIAGNOSTIC] Total de filas detectadas con datos en la hoja: {totalRowsUsed - headerRow.RowNumber()}.");
 
-        foreach (var row in sheet.RowsUsed().Where(r => r.RowNumber() > headerRow.RowNumber()))
+        var headerRowNumber = headerRow.RowNumber();
+
+        foreach (var row in sheet.RowsUsed().Where(r => r.RowNumber() > headerRowNumber))
         {
-            var codigo = GetCellString(row, headerMap, "Codigo");
+            var codigo = GetCellString(row, headerMap, "Codigo", headerRowNumber);
             if (string.IsNullOrWhiteSpace(codigo))
             {
                 Console.WriteLine($"[IMPORT DIAGNOSTIC] Fila {row.RowNumber()} omitida: Código de documento vacío o no mapeado.");
                 continue;
             }
 
-            var nombreDocumento = GetCellString(row, headerMap, "Nombre");
+            var nombreDocumento = GetCellString(row, headerMap, "Nombre", headerRowNumber);
             if (string.IsNullOrWhiteSpace(nombreDocumento))
             {
                 Console.WriteLine($"[IMPORT DIAGNOSTIC] Fila {row.RowNumber()} omitida: Nombre de documento vacío o no mapeado.");
                 continue;
             }
 
-            var proceso = GetCellString(row, headerMap, "ProcesoResponsable");
+            var proceso = GetCellString(row, headerMap, "ProcesoResponsable", headerRowNumber);
             if (string.IsNullOrWhiteSpace(proceso))
             {
-                proceso = GetCellString(row, headerMap, "Lugar de archivo");
+                proceso = GetCellString(row, headerMap, "Lugar de archivo", headerRowNumber);
             }
 
             if (string.IsNullOrWhiteSpace(proceso))
@@ -462,28 +509,33 @@ public class ControlDocumentalController(
                 proceso = "No asignado";
             }
 
-            var version = GetCellString(row, headerMap, "Version");
-            var estado = GetCellString(row, headerMap, "Estado");
-            var fechaDocumento = GetCellDateTime(row, headerMap, "FechaDocumento")
-                ?? GetCellDateTime(row, headerMap, "Fecha");
-            var oneDriveUrl = GetCellString(row, headerMap, "OneDriveUrl");
-            var oneDriveItemId = GetCellString(row, headerMap, "OneDrive Item ID");
-            var archivoNombre = GetCellString(row, headerMap, "ArchivoNombre");
-            var uso = GetCellString(row, headerMap, "Uso");
-            var tiempoRetencion = GetCellString(row, headerMap, "TiempoRetencion");
-            var proteccion = GetCellString(row, headerMap, "Proteccion");
-            var recuperacion = GetCellString(row, headerMap, "Recuperacion");
-            var disposicionFinal = GetCellString(row, headerMap, "DisposicionFinal");
-            var observaciones = GetCellString(row, headerMap, "Observaciones");
-            var comentarioCambio = GetCellString(row, headerMap, "ComentarioCambio");
-            var area = GetCellString(row, headerMap, "Area");
+            var version = GetCellString(row, headerMap, "Version", headerRowNumber);
+            var estado = GetCellString(row, headerMap, "Estado", headerRowNumber);
+            var fechaDocumento = GetCellDateTime(row, headerMap, "FechaDocumento", headerRowNumber)
+                ?? GetCellDateTime(row, headerMap, "Fecha", headerRowNumber);
+            var oneDriveUrl = GetCellString(row, headerMap, "OneDriveUrl", headerRowNumber);
+            var oneDriveItemId = GetCellString(row, headerMap, "OneDrive Item ID", headerRowNumber);
+            var archivoNombre = GetCellString(row, headerMap, "ArchivoNombre", headerRowNumber);
+            var uso = GetCellString(row, headerMap, "Uso", headerRowNumber);
+            var tiempoRetencion = GetCellString(row, headerMap, "TiempoRetencion", headerRowNumber);
+            var proteccion = GetCellString(row, headerMap, "Proteccion", headerRowNumber);
+            var recuperacion = GetCellString(row, headerMap, "Recuperacion", headerRowNumber);
+            var disposicionFinal = GetCellString(row, headerMap, "DisposicionFinal", headerRowNumber);
+            var observaciones = GetCellString(row, headerMap, "Observaciones", headerRowNumber);
+            var comentarioCambio = GetCellString(row, headerMap, "ComentarioCambio", headerRowNumber);
+            var area = GetCellString(row, headerMap, "Area", headerRowNumber);
 
             var customValues = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
             foreach (var header in headerDefinitions)
             {
                 if (customHeaderMap.TryGetValue(header.Index, out var campoClave))
                 {
-                    var value = FormatCellValue(row.Cell(header.Index));
+                    var cell = row.Cell(header.Index);
+                    if (cell.IsMerged() && cell.MergedRange().FirstCell().Address.RowNumber <= headerRowNumber)
+                    {
+                        continue;
+                    }
+                    var value = FormatCellValue(cell);
                     if (!string.IsNullOrWhiteSpace(value))
                     {
                         customValues[campoClave] = value;
@@ -548,22 +600,19 @@ public class ControlDocumentalController(
 
     private static bool IsFixedColumn(string normalizedHeader)
     {
-        var fixedKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        var fixedKeys = new[] { "codigo", "nombre", "procesoresponsable", "version", "estado", "fechadocumento", "onedriveurl", "onedriveitemid", "archivonombre", "comentariocambio", "area", "observaciones" };
+        foreach (var key in fixedKeys)
         {
-            "codigo",
-            "nombre",
-            "procesoresponsable", "lugardearchivo", "proceso", "responsable",
-            "version",
-            "estado",
-            "fechadocumento", "fecha", "fechadedocumento",
-            "onedriveurl", "archivoonedrive", "url",
-            "onedriveitemid", "itemid",
-            "archivonombre", "archivo", "nombrearchivo", "nombredearchivo",
-            "comentariocambio", "comentariodecambio", "cambio",
-            "area", "areaid"
-        };
-
-        return fixedKeys.Contains(normalizedHeader);
+            if (string.Equals(key, normalizedHeader, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+            if (GetHeaderSynonyms(key).Contains(normalizedHeader, StringComparer.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static bool IsFieldRequiredByDefault(string campoClave)
@@ -622,64 +671,88 @@ public class ControlDocumentalController(
 
     private static string? MapHeaderToFieldKey(string normalizedHeader)
     {
+        if (normalizedHeader == "codigo" || GetHeaderSynonyms("codigo").Contains(normalizedHeader))
+            return "Codigo";
+        if (normalizedHeader == "nombre" || GetHeaderSynonyms("nombre").Contains(normalizedHeader))
+            return "Nombre";
+        if (normalizedHeader == "procesoresponsable" || GetHeaderSynonyms("procesoresponsable").Contains(normalizedHeader))
+            return "ProcesoResponsable";
+        if (normalizedHeader == "version" || GetHeaderSynonyms("version").Contains(normalizedHeader))
+            return "Version";
+        if (normalizedHeader == "estado" || GetHeaderSynonyms("estado").Contains(normalizedHeader))
+            return "Estado";
+        if (normalizedHeader == "fechadocumento" || GetHeaderSynonyms("fechadocumento").Contains(normalizedHeader))
+            return "FechaDocumento";
+        if (normalizedHeader == "onedriveurl" || GetHeaderSynonyms("onedriveurl").Contains(normalizedHeader))
+            return "OneDriveUrl";
+        if (normalizedHeader == "onedriveitemid" || GetHeaderSynonyms("onedriveitemid").Contains(normalizedHeader))
+            return "OneDriveItemId";
+        if (normalizedHeader == "archivonombre" || GetHeaderSynonyms("archivonombre").Contains(normalizedHeader))
+            return "ArchivoNombre";
+        if (normalizedHeader == "comentariocambio" || GetHeaderSynonyms("comentariocambio").Contains(normalizedHeader))
+            return "ComentarioCambio";
+        if (normalizedHeader == "area" || GetHeaderSynonyms("area").Contains(normalizedHeader))
+            return "Area";
+        if (normalizedHeader == "observaciones" || GetHeaderSynonyms("observaciones").Contains(normalizedHeader))
+            return "Observaciones";
+
         return normalizedHeader switch
         {
-            var key when key == "codigo" => "Codigo",
-            var key when key == "nombre" => "Nombre",
-            var key when key == "procesoresponsable" || key == "lugardearchivo" || key == "proceso" || key == "responsable" => "ProcesoResponsable",
-            var key when key == "version" => "Version",
-            var key when key == "estado" => "Estado",
-            var key when key == "fechadocumento" || key == "fecha" || key == "fechadedocumento" => "FechaDocumento",
             var key when key == "uso" => "Uso",
             var key when key == "tiemporetencion" || key == "tiempoderetencion" || key == "retencion" => "TiempoRetencion",
             var key when key == "proteccion" => "Proteccion",
             var key when key == "recuperacion" => "Recuperacion",
             var key when key == "disposicionfinal" || key == "disposicion" => "DisposicionFinal",
-            var key when key == "observaciones" => "Observaciones",
-            var key when key == "onedriveurl" || key == "archivoonedrive" || key == "url" => "OneDriveUrl",
-            var key when key == "onedriveitemid" || key == "itemid" => "OneDriveItemId",
-            var key when key == "archivonombre" || key == "archivo" || key == "nombrearchivo" || key == "nombredearchivo" => "ArchivoNombre",
-            var key when key == "comentariocambio" || key == "comentariodecambio" || key == "cambio" => "ComentarioCambio",
-            var key when key == "area" || key == "areaid" => "Area",
             _ => null
         };
     }
 
     private static string MapHeaderToTipo(string normalizedKey)
     {
-        return normalizedKey switch
-        {
-            var k when k == "fechadocumento" || k == "fecha" || k == "fechadedocumento" => "Fecha",
-            _ => "Texto"
-        };
+        if (normalizedKey == "fechadocumento" || GetHeaderSynonyms("fechadocumento").Contains(normalizedKey))
+            return "Fecha";
+        return "Texto";
     }
 
-    private static string GetCellString(IXLRow row, Dictionary<string, int> headerMap, string headerName)
+    private static string GetCellString(IXLRow row, Dictionary<string, int> headerMap, string headerName, int headerRowNumber = 0)
     {
-        return TryGetCellIndex(headerMap, headerName, out var index)
-            ? GetEffectiveCell(row.Cell(index)).GetString().Trim()
-            : string.Empty;
+        if (!TryGetCellIndex(headerMap, headerName, out var index))
+            return string.Empty;
+
+        var cell = row.Cell(index);
+        if (headerRowNumber > 0 && cell.IsMerged() && cell.MergedRange().FirstCell().Address.RowNumber <= headerRowNumber)
+        {
+            return string.Empty;
+        }
+
+        return GetEffectiveCell(cell).GetString().Trim();
     }
 
-    private static DateTime? GetCellDateTime(IXLRow row, Dictionary<string, int> headerMap, string headerName)
+    private static DateTime? GetCellDateTime(IXLRow row, Dictionary<string, int> headerMap, string headerName, int headerRowNumber = 0)
     {
         if (!TryGetCellIndex(headerMap, headerName, out var index))
         {
             return null;
         }
 
-        var cell = GetEffectiveCell(row.Cell(index));
-        if (cell.IsEmpty())
+        var cell = row.Cell(index);
+        if (headerRowNumber > 0 && cell.IsMerged() && cell.MergedRange().FirstCell().Address.RowNumber <= headerRowNumber)
         {
             return null;
         }
 
-        if (cell.TryGetValue<DateTime>(out var dateValue))
+        var effCell = GetEffectiveCell(cell);
+        if (effCell.IsEmpty())
+        {
+            return null;
+        }
+
+        if (effCell.TryGetValue<DateTime>(out var dateValue))
         {
             return dateValue;
         }
 
-        if (DateTime.TryParse(cell.GetString().Trim(), CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed))
+        if (DateTime.TryParse(effCell.GetString().Trim(), CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed))
         {
             return parsed;
         }
@@ -720,23 +793,29 @@ public class ControlDocumentalController(
         return normalizedHeader switch
         {
             var n when n == "codigo" =>
-                new[] { "codigo", "codigodedocumento", "cod", "reference" },
+                new[] { "codigo", "codigodedocumento", "cod", "reference", "ref" },
             var n when n == "nombre" =>
-                new[] { "nombre", "nombrededocumento", "nombredearchivo", "titulo", "title", "name" },
+                new[] { "nombre", "nombrededocumento", "nombredearchivo", "titulo", "title", "name", "nombredeldocumento" },
             var n when n == "procesoresponsable" =>
                 new[] { "procesoresponsable", "lugardearchivo", "proceso", "responsable" },
+            var n when n == "version" =>
+                new[] { "version", "revision" },
+            var n when n == "estado" =>
+                new[] { "estado", "status" },
             var n when n == "fechadocumento" =>
                 new[] { "fechadocumento", "fecha", "fechadedocumento" },
             var n when n == "onedriveurl" =>
-                new[] { "onedriveurl", "archivoonedrive", "url" },
+                new[] { "onedriveurl", "archivoonedrive", "url", "rutaonedrive", "ruta" },
             var n when n == "onedriveitemid" =>
                 new[] { "onedriveitemid", "itemid" },
             var n when n == "archivonombre" =>
                 new[] { "archivonombre", "archivo", "nombrearchivo", "nombredearchivo" },
             var n when n == "comentariocambio" =>
-                new[] { "comentariocambio", "comentariodecambio", "cambio" },
+                new[] { "comentariocambio", "comentariodecambio", "cambio", "comentario" },
             var n when n == "area" =>
-                new[] { "area", "areaid" },
+                new[] { "area", "areaid", "areanombre", "departamento" },
+            var n when n == "observaciones" =>
+                new[] { "observaciones", "observacion", "notas", "comentarios", "nota" },
             var n when n == "tiemporetencion" =>
                 new[] { "tiemporetencion", "tiempoderetencion", "retencion" },
             var n when n == "disposicionfinal" =>
