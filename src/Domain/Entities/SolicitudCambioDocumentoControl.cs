@@ -22,6 +22,7 @@ public class SolicitudCambioDocumentoControl
     public string? ComentarioResolucion { get; set; }
 
     public string DatosPropuestos { get; set; } = string.Empty;
+    public string? DatosOriginales { get; set; }
 
     public EstadoPropuesta EstadoPropuesta { get; set; } = EstadoPropuesta.PendienteRevision;
 

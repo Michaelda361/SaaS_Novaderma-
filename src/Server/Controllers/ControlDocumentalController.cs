@@ -1287,12 +1287,12 @@ public class ControlDocumentalController(
     }
 
     [HttpPost("solicitudes/{solicitudId:int}/aprobar")]
-    public async Task<IActionResult> AprobarSolicitudCambio(int solicitudId)
+    public async Task<IActionResult> AprobarSolicitudCambio(int solicitudId, [FromBody] AprobarSolicitudCambioDto? dto)
     {
         try
         {
             var email = currentUser.GetEmail();
-            await service.AprobarSolicitudCambioAsync(solicitudId, email);
+            await service.AprobarSolicitudCambioAsync(solicitudId, dto?.Comentarios, email);
             return NoContent();
         }
         catch (UnauthorizedAccessException)

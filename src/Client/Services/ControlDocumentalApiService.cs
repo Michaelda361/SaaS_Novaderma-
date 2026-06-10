@@ -129,9 +129,9 @@ public class ControlDocumentalApiService(HttpClient http)
         return await response.Content.ReadFromJsonAsync<int>(JsonOptions);
     }
 
-    public async Task<HttpResponseMessage> AprobarSolicitudCambioAsync(int solicitudId)
+    public async Task<HttpResponseMessage> AprobarSolicitudCambioAsync(int solicitudId, AprobarSolicitudCambioDto? dto = null)
     {
-        return await http.PostAsync($"{Base}/solicitudes/{solicitudId}/aprobar", null);
+        return await http.PostAsJsonAsync($"{Base}/solicitudes/{solicitudId}/aprobar", dto ?? new AprobarSolicitudCambioDto());
     }
 
     public async Task<HttpResponseMessage> RechazarSolicitudCambioAsync(int solicitudId, RechazarSolicitudCambioDto dto)

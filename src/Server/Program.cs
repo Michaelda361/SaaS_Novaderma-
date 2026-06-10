@@ -99,6 +99,8 @@ if (esModoDev)
         .GetRequiredService<TalentManagement.Infrastructure.Persistence.AppDbContext>();
     db.Database.Migrate();
     await TalentManagement.Infrastructure.Persistence.DbSeeder.SeedAsync(db);
+    await TalentManagement.Infrastructure.Persistence.DbSeeder.CorregirHistoricosHuerfanosAsync(db);
+    await TalentManagement.Infrastructure.Persistence.DbSeeder.RunIntegrationTestsAsync(scope.ServiceProvider);
 }
 
 app.UseCors();

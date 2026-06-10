@@ -15,6 +15,7 @@ public class SolicitudCambioDocumentoControlDto
     public DateTime? FechaEdicion { get; set; }
     public DateTime? FechaResolucion { get; set; }
     public string? DatosPropuestos { get; set; }
+    public string? DatosOriginales { get; set; }
     public string? EditorNombre { get; set; }
     public int? AprobadorId { get; set; }
     public string? AprobadorNombre { get; set; }

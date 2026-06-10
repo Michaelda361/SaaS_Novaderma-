@@ -23,5 +23,6 @@ public enum EstadoPropuesta
     EnEdicion,
     PendienteAprobacion,
     Aprobada,
-    Rechazada
+    Rechazada,
+    Publicada
 }

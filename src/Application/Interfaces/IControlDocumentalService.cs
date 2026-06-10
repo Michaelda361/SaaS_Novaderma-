@@ -24,7 +24,7 @@ public interface IControlDocumentalService
     Task IniciarRevisionSolicitudAsync(int solicitudId, string usuarioEmail);
     Task UpdateBorradorDocumentoAsync(int solicitudId, UpdateDocumentoControlDto borrador, string usuarioEmail);
     Task EnviarAAprobacionAsync(int solicitudId, string usuarioEmail);
-    Task AprobarSolicitudCambioAsync(int solicitudId, string usuarioEmail);
+    Task AprobarSolicitudCambioAsync(int solicitudId, string? comentarios, string usuarioEmail);
     Task RechazarSolicitudCambioAsync(int solicitudId, string motivo, string usuarioEmail);
     Task<List<ListadoMaestroPermisoDto>> GetListadoPermisosAsync(int listadoId);
     Task<ListadoMaestroPermisoDto?> GetListadoPermisosActualUsuarioAsync(int listadoId, string usuarioEmail);

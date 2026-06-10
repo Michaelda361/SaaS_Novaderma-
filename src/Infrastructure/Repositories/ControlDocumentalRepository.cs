@@ -72,7 +72,10 @@ public class ControlDocumentalRepository(AppDbContext context) : IControlDocumen
         if (!string.IsNullOrWhiteSpace(estado))
             query = query.Where(d => d.Estado.Contains(estado));
 
-        var results = await query.OrderBy(d => d.Nombre).ToListAsync();
+        var results = await query
+            .OrderByDescending(d => d.FechaPublicacion ?? d.FechaDocumento)
+            .ThenByDescending(d => d.Id)
+            .ToListAsync();
         Console.WriteLine($"[RETRIEVAL DIAGNOSTIC] Registros recuperados posteriormente: {results.Count} documentos recuperados de la base de datos para el listado ID {listadoId}.");
         return results;
     }
@@ -163,38 +166,53 @@ public class ControlDocumentalRepository(AppDbContext context) : IControlDocumen
             .Include(s => s.Aprobador)
             .FirstOrDefaultAsync(s => s.Id == id);
 
-    public async Task<IEnumerable<SolicitudCambioDocumentoControl>> GetSolicitudesPorDocumentoAsync(int documentoId) =>
-        await context.SolicitudesCambioDocumentoControl
+    public async Task<IEnumerable<SolicitudCambioDocumentoControl>> GetSolicitudesPorDocumentoAsync(int documentoId)
+    {
+        var targetDoc = await context.DocumentosControl
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(d => d.Id == documentoId);
+
+        if (targetDoc == null)
+            return Enumerable.Empty<SolicitudCambioDocumentoControl>();
+
+        int parentId = targetDoc.DocumentoOriginalId ?? targetDoc.Id;
+
+        return await context.SolicitudesCambioDocumentoControl
+            .IgnoreQueryFilters()
             .Include(s => s.DocumentoControl)
             .Include(s => s.Solicitante)
             .Include(s => s.Editor)
             .Include(s => s.Aprobador)
-            .Where(s => s.DocumentoControlId == documentoId)
+            .Where(s => s.DocumentoControlId == parentId || s.DocumentoControl.DocumentoOriginalId == parentId)
             .OrderByDescending(s => s.FechaCreacion)
             .ToListAsync();
+    }
 
     public async Task<IEnumerable<SolicitudCambioDocumentoControl>> GetSolicitudesCambioPendientesAsync() =>
         await context.SolicitudesCambioDocumentoControl
+            .IgnoreQueryFilters()
             .Include(s => s.DocumentoControl)
             .Include(s => s.Solicitante)
             .Include(s => s.Aprobador)
-            .Where(s => s.EstadoPropuesta == Domain.Enums.EstadoPropuesta.PendienteRevision)
             .OrderByDescending(s => s.FechaCreacion)
             .ToListAsync();
 
     public async Task<IEnumerable<SolicitudCambioDocumentoControl>> GetSolicitudesCambioPendientesPorAreaAsync(int areaId) =>
         await context.SolicitudesCambioDocumentoControl
+            .IgnoreQueryFilters()
             .Include(s => s.DocumentoControl)
             .Include(s => s.Solicitante)
             .Include(s => s.Aprobador)
-            .Where(s => s.EstadoPropuesta == Domain.Enums.EstadoPropuesta.PendienteRevision
-                && s.DocumentoControl.AreaId == areaId)
+            .Where(s => s.DocumentoControl.AreaId == areaId)
             .OrderByDescending(s => s.FechaCreacion)
             .ToListAsync();
 
     public async Task<int> CountSolicitudesCambioPendientesPorAreaAsync(int areaId) =>
         await context.SolicitudesCambioDocumentoControl
-            .Where(s => s.EstadoPropuesta == Domain.Enums.EstadoPropuesta.PendienteRevision
+            .IgnoreQueryFilters()
+            .Where(s => (s.EstadoPropuesta == Domain.Enums.EstadoPropuesta.PendienteRevision
+                || s.EstadoPropuesta == Domain.Enums.EstadoPropuesta.EnEdicion
+                || s.EstadoPropuesta == Domain.Enums.EstadoPropuesta.PendienteAprobacion)
                 && s.DocumentoControl.AreaId == areaId)
             .CountAsync();
 
@@ -286,6 +304,15 @@ public class ControlDocumentalRepository(AppDbContext context) : IControlDocumen
 
     public async Task<IEnumerable<DocumentoControl>> GetDocumentosIgnoreFiltersAsync(int documentoId)
     {
+        var targetDoc = await context.DocumentosControl
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(d => d.Id == documentoId);
+
+        if (targetDoc == null)
+            return Enumerable.Empty<DocumentoControl>();
+
+        int parentId = targetDoc.DocumentoOriginalId ?? targetDoc.Id;
+
         var list = await context.DocumentosControl
             .IgnoreQueryFilters()
             .Include(d => d.ListadoMaestro)
@@ -293,7 +320,7 @@ public class ControlDocumentalRepository(AppDbContext context) : IControlDocumen
             .Include(d => d.Solicitante)
             .Include(d => d.Editor)
             .Include(d => d.Aprobador)
-            .Where(d => d.Id == documentoId || d.DocumentoOriginalId == documentoId)
+            .Where(d => d.Id == parentId || d.DocumentoOriginalId == parentId)
             .ToListAsync();
 
         return list

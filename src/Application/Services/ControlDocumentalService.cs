@@ -225,28 +225,24 @@ public class ControlDocumentalService(
         return norm == "N.A" || norm == "N/A" || norm == "NA" || norm == "NO APLICA" || norm == "N/D" || norm == "ND";
     }    private async Task SyncImportDocumentsAsync(int listadoId, IEnumerable<TemplateDocumentoDto> documentos, string usuarioEmail)
     {
-        Console.WriteLine($"[PERSISTENCE DIAGNOSTIC] Iniciando sincronización limpia para listado ID {listadoId}. Importando {documentos.Count()} registros.");
+        Console.WriteLine($"[PERSISTENCE DIAGNOSTIC] Iniciando sincronización inteligente (Upsert) para listado ID {listadoId}. Importando {documentos.Count()} registros.");
 
-        // 1. Desactivar todos los documentos actuales para evitar mezclas con importaciones anteriores
+        // 1. Obtener todos los documentos activos actuales en base de datos
         var activeDbDocs = (await repository.GetDocumentosAsync(listadoId, null, null, null, null, null))
             .Where(d => d.Activo)
             .ToList();
 
-        foreach (var dbDoc in activeDbDocs)
+        var dbDocsByCodigo = new Dictionary<string, DocumentoControl>(StringComparer.OrdinalIgnoreCase);
+        foreach (var doc in activeDbDocs)
         {
-            var docEntity = await repository.GetDocumentoByIdAsync(dbDoc.Id);
-            if (docEntity is not null)
+            var fullDoc = await repository.GetDocumentoByIdAsync(doc.Id);
+            if (fullDoc != null)
             {
-                docEntity.Activo = false;
-                await repository.UpdateDocumentoAsync(docEntity);
-                
-                var log = await BuildAuditLogAsync(docEntity.Id, docEntity.Nombre, "Eliminado", "Eliminado por nueva importación (sobrescritura limpia)", usuarioEmail, docEntity, null);
-                await auditRepository.CreateAsync(log);
+                dbDocsByCodigo[fullDoc.Codigo.Trim()] = fullDoc;
             }
         }
 
-        // 2. Crear todos los nuevos registros
-        int createdCount = 0;
+        // 2. Resolver áreas
         var areas = await areaRepository.GetAllAsync();
         var areasByName = areas.ToDictionary(a => a.Nombre.Trim(), a => a.Id, StringComparer.OrdinalIgnoreCase);
         int? GetAreaId(string? areaName)
@@ -255,28 +251,175 @@ public class ControlDocumentalService(
             return areasByName.TryGetValue(areaName.Trim(), out var id) ? id : null;
         }
 
+        var importedCodigos = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        int createdCount = 0;
+        int updatedCount = 0;
+
         foreach (var docDto in documentos)
         {
-            var newDoc = new DocumentoControl
+            var codigoTrimmed = docDto.Codigo.Trim();
+            importedCodigos.Add(codigoTrimmed);
+
+            int? targetAreaId = GetAreaId(docDto.Area);
+
+            if (dbDocsByCodigo.TryGetValue(codigoTrimmed, out var existingDoc))
             {
-                ListadoMaestroId = listadoId,
-                Activo = true
-            };
-            MapTemplateToDocumento(docDto, newDoc, GetAreaId(docDto.Area));
+                // Comparar si existen cambios reales
+                if (TieneCambios(existingDoc, docDto, targetAreaId))
+                {
+                    // Clone vigente to historical
+                    var historicalClone = new DocumentoControl
+                    {
+                        ListadoMaestroId = existingDoc.ListadoMaestroId,
+                        Codigo = existingDoc.Codigo,
+                        Nombre = existingDoc.Nombre,
+                        ProcesoResponsable = existingDoc.ProcesoResponsable,
+                        Version = existingDoc.Version,
+                        FechaDocumento = existingDoc.FechaDocumento,
+                        OneDriveUrl = existingDoc.OneDriveUrl,
+                        OneDriveItemId = existingDoc.OneDriveItemId,
+                        ArchivoNombre = existingDoc.ArchivoNombre,
+                        Uso = existingDoc.Uso,
+                        TiempoRetencion = existingDoc.TiempoRetencion,
+                        Proteccion = existingDoc.Proteccion,
+                        Recuperacion = existingDoc.Recuperacion,
+                        DisposicionFinal = existingDoc.DisposicionFinal,
+                        Estado = "Histórica",
+                        Observaciones = existingDoc.Observaciones,
+                        ComentarioCambio = existingDoc.ComentarioCambio,
+                        DatosPersonalizados = existingDoc.DatosPersonalizados,
+                        AreaId = existingDoc.AreaId,
+                        DocumentoOriginalId = existingDoc.Id,
+                        Activo = false,
+                        SolicitanteId = existingDoc.SolicitanteId,
+                        EditorId = existingDoc.EditorId,
+                        AprobadorId = existingDoc.AprobadorId,
+                        FechaPublicacion = existingDoc.FechaPublicacion,
+                        MotivoCambio = existingDoc.MotivoCambio,
+                        DescripcionDetallada = existingDoc.DescripcionDetallada
+                    };
 
-            // EF navigation properties null to avoid conflicts
-            newDoc.ListadoMaestro = null!;
-            newDoc.Area = null!;
+                    await repository.CreateDocumentoAsync(historicalClone);
 
-            var createdDoc = await repository.CreateDocumentoAsync(newDoc);
-            createdCount++;
-            Console.WriteLine($"[PERSISTENCE DIAGNOSTIC] Documento creado: Código='{createdDoc.Codigo}', Nombre='{createdDoc.Nombre}', ID={createdDoc.Id}");
+                    // Update vigente in-place
+                    var original = CloneForDiff(existingDoc);
+                    MapTemplateToDocumento(docDto, existingDoc, targetAreaId);
+                    
+                    existingDoc.FechaPublicacion = DateTime.UtcNow;
+                    existingDoc.MotivoCambio = docDto.ComentarioCambio ?? "Importado mediante archivo Excel (Actualización)";
 
-            var log = await BuildAuditLogAsync(createdDoc.Id, createdDoc.Nombre, "Creado", docDto.ComentarioCambio ?? "Importado mediante archivo Excel", usuarioEmail, createdDoc, null);
-            await auditRepository.CreateAsync(log);
+                    var updated = await repository.UpdateDocumentoAsync(existingDoc);
+                    updatedCount++;
+
+                    var cambios = BuildDiff(original, updated);
+                    var log = await BuildAuditLogAsync(updated.Id, updated.Nombre, "Actualizado", docDto.ComentarioCambio ?? "Actualizado mediante importación Excel", usuarioEmail, updated, cambios);
+                    await auditRepository.CreateAsync(log);
+                }
+            }
+            else
+            {
+                // Create new document control record
+                var newDoc = new DocumentoControl
+                {
+                    ListadoMaestroId = listadoId,
+                    Activo = true
+                };
+                MapTemplateToDocumento(docDto, newDoc, targetAreaId);
+
+                newDoc.FechaPublicacion = DateTime.UtcNow;
+                newDoc.MotivoCambio = "Creación inicial por importación Excel";
+
+                var createdDoc = await repository.CreateDocumentoAsync(newDoc);
+                createdCount++;
+
+                var log = await BuildAuditLogAsync(createdDoc.Id, createdDoc.Nombre, "Creado", docDto.ComentarioCambio ?? "Importado mediante archivo Excel", usuarioEmail, createdDoc, null);
+                await auditRepository.CreateAsync(log);
+            }
         }
 
-        Console.WriteLine($"[PERSISTENCE DIAGNOSTIC] Sincronización completada. Creados: {createdCount}.");
+        // 3. Desactivar documentos que estaban activos pero no vinieron en la planilla
+        int deactivatedCount = 0;
+        foreach (var kv in dbDocsByCodigo)
+        {
+            if (!importedCodigos.Contains(kv.Key))
+            {
+                var docToDeactivate = kv.Value;
+                docToDeactivate.Activo = false;
+                
+                await repository.UpdateDocumentoAsync(docToDeactivate);
+                deactivatedCount++;
+
+                var log = await BuildAuditLogAsync(docToDeactivate.Id, docToDeactivate.Nombre, "Eliminado", "Eliminado por no estar presente en la importación Excel", usuarioEmail, docToDeactivate, null);
+                await auditRepository.CreateAsync(log);
+            }
+        }
+
+        Console.WriteLine($"[PERSISTENCE DIAGNOSTIC] Sincronización completada. Creados: {createdCount}, Actualizados: {updatedCount}, Desactivados: {deactivatedCount}.");
+    }
+
+    private static bool TieneCambios(DocumentoControl dbDoc, TemplateDocumentoDto excelDto, int? areaId)
+    {
+        if (!string.Equals(dbDoc.Nombre?.Trim(), excelDto.Nombre?.Trim(), StringComparison.OrdinalIgnoreCase)) return true;
+        if (!string.Equals(dbDoc.ProcesoResponsable?.Trim(), excelDto.ProcesoResponsable?.Trim(), StringComparison.OrdinalIgnoreCase)) return true;
+        if (!string.Equals(dbDoc.Version?.Trim(), excelDto.Version?.Trim(), StringComparison.OrdinalIgnoreCase)) return true;
+        
+        var excelFecha = excelDto.FechaDocumento ?? DateTime.Today;
+        if (dbDoc.FechaDocumento.Date != excelFecha.Date) return true;
+
+        if (!string.Equals(dbDoc.OneDriveUrl?.Trim(), excelDto.OneDriveUrl?.Trim(), StringComparison.OrdinalIgnoreCase)) return true;
+        if (!string.Equals(dbDoc.OneDriveItemId?.Trim(), excelDto.OneDriveItemId?.Trim(), StringComparison.OrdinalIgnoreCase)) return true;
+        if (!string.Equals(dbDoc.ArchivoNombre?.Trim(), excelDto.ArchivoNombre?.Trim(), StringComparison.OrdinalIgnoreCase)) return true;
+        
+        var usoExcel = (excelDto.Uso ?? GetValoresPersonalizados(excelDto.CamposPersonalizados, "uso"))?.Trim();
+        if (!string.Equals(dbDoc.Uso?.Trim(), usoExcel, StringComparison.OrdinalIgnoreCase)) return true;
+
+        var retencionExcel = (excelDto.TiempoRetencion ?? GetValoresPersonalizados(excelDto.CamposPersonalizados, "tiemporetencion", "tiempoderetencion", "retencion"))?.Trim();
+        if (!string.Equals(dbDoc.TiempoRetencion?.Trim(), retencionExcel, StringComparison.OrdinalIgnoreCase)) return true;
+
+        var proteccionExcel = (excelDto.Proteccion ?? GetValoresPersonalizados(excelDto.CamposPersonalizados, "proteccion"))?.Trim();
+        if (!string.Equals(dbDoc.Proteccion?.Trim(), proteccionExcel, StringComparison.OrdinalIgnoreCase)) return true;
+
+        var recuperacionExcel = (excelDto.Recuperacion ?? GetValoresPersonalizados(excelDto.CamposPersonalizados, "recuperacion"))?.Trim();
+        if (!string.Equals(dbDoc.Recuperacion?.Trim(), recuperacionExcel, StringComparison.OrdinalIgnoreCase)) return true;
+
+        var dispExcel = (excelDto.DisposicionFinal ?? GetValoresPersonalizados(excelDto.CamposPersonalizados, "disposicionfinal", "disposicion"))?.Trim();
+        if (!string.Equals(dbDoc.DisposicionFinal?.Trim(), dispExcel, StringComparison.OrdinalIgnoreCase)) return true;
+
+        var obsExcel = (excelDto.Observaciones ?? GetValoresPersonalizados(excelDto.CamposPersonalizados, "observaciones"))?.Trim();
+        if (!string.Equals(dbDoc.Observaciones?.Trim(), obsExcel, StringComparison.OrdinalIgnoreCase)) return true;
+
+        if (dbDoc.AreaId != areaId) return true;
+
+        var dbCustomJson = dbDoc.DatosPersonalizados;
+        var excelCustom = excelDto.CamposPersonalizados;
+        
+        if (string.IsNullOrWhiteSpace(dbCustomJson))
+        {
+            if (excelCustom != null && excelCustom.Any()) return true;
+        }
+        else
+        {
+            if (excelCustom == null || !excelCustom.Any()) return true;
+            try
+            {
+                var dbCustom = JsonSerializer.Deserialize<Dictionary<string, string?>>(dbCustomJson);
+                if (dbCustom == null) return true;
+                if (dbCustom.Count != excelCustom.Count) return true;
+                foreach (var kv in excelCustom)
+                {
+                    if (!dbCustom.TryGetValue(kv.Key, out var dbVal) || !string.Equals(dbVal?.Trim(), kv.Value?.Trim(), StringComparison.OrdinalIgnoreCase))
+                    {
+                        return true;
+                    }
+                }
+            }
+            catch
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static string NormalizeFieldName(string name)
@@ -427,36 +570,68 @@ public class ControlDocumentalService(
 
         await ValidateCamposPersonalizados(dto.ListadoMaestroId, dto.CamposPersonalizados);
 
-        var original = CloneForDiff(existing);
+        // In the new flow, an authorized user edit does NOT overwrite the vigente version.
+        // It generates a new version in state "En Revisión" and creates a change request in PendienteAprobacion.
+        var borrador = new DocumentoControl
+        {
+            ListadoMaestroId = dto.ListadoMaestroId,
+            Codigo = dto.Codigo.Trim(),
+            Nombre = dto.Nombre.Trim(),
+            ProcesoResponsable = dto.ProcesoResponsable.Trim(),
+            Version = string.IsNullOrWhiteSpace(dto.Version) ? existing.Version : dto.Version.Trim(),
+            FechaDocumento = dto.FechaDocumento,
+            OneDriveUrl = dto.OneDriveUrl.Trim(),
+            OneDriveItemId = dto.OneDriveItemId?.Trim(),
+            ArchivoNombre = dto.ArchivoNombre?.Trim(),
+            Uso = dto.Uso?.Trim(),
+            TiempoRetencion = dto.TiempoRetencion?.Trim(),
+            Proteccion = dto.Proteccion?.Trim(),
+            Recuperacion = dto.Recuperacion?.Trim(),
+            DisposicionFinal = dto.DisposicionFinal?.Trim(),
+            Estado = "En Revisión",
+            Observaciones = dto.Observaciones?.Trim(),
+            ComentarioCambio = dto.ComentarioCambio?.Trim(),
+            AreaId = dto.AreaId,
+            DatosPersonalizados = dto.CamposPersonalizados is null
+                ? existing.DatosPersonalizados
+                : JsonSerializer.Serialize(dto.CamposPersonalizados),
+            DocumentoOriginalId = existing.Id,
+            Activo = true,
+            SolicitanteId = editor.Id,
+            EditorId = editor.Id
+        };
 
-        existing.ListadoMaestroId = dto.ListadoMaestroId;
-        existing.Codigo = dto.Codigo.Trim();
-        existing.Nombre = dto.Nombre.Trim();
-        existing.ProcesoResponsable = dto.ProcesoResponsable.Trim();
-        existing.Version = string.IsNullOrWhiteSpace(dto.Version) ? existing.Version : dto.Version.Trim();
-        existing.FechaDocumento = dto.FechaDocumento;
-        existing.OneDriveUrl = dto.OneDriveUrl.Trim();
-        existing.OneDriveItemId = dto.OneDriveItemId?.Trim();
-        existing.ArchivoNombre = dto.ArchivoNombre?.Trim();
-        existing.Uso = dto.Uso?.Trim();
-        existing.TiempoRetencion = dto.TiempoRetencion?.Trim();
-        existing.Proteccion = dto.Proteccion?.Trim();
-        existing.Recuperacion = dto.Recuperacion?.Trim();
-        existing.DisposicionFinal = dto.DisposicionFinal?.Trim();
-        existing.Estado = dto.Estado.Trim();
-        existing.Observaciones = dto.Observaciones?.Trim();
-        existing.ComentarioCambio = dto.ComentarioCambio?.Trim();
-        existing.AreaId = dto.AreaId;
-        existing.DatosPersonalizados = dto.CamposPersonalizados is null
-            ? existing.DatosPersonalizados
-            : JsonSerializer.Serialize(dto.CamposPersonalizados);
+        var createdBorrador = await repository.CreateDocumentoAsync(borrador);
 
-        var updated = await repository.UpdateDocumentoAsync(existing);
-        var cambios = BuildDiff(original, updated);
-        var log = await BuildAuditLogAsync(updated.Id, updated.Nombre, "Actualizado", dto.ComentarioCambio, usuarioEmail, updated, cambios);
+        var solicitud = new SolicitudCambioDocumentoControl
+        {
+            DocumentoControlId = existing.Id,
+            SolicitanteId = editor.Id,
+            EditorId = editor.Id,
+            ComentarioSolicitud = dto.ComentarioCambio?.Trim() ?? "Edición directa de metadatos",
+            DatosPropuestos = JsonSerializer.Serialize(dto),
+            DatosOriginales = JsonSerializer.Serialize(MapToDto(existing)),
+            EstadoPropuesta = EstadoPropuesta.PendienteAprobacion,
+            FechaCreacion = DateTime.UtcNow,
+            FechaEdicion = DateTime.UtcNow,
+            MotivoCambio = dto.ComentarioCambio?.Trim() ?? "Edición directa por administrador/jefe",
+            DescripcionDetallada = "Modificación directa de versión vigente.",
+            BorradorDocumentoId = createdBorrador.Id
+        };
+
+        await repository.CreateSolicitudCambioAsync(solicitud);
+
+        var log = await BuildAuditLogAsync(
+            existing.Id,
+            existing.Nombre,
+            "SolicitudCambioCreada",
+            $"Edición directa por {editor.Nombre} {editor.Apellido}. Se creó borrador en revisión ID {createdBorrador.Id}.",
+            usuarioEmail,
+            existing,
+            null);
         await auditRepository.CreateAsync(log);
 
-        return MapToDto(updated);
+        return MapToDto(createdBorrador);
     }
 
     public async Task<SolicitudCambioDocumentoControlDto> CreateSolicitudCambioAsync(int documentoId, UpdateDocumentoControlDto propuesta, string usuarioEmail)
@@ -481,8 +656,11 @@ public class ControlDocumentalService(
             SolicitanteId = solicitante.Id,
             ComentarioSolicitud = propuesta.ComentarioCambio?.Trim() ?? string.Empty,
             DatosPropuestos = JsonSerializer.Serialize(propuesta),
+            DatosOriginales = JsonSerializer.Serialize(MapToDto(documento)),
             EstadoPropuesta = EstadoPropuesta.PendienteRevision,
-            FechaCreacion = DateTime.UtcNow
+            FechaCreacion = DateTime.UtcNow,
+            MotivoCambio = propuesta.ComentarioCambio?.Trim() ?? string.Empty,
+            DescripcionDetallada = propuesta.Observaciones?.Trim() ?? string.Empty
         };
 
         var created = await repository.CreateSolicitudCambioAsync(solicitud);
@@ -541,7 +719,12 @@ public class ControlDocumentalService(
             return 0;
 
         if (colaborador.Rol == RolUsuario.Admin)
-            return (await repository.GetSolicitudesCambioPendientesAsync()).Count();
+        {
+            var todas = await repository.GetSolicitudesCambioPendientesAsync();
+            return todas.Count(s => s.EstadoPropuesta == EstadoPropuesta.PendienteRevision
+                || s.EstadoPropuesta == EstadoPropuesta.EnEdicion
+                || s.EstadoPropuesta == EstadoPropuesta.PendienteAprobacion);
+        }
 
         var (esJefe, areaId) = await EsJefeDeAreaAsync(colaborador.Id);
         if (!esJefe)
@@ -590,7 +773,7 @@ public class ControlDocumentalService(
             Proteccion = originalDoc.Proteccion,
             Recuperacion = originalDoc.Recuperacion,
             DisposicionFinal = originalDoc.DisposicionFinal,
-            Estado = "Borrador",
+            Estado = "En Revisión",
             Observaciones = originalDoc.Observaciones,
             ComentarioCambio = originalDoc.ComentarioCambio,
             DatosPersonalizados = originalDoc.DatosPersonalizados,
@@ -693,7 +876,7 @@ public class ControlDocumentalService(
         await auditRepository.CreateAsync(log);
     }
 
-    public async Task AprobarSolicitudCambioAsync(int solicitudId, string usuarioEmail)
+    public async Task AprobarSolicitudCambioAsync(int solicitudId, string? comentarios, string usuarioEmail)
     {
         var aprobador = await TryResolverColaboradorAsync(usuarioEmail);
         if (aprobador is null)
@@ -718,137 +901,86 @@ public class ControlDocumentalService(
         var documento = await repository.GetDocumentoByIdAsync(solicitud.DocumentoControlId)
             ?? throw new KeyNotFoundException("Documento no encontrado.");
 
-        UpdateDocumentoControlDto? propuesta = null;
-        DocumentoControl? borradorToDelete = null;
+        // 1. Update previous vigente to Historical
+        documento.Estado = "Histórica";
+        documento.Activo = false;
+        await repository.UpdateDocumentoAsync(documento);
+
+        DocumentoControl? finalVigente = null;
 
         if (solicitud.BorradorDocumentoId.HasValue)
         {
             var borrador = await repository.GetDocumentoByIdAsync(solicitud.BorradorDocumentoId.Value);
             if (borrador != null)
             {
-                borradorToDelete = borrador;
-                propuesta = new UpdateDocumentoControlDto
-                {
-                    ListadoMaestroId = borrador.ListadoMaestroId,
-                    Codigo = borrador.Codigo,
-                    Nombre = borrador.Nombre,
-                    ProcesoResponsable = borrador.ProcesoResponsable,
-                    Version = borrador.Version,
-                    FechaDocumento = borrador.FechaDocumento,
-                    OneDriveUrl = borrador.OneDriveUrl,
-                    OneDriveItemId = borrador.OneDriveItemId,
-                    ArchivoNombre = borrador.ArchivoNombre,
-                    Uso = borrador.Uso,
-                    TiempoRetencion = borrador.TiempoRetencion,
-                    Proteccion = borrador.Proteccion,
-                    Recuperacion = borrador.Recuperacion,
-                    DisposicionFinal = borrador.DisposicionFinal,
-                    Estado = "Vigente",
-                    Observaciones = borrador.Observaciones,
-                    ComentarioCambio = borrador.ComentarioCambio,
-                    AreaId = borrador.AreaId,
-                    CamposPersonalizados = string.IsNullOrWhiteSpace(borrador.DatosPersonalizados)
-                        ? new Dictionary<string, string?>()
-                        : JsonSerializer.Deserialize<Dictionary<string, string?>>(borrador.DatosPersonalizados)
-                };
+                // Promote the borrador (which was in state "En Revisión") to Vigente
+                borrador.Estado = "Vigente";
+                borrador.Activo = true;
+                borrador.SolicitanteId = solicitud.SolicitanteId;
+                borrador.EditorId = solicitud.EditorId ?? solicitud.SolicitanteId;
+                borrador.AprobadorId = aprobador.Id;
+                borrador.FechaPublicacion = DateTime.UtcNow;
+                borrador.MotivoCambio = solicitud.MotivoCambio ?? solicitud.ComentarioSolicitud;
+                borrador.DescripcionDetallada = solicitud.DescripcionDetallada;
+
+                finalVigente = await repository.UpdateDocumentoAsync(borrador);
             }
         }
 
-        if (propuesta == null)
+        if (finalVigente == null)
         {
-            propuesta = JsonSerializer.Deserialize<UpdateDocumentoControlDto>(solicitud.DatosPropuestos)
+            // If no borrador existed (approved directly), create a new Vigente version record using proposal data
+            var propuestaDto = JsonSerializer.Deserialize<UpdateDocumentoControlDto>(solicitud.DatosPropuestos)
                 ?? throw new InvalidOperationException("Los datos de la solicitud son inválidos.");
+
+            await ValidateCamposPersonalizados(propuestaDto.ListadoMaestroId, propuestaDto.CamposPersonalizados);
+
+            var newDoc = new DocumentoControl
+            {
+                ListadoMaestroId = propuestaDto.ListadoMaestroId,
+                Codigo = propuestaDto.Codigo.Trim(),
+                Nombre = propuestaDto.Nombre.Trim(),
+                ProcesoResponsable = propuestaDto.ProcesoResponsable.Trim(),
+                Version = string.IsNullOrWhiteSpace(propuestaDto.Version) ? documento.Version : propuestaDto.Version.Trim(),
+                FechaDocumento = propuestaDto.FechaDocumento,
+                OneDriveUrl = propuestaDto.OneDriveUrl.Trim(),
+                OneDriveItemId = propuestaDto.OneDriveItemId?.Trim(),
+                ArchivoNombre = propuestaDto.ArchivoNombre?.Trim(),
+                Uso = propuestaDto.Uso?.Trim(),
+                TiempoRetencion = propuestaDto.TiempoRetencion?.Trim(),
+                Proteccion = propuestaDto.Proteccion?.Trim(),
+                Recuperacion = propuestaDto.Recuperacion?.Trim(),
+                DisposicionFinal = propuestaDto.DisposicionFinal?.Trim(),
+                Estado = "Vigente",
+                Observaciones = propuestaDto.Observaciones?.Trim(),
+                ComentarioCambio = solicitud.ComentarioSolicitud,
+                AreaId = propuestaDto.AreaId,
+                DatosPersonalizados = propuestaDto.CamposPersonalizados is null
+                    ? documento.DatosPersonalizados
+                    : JsonSerializer.Serialize(propuestaDto.CamposPersonalizados),
+                DocumentoOriginalId = documento.Id,
+                Activo = true,
+                SolicitanteId = solicitud.SolicitanteId,
+                EditorId = solicitud.EditorId ?? solicitud.SolicitanteId,
+                AprobadorId = aprobador.Id,
+                FechaPublicacion = DateTime.UtcNow,
+                MotivoCambio = solicitud.MotivoCambio ?? solicitud.ComentarioSolicitud,
+                DescripcionDetallada = solicitud.DescripcionDetallada
+            };
+
+            finalVigente = await repository.CreateDocumentoAsync(newDoc);
+            solicitud.BorradorDocumentoId = finalVigente.Id;
         }
 
-        await ValidateCamposPersonalizados(propuesta.ListadoMaestroId, propuesta.CamposPersonalizados);
-
-        // 1. Clone current Vigente document as Historical (Activo = false)
-        var historicalClone = new DocumentoControl
-        {
-            ListadoMaestroId = documento.ListadoMaestroId,
-            Codigo = documento.Codigo,
-            Nombre = documento.Nombre,
-            ProcesoResponsable = documento.ProcesoResponsable,
-            Version = documento.Version,
-            FechaDocumento = documento.FechaDocumento,
-            OneDriveUrl = documento.OneDriveUrl,
-            OneDriveItemId = documento.OneDriveItemId,
-            ArchivoNombre = documento.ArchivoNombre,
-            Uso = documento.Uso,
-            TiempoRetencion = documento.TiempoRetencion,
-            Proteccion = documento.Proteccion,
-            Recuperacion = documento.Recuperacion,
-            DisposicionFinal = documento.DisposicionFinal,
-            Estado = "Histórica",
-            Observaciones = documento.Observaciones,
-            ComentarioCambio = documento.ComentarioCambio,
-            DatosPersonalizados = documento.DatosPersonalizados,
-            AreaId = documento.AreaId,
-            DocumentoOriginalId = documento.Id,
-            Activo = false,
-            
-            SolicitanteId = documento.SolicitanteId,
-            EditorId = documento.EditorId,
-            AprobadorId = documento.AprobadorId,
-            FechaPublicacion = documento.FechaPublicacion,
-            MotivoCambio = documento.MotivoCambio,
-            DescripcionDetallada = documento.DescripcionDetallada
-        };
-
-        await repository.CreateDocumentoAsync(historicalClone);
-
-        // 2. Update Vigente document in place
-        var original = CloneForDiff(documento);
-
-        documento.ListadoMaestroId = propuesta.ListadoMaestroId;
-        documento.Codigo = propuesta.Codigo.Trim();
-        documento.Nombre = propuesta.Nombre.Trim();
-        documento.ProcesoResponsable = propuesta.ProcesoResponsable.Trim();
-        documento.Version = string.IsNullOrWhiteSpace(propuesta.Version) ? documento.Version : propuesta.Version.Trim();
-        documento.FechaDocumento = propuesta.FechaDocumento;
-        documento.OneDriveUrl = propuesta.OneDriveUrl.Trim();
-        documento.OneDriveItemId = propuesta.OneDriveItemId?.Trim();
-        documento.ArchivoNombre = propuesta.ArchivoNombre?.Trim();
-        documento.Uso = propuesta.Uso?.Trim();
-        documento.TiempoRetencion = propuesta.TiempoRetencion?.Trim();
-        documento.Proteccion = propuesta.Proteccion?.Trim();
-        documento.Recuperacion = propuesta.Recuperacion?.Trim();
-        documento.DisposicionFinal = propuesta.DisposicionFinal?.Trim();
-        documento.Estado = "Vigente";
-        documento.Observaciones = propuesta.Observaciones?.Trim();
-        documento.ComentarioCambio = solicitud.ComentarioSolicitud;
-        documento.AreaId = propuesta.AreaId;
-        documento.DatosPersonalizados = propuesta.CamposPersonalizados is null
-            ? documento.DatosPersonalizados
-            : JsonSerializer.Serialize(propuesta.CamposPersonalizados);
-
-        documento.SolicitanteId = solicitud.SolicitanteId;
-        documento.EditorId = solicitud.EditorId ?? solicitud.SolicitanteId;
-        documento.AprobadorId = aprobador.Id;
-        documento.FechaPublicacion = DateTime.UtcNow;
-        documento.MotivoCambio = solicitud.MotivoCambio ?? solicitud.ComentarioSolicitud;
-        documento.DescripcionDetallada = solicitud.DescripcionDetallada;
-
-        var updated = await repository.UpdateDocumentoAsync(documento);
-        var cambios = BuildDiff(original, updated);
-
-        // 3. Update request status and clean up borrador
-        solicitud.EstadoPropuesta = EstadoPropuesta.Aprobada;
+        // 2. Update request status
+        solicitud.EstadoPropuesta = EstadoPropuesta.Publicada;
         solicitud.AprobadorId = aprobador.Id;
         solicitud.FechaResolucion = DateTime.UtcNow;
+        solicitud.ComentarioResolucion = comentarios;
 
-        if (borradorToDelete != null)
-        {
-            solicitud.BorradorDocumentoId = null;
-            await repository.UpdateSolicitudCambioAsync(solicitud);
-            await repository.DeleteDocumentoAsync(borradorToDelete);
-        }
-        else
-        {
-            await repository.UpdateSolicitudCambioAsync(solicitud);
-        }
+        await repository.UpdateSolicitudCambioAsync(solicitud);
 
-        var log = await BuildAuditLogAsync(updated.Id, updated.Nombre, "SolicitudCambioAprobada", solicitud.ComentarioSolicitud, usuarioEmail, updated, cambios);
+        var log = await BuildAuditLogAsync(finalVigente.Id, finalVigente.Nombre, "SolicitudCambioAprobada", solicitud.ComentarioSolicitud, usuarioEmail, finalVigente, null);
         await auditRepository.CreateAsync(log);
     }
 
@@ -861,7 +993,7 @@ public class ControlDocumentalService(
         var solicitud = await repository.GetSolicitudCambioByIdAsync(solicitudId)
             ?? throw new KeyNotFoundException("Solicitud de cambio no encontrada.");
 
-        if (solicitud.EstadoPropuesta == EstadoPropuesta.Aprobada || solicitud.EstadoPropuesta == EstadoPropuesta.Rechazada)
+        if (solicitud.EstadoPropuesta == EstadoPropuesta.Aprobada || solicitud.EstadoPropuesta == EstadoPropuesta.Publicada || solicitud.EstadoPropuesta == EstadoPropuesta.Rechazada)
             throw new InvalidOperationException("La solicitud ya fue resuelta.");
 
         var (esJefe, areaId) = await EsJefeDeAreaAsync(aprobador.Id);
@@ -871,28 +1003,24 @@ public class ControlDocumentalService(
         if (aprobador.Rol == RolUsuario.Jefe && solicitud.DocumentoControl.AreaId != areaId)
             throw new UnauthorizedAccessException("No tienes permisos para rechazar esta solicitud.");
 
-        solicitud.EstadoPropuesta = EstadoPropuesta.Rechazada;
-        solicitud.AprobadorId = aprobador.Id;
-        solicitud.ComentarioResolucion = motivo?.Trim();
-        solicitud.FechaResolucion = DateTime.UtcNow;
-
-        DocumentoControl? borradorToDelete = null;
+        // Update the borrador (if any) to state "Rechazada" and set it to Activo = false
         if (solicitud.BorradorDocumentoId.HasValue)
         {
             var borrador = await repository.GetDocumentoByIdAsync(solicitud.BorradorDocumentoId.Value);
             if (borrador != null)
             {
-                borradorToDelete = borrador;
-                solicitud.BorradorDocumentoId = null;
+                borrador.Estado = "Rechazada";
+                borrador.Activo = false;
+                await repository.UpdateDocumentoAsync(borrador);
             }
         }
 
-        await repository.UpdateSolicitudCambioAsync(solicitud);
+        solicitud.EstadoPropuesta = EstadoPropuesta.Rechazada;
+        solicitud.AprobadorId = aprobador.Id;
+        solicitud.ComentarioResolucion = motivo?.Trim();
+        solicitud.FechaResolucion = DateTime.UtcNow;
 
-        if (borradorToDelete != null)
-        {
-            await repository.DeleteDocumentoAsync(borradorToDelete);
-        }
+        await repository.UpdateSolicitudCambioAsync(solicitud);
 
         var documento = await repository.GetDocumentoByIdAsync(solicitud.DocumentoControlId);
         var log = await BuildAuditLogAsync(solicitud.DocumentoControlId, documento?.Nombre ?? "—", "SolicitudCambioRechazada", motivo, usuarioEmail, documento ?? new DocumentoControl { Id = solicitud.DocumentoControlId, Nombre = "—" }, null);
@@ -921,6 +1049,7 @@ public class ControlDocumentalService(
         FechaEdicion = solicitud.FechaEdicion,
         FechaResolucion = solicitud.FechaResolucion,
         DatosPropuestos = solicitud.DatosPropuestos,
+        DatosOriginales = solicitud.DatosOriginales,
         AprobadorId = solicitud.AprobadorId,
         AprobadorNombre = solicitud.Aprobador?.Nombre + " " + solicitud.Aprobador?.Apellido,
         EditorNombre = solicitud.Editor?.Nombre + " " + solicitud.Editor?.Apellido,
