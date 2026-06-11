@@ -1160,7 +1160,7 @@ public class ControlDocumentalService(
         DocumentoControlCodigo = solicitud.DocumentoControl?.Codigo ?? string.Empty,
         SolicitanteId = solicitud.SolicitanteId,
         SolicitanteNombre = string.IsNullOrWhiteSpace(solicitud.Solicitante?.Nombre) && string.IsNullOrWhiteSpace(solicitud.Solicitante?.Apellido)
-            ? null
+            ? string.Empty
             : $"{solicitud.Solicitante?.Nombre} {solicitud.Solicitante?.Apellido}".Trim(),
         EstadoPropuesta = solicitud.EstadoPropuesta.ToString(),
         ComentarioSolicitud = solicitud.ComentarioSolicitud,
@@ -1686,7 +1686,7 @@ public class ControlDocumentalService(
     {
         ColaboradorId = permiso.ColaboradorId,
         ColaboradorNombre = string.IsNullOrWhiteSpace(permiso.Colaborador?.Nombre) && string.IsNullOrWhiteSpace(permiso.Colaborador?.Apellido)
-            ? null
+            ? string.Empty
             : $"{permiso.Colaborador?.Nombre} {permiso.Colaborador?.Apellido}".Trim(),
         ColaboradorEmail = permiso.Colaborador?.Email ?? string.Empty,
         PuedeVer = permiso.PuedeVer,

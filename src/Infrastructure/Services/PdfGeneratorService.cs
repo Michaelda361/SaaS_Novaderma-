@@ -1,4 +1,4 @@
-﻿using System.Reflection;
+using System.Reflection;
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Wordprocessing;
 using PdfSharpCore.Pdf;
@@ -298,7 +298,10 @@ public class PdfGeneratorService(LibreOfficeConverterService libreOffice)
                 primerText.Space = DocumentFormat.OpenXml.SpaceProcessingModeValues.Preserve;
                 foreach (var r in runs.Skip(1)) r.Remove();
             }
-            doc.MainDocumentPart!.Document.Save();
+            if (doc.MainDocumentPart?.Document != null)
+            {
+                doc.MainDocumentPart.Document.Save();
+            }
         }
         return ms.ToArray();
     }
@@ -402,7 +405,10 @@ public class PdfGeneratorService(LibreOfficeConverterService libreOffice)
             {
                 ConsolidarRuns(body);
                 ReemplazarEnParrafos(body, variables);
-                doc.MainDocumentPart!.Document.Save();
+                if (doc.MainDocumentPart?.Document != null)
+                {
+                    doc.MainDocumentPart.Document.Save();
+                }
             }
         }
 
