@@ -183,7 +183,8 @@ public class ControlDocumentalRepository(AppDbContext context) : IControlDocumen
             .Include(s => s.Solicitante)
             .Include(s => s.Editor)
             .Include(s => s.Aprobador)
-            .Where(s => s.DocumentoControlId == parentId || s.DocumentoControl.DocumentoOriginalId == parentId)
+            .Where(s => (s.DocumentoControl.ListadoMaestroId == targetDoc.ListadoMaestroId && s.DocumentoControl.Codigo == targetDoc.Codigo)
+                     || s.DocumentoControlId == parentId || s.DocumentoControl.DocumentoOriginalId == parentId)
             .OrderByDescending(s => s.FechaCreacion)
             .ToListAsync();
     }
@@ -320,7 +321,8 @@ public class ControlDocumentalRepository(AppDbContext context) : IControlDocumen
             .Include(d => d.Solicitante)
             .Include(d => d.Editor)
             .Include(d => d.Aprobador)
-            .Where(d => d.Id == parentId || d.DocumentoOriginalId == parentId)
+            .Where(d => (d.ListadoMaestroId == targetDoc.ListadoMaestroId && d.Codigo == targetDoc.Codigo)
+                     || d.Id == parentId || d.DocumentoOriginalId == parentId)
             .ToListAsync();
 
         return list

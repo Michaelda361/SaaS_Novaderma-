@@ -708,7 +708,7 @@
 @if (showAuditModal)
 {
     <div class="modal-backdrop" @onclick="CerrarAuditoriaModal">
-        <div class="modal large" @onclick:stopPropagation>
+        <div class="modal large" @onclick:stopPropagation style="max-width: 1200px; width: 95%;">
             <div class="modal-header">
                 <span class="modal-title">Historial de auditoría</span>
                 <button class="btn btn-ghost btn-sm btn-icon" @onclick="CerrarAuditoriaModal">✕</button>
@@ -734,90 +734,171 @@
                     }
                     else
                     {
-                        <!-- 1. Versión Vigente Actual Card -->
+                        <!-- SECCIÓN 1: Versión Vigente (Siempre arriba) -->
                         @if (vigenteDoc != null)
                         {
-                            <div style="border: 2px solid var(--color-success); border-radius: 8px; padding: 1.25rem; background: var(--surface-card); margin-bottom: 1.5rem; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
-                                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--surface-border); padding-bottom: 0.75rem; margin-bottom: 1rem;">
-                                    <h4 style="margin: 0; color: var(--color-success); display: flex; align-items: center; gap: 0.5rem;">
-                                        <span>🟢</span> Versión Vigente Actual
-                                    </h4>
-                                    <span class="badge badge-success" style="font-size: 0.9rem; padding: 0.35rem 0.75rem;">Vigente</span>
-                                </div>
-                                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; font-size: 0.95rem;">
+                            <div style="border: 1px solid var(--surface-border); border-top: 4px solid var(--color-success, #22c55e); border-radius: 8px; padding: 1.25rem; background: var(--surface-card); margin-bottom: 1.5rem; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+                                <h4 style="margin: 0 0 1rem 0; color: var(--color-success, #22c55e); font-weight: 600; display: flex; align-items: center; gap: 0.5rem;">
+                                    <span>🟢</span> Versión Vigente Actual
+                                </h4>
+                                
+                                <!-- Fila 1: Código, Nombre, Versión, Área (4 columnas) -->
+                                <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; border-bottom: 1px solid var(--surface-border); padding-bottom: 0.75rem; margin-bottom: 0.75rem;">
                                     <div>
-                                        <span style="font-size: 0.8rem; color: var(--text-muted); display: block; text-transform: uppercase; letter-spacing: 0.5px;">Documento</span>
-                                        <strong>@vigenteDoc.Nombre</strong>
+                                        <span style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); display: block; font-weight: 600; margin-bottom: 0.25rem;">Código</span>
+                                        <strong style="font-size: 1.1rem; color: var(--text-color);">@vigenteDoc.Codigo</strong>
                                     </div>
                                     <div>
-                                        <span style="font-size: 0.8rem; color: var(--text-muted); display: block; text-transform: uppercase; letter-spacing: 0.5px;">Código</span>
-                                        <code>@vigenteDoc.Codigo</code>
+                                        <span style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); display: block; font-weight: 600; margin-bottom: 0.25rem;">Nombre</span>
+                                        <strong style="font-size: 1.1rem; color: var(--text-color);">@vigenteDoc.Nombre</strong>
                                     </div>
                                     <div>
-                                        <span style="font-size: 0.8rem; color: var(--text-muted); display: block; text-transform: uppercase; letter-spacing: 0.5px;">Versión</span>
-                                        <strong>@vigenteDoc.Version</strong>
+                                        <span style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); display: block; font-weight: 600; margin-bottom: 0.25rem;">Versión</span>
+                                        <strong style="font-size: 1.1rem; color: var(--text-color);">@vigenteDoc.Version</strong>
                                     </div>
                                     <div>
-                                        <span style="font-size: 0.8rem; color: var(--text-muted); display: block; text-transform: uppercase; letter-spacing: 0.5px;">Fecha de publicación</span>
-                                        <strong>@(vigenteDoc.FechaPublicacion?.ToLocalTime().ToString("g") ?? vigenteDoc.FechaDocumento.ToLocalTime().ToString("g"))</strong>
-                                    </div>
-                                    <div>
-                                        <span style="font-size: 0.8rem; color: var(--text-muted); display: block; text-transform: uppercase; letter-spacing: 0.5px;">Última modificación</span>
-                                        <strong>@vigenteDoc.FechaDocumento.ToLocalTime().ToString("g")</strong>
-                                    </div>
-                                    <div>
-                                        <span style="font-size: 0.8rem; color: var(--text-muted); display: block; text-transform: uppercase; letter-spacing: 0.5px;">Solicitante</span>
-                                        <strong>@(vigenteDoc.SolicitanteNombre ?? "—")</strong>
-                                    </div>
-                                    <div>
-                                        <span style="font-size: 0.8rem; color: var(--text-muted); display: block; text-transform: uppercase; letter-spacing: 0.5px;">Editor</span>
-                                        <strong>@(vigenteDoc.EditorNombre ?? "—")</strong>
-                                    </div>
-                                    <div>
-                                        <span style="font-size: 0.8rem; color: var(--text-muted); display: block; text-transform: uppercase; letter-spacing: 0.5px;">Aprobador</span>
-                                        <strong>@(vigenteDoc.AprobadorNombre ?? "—")</strong>
+                                        <span style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); display: block; font-weight: 600; margin-bottom: 0.25rem;">Área</span>
+                                        <strong style="font-size: 1.1rem; color: var(--text-color);">@(vigenteDoc.AreaNombre ?? "—")</strong>
                                     </div>
                                 </div>
-                                <div style="margin-top: 1rem; padding-top: 0.75rem; border-top: 1px dashed var(--surface-border);">
-                                    <span style="font-size: 0.8rem; color: var(--text-muted); display: block; text-transform: uppercase; letter-spacing: 0.5px;">Motivo del último cambio</span>
-                                    <p style="margin: 0.25rem 0 0 0; font-style: italic; color: var(--text-secondary);">
-                                        @(string.IsNullOrWhiteSpace(vigenteDoc.MotivoCambio) ? vigenteDoc.ComentarioCambio ?? "Sin registrar" : vigenteDoc.MotivoCambio)
-                                    </p>
+
+                                <!-- Fila 2: Estado, Fecha Publicación, Última Modificación (3 columnas) -->
+                                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; border-bottom: 1px solid var(--surface-border); padding-bottom: 0.75rem; margin-bottom: 0.75rem;">
+                                    <div>
+                                        <span style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); display: block; font-weight: 600; margin-bottom: 0.25rem;">Estado</span>
+                                        <span class="badge badge-success" style="font-size: 0.9rem; padding: 0.25rem 0.5rem; font-weight: 600;">@vigenteDoc.Estado</span>
+                                    </div>
+                                    <div>
+                                        <span style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); display: block; font-weight: 600; margin-bottom: 0.25rem;">Fecha Publicación</span>
+                                        <strong style="font-size: 0.95rem; color: var(--text-color);">@vigenteDoc.FechaDocumento.ToLocalTime().ToString("dd/MM/yyyy")</strong>
+                                    </div>
+                                    <div>
+                                        <span style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); display: block; font-weight: 600; margin-bottom: 0.25rem;">Última Modificación</span>
+                                        <strong style="font-size: 0.95rem; color: var(--text-color);">@((vigenteDoc.FechaPublicacion ?? vigenteDoc.FechaDocumento).ToLocalTime().ToString("dd/MM/yyyy"))</strong>
+                                    </div>
+                                </div>
+
+                                <!-- Fila 3: Solicitante, Editor, Aprobador (3 columnas) -->
+                                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem;">
+                                    <div>
+                                        <span style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); display: block; font-weight: 600; margin-bottom: 0.25rem;">Solicitante</span>
+                                        <strong style="font-size: 0.95rem; color: var(--text-color);">@(vigenteDoc.SolicitanteNombre ?? "—")</strong>
+                                    </div>
+                                    <div>
+                                        <span style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); display: block; font-weight: 600; margin-bottom: 0.25rem;">Editor</span>
+                                        <strong style="font-size: 0.95rem; color: var(--text-color);">@(vigenteDoc.EditorNombre ?? "—")</strong>
+                                    </div>
+                                    <div>
+                                        <span style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); display: block; font-weight: 600; margin-bottom: 0.25rem;">Aprobador</span>
+                                        <strong style="font-size: 0.95rem; color: var(--text-color);">@(vigenteDoc.AprobadorNombre ?? "—")</strong>
+                                    </div>
+                                </div>
+
+                                <!-- Fila 4: Comentarios / Motivo del Cambio -->
+                                <div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px dashed var(--surface-border);">
+                                    <span style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); display: block; font-weight: 600; margin-bottom: 0.25rem;">Comentarios / Motivo del Cambio</span>
+                                    <strong style="font-size: 0.95rem; color: var(--text-color); font-weight: 500;">@(vigenteDoc.ComentarioCambio ?? vigenteDoc.MotivoCambio ?? "Sin comentarios registrados")</strong>
                                 </div>
                             </div>
                         }
 
-                        <!-- 2. Línea de tiempo completa -->
-                        <div style="margin-bottom: 1.5rem; border-bottom: 1px solid var(--surface-border); padding-bottom: 1.5rem;">
-                            <h4 style="margin-bottom: 1rem; color: var(--color-primary);">Línea de tiempo de trazabilidad</h4>
+                        <!-- SECCIÓN 2: Línea de Tiempo Documental -->
+                        <div style="margin-bottom: 2rem; border-bottom: 1px solid var(--surface-border); padding-bottom: 1.5rem;">
+                            <h4 style="margin-bottom: 1rem; color: var(--color-primary); font-weight: 600;">Línea de tiempo de trazabilidad</h4>
                             
                             <div class="timeline-container" style="position: relative; padding-left: 2.5rem; margin: 1.5rem 0 1.5rem 0.5rem; border-left: 2px solid var(--surface-border);">
                                 @foreach (var ev in BuildTimeline())
                                 {
                                     <div class="timeline-item" style="position: relative; margin-bottom: 1.5rem;">
                                         <!-- Icon dot -->
-                                        <div class="timeline-badge" style="position: absolute; left: -3.35rem; top: 0; width: 1.75rem; height: 1.75rem; border-radius: 50%; background: var(--surface-card); border: 2px solid var(--surface-border); display: flex; align-items: center; justify-content: center; font-size: 0.95rem; z-index: 2; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                                        <div class="timeline-badge" style="position: absolute; left: -3.35rem; top: 0; width: 1.75rem; height: 1.75rem; border-radius: 50%; background: var(--surface-card); border: 2px solid @(ev.Tipo == "Creacion" ? "#22c55e" : ev.Tipo == "Solicitud" ? "#eab308" : ev.Tipo == "Edicion" ? "#06b6d4" : "#22c55e"); display: flex; align-items: center; justify-content: center; font-size: 0.95rem; z-index: 2; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
                                             @ev.Icon
                                         </div>
                                         
-                                        <div class="timeline-content" style="background: var(--surface-card); border: 1px solid var(--surface-border); border-radius: 6px; padding: 0.75rem 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
-                                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
-                                                <span style="font-weight: 600; font-size: 0.95rem; color: var(--text-color);">@ev.Titulo</span>
-                                                <span style="font-size: 0.8rem; color: var(--text-muted);">@ev.Fecha.ToLocalTime().ToString("g")</span>
+                                        <!-- Event Card -->
+                                        <div class="timeline-content" style="background: var(--surface-card); border: 1px solid var(--surface-border); border-left: 4px solid @(ev.Tipo == "Creacion" ? "#22c55e" : ev.Tipo == "Solicitud" ? "#eab308" : ev.Tipo == "Edicion" ? "#06b6d4" : ev.BadgeClass == "badge-danger" ? "#ef4444" : "#22c55e"); border-radius: 6px; padding: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                                            <!-- Event Title & Date -->
+                                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; border-bottom: 1px dashed var(--surface-border); padding-bottom: 0.25rem;">
+                                                <span style="font-weight: 600; font-size: 1rem; color: var(--text-color);">@ev.Titulo</span>
+                                                <span style="font-size: 0.8rem; color: var(--text-muted); font-weight: 500;">@ev.Fecha.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</span>
                                             </div>
-                                            <div style="font-size: 0.85rem; margin-bottom: 0.25rem;">
-                                                <strong>Usuario:</strong> @ev.Usuario
-                                            </div>
-                                            @if (!string.IsNullOrWhiteSpace(ev.Detalle1))
+
+                                            @if (ev.Tipo == "Creacion")
                                             {
-                                                <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.15rem;">
-                                                    @ev.Detalle1
+                                                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 0.5rem; font-size: 0.85rem;">
+                                                    <div><span style="color: var(--text-muted);">Código:</span> <strong>@ev.Codigo</strong></div>
+                                                    <div><span style="color: var(--text-muted);">Nombre:</span> <strong>@ev.Nombre</strong></div>
+                                                    <div><span style="color: var(--text-muted);">Versión:</span> <strong>@ev.Version</strong></div>
+                                                    <div><span style="color: var(--text-muted);">Área:</span> <strong>@ev.Area</strong></div>
+                                                    <div><span style="color: var(--text-muted);">Creado por:</span> <strong>@ev.Usuario</strong></div>
                                                 </div>
                                             }
-                                            @if (!string.IsNullOrWhiteSpace(ev.Detalle2))
+                                            else if (ev.Tipo == "Solicitud")
                                             {
-                                                <div style="font-size: 0.85rem; color: var(--text-secondary);">
-                                                    @ev.Detalle2
+                                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; font-size: 0.85rem; margin-bottom: 0.5rem;">
+                                                    <div><span style="color: var(--text-muted);">Solicitado por:</span> <strong>@ev.Usuario</strong></div>
+                                                    <div><span style="color: var(--text-muted);">Fecha:</span> <strong>@ev.Fecha.ToLocalTime().ToString("dd/MM/yyyy")</strong></div>
+                                                    <div style="grid-column: span 2;"><span style="color: var(--text-muted);">Motivo:</span> <strong>@ev.Motivo</strong></div>
+                                                    <div style="grid-column: span 2;"><span style="color: var(--text-muted);">Observaciones:</span> <strong>@ev.Observaciones</strong></div>
+                                                </div>
+                                                @if (ev.SnapshotOriginal != null)
+                                                {
+                                                    <div style="margin-top: 0.75rem; padding: 0.5rem 0.75rem; background: var(--surface-muted); border-radius: 4px; border: 1px solid var(--surface-border);">
+                                                        <div style="font-size: 0.75rem; font-weight: 600; text-transform: uppercase; color: var(--text-muted); margin-bottom: 0.25rem;">Datos del documento antes del cambio:</div>
+                                                        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.5rem; font-size: 0.8rem;">
+                                                            <div><span style="color: var(--text-muted);">Código</span><br/><strong>@ev.SnapshotOriginal.Codigo</strong></div>
+                                                            <div><span style="color: var(--text-muted);">Nombre</span><br/><strong>@ev.SnapshotOriginal.Nombre</strong></div>
+                                                            <div><span style="color: var(--text-muted);">Versión</span><br/><strong>@ev.SnapshotOriginal.Version</strong></div>
+                                                            <div><span style="color: var(--text-muted);">Área</span><br/><strong>@(ev.SnapshotOriginal.AreaNombre ?? "—")</strong></div>
+                                                        </div>
+                                                    </div>
+                                                }
+                                            }
+                                            else if (ev.Tipo == "Edicion")
+                                            {
+                                                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; font-size: 0.85rem; margin-bottom: 0.5rem;">
+                                                    <div><span style="color: var(--text-muted);">Editado por:</span> <strong>@ev.Usuario</strong></div>
+                                                    <div><span style="color: var(--text-muted);">Fecha:</span> <strong>@ev.Fecha.ToLocalTime().ToString("dd/MM/yyyy")</strong></div>
+                                                    <div><span style="color: var(--text-muted);">Estado:</span> <span class="badge badge-info">@ev.Estado</span></div>
+                                                </div>
+                                                @if (ev.Cambios != null && ev.Cambios.Any())
+                                                {
+                                                    <div style="margin-top: 0.75rem; padding: 0.5rem 0.75rem; background: var(--surface-muted); border-radius: 4px; border: 1px solid var(--surface-border);">
+                                                        <div style="font-size: 0.75rem; font-weight: 600; text-transform: uppercase; color: var(--text-muted); margin-bottom: 0.25rem;">Cambios detectados:</div>
+                                                        <table style="width: 100%; border-collapse: collapse; font-size: 0.8rem;">
+                                                            <thead>
+                                                                <tr style="border-bottom: 1px solid var(--surface-border); text-align: left; color: var(--text-muted);">
+                                                                    <th style="padding: 0.25rem; width: 30%;">Campo</th>
+                                                                    <th style="padding: 0.25rem; width: 35%;">Antes</th>
+                                                                    <th style="padding: 0.25rem; width: 35%;">Después</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody>
+                                                                @foreach (var c in ev.Cambios)
+                                                                {
+                                                                    <tr style="border-bottom: 1px dashed var(--surface-border);">
+                                                                        <td style="padding: 0.25rem; font-weight: 600;">@c.Name</td>
+                                                                        <td style="padding: 0.25rem; color: #991b1b; background: #fee2e2;">@c.OriginalValue</td>
+                                                                        <td style="padding: 0.25rem; color: #166534; font-weight: 600; background: #dcfce7;">@c.ProposedValue</td>
+                                                                    </tr>
+                                                                }
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                }
+                                                else
+                                                {
+                                                    <div style="margin-top: 0.5rem; font-size: 0.8rem; color: var(--text-muted); font-style: italic;">
+                                                        No se detectaron cambios en los metadatos.
+                                                    </div>
+                                                }
+                                            }
+                                            else if (ev.Tipo == "Aprobacion")
+                                            {
+                                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; font-size: 0.85rem;">
+                                                    <div><span style="color: var(--text-muted);">@(ev.Titulo.Contains("Rechazado") ? "Rechazado por:" : "Aprobado por:")</span> <strong>@ev.Usuario</strong></div>
+                                                    <div><span style="color: var(--text-muted);">Fecha:</span> <strong>@ev.Fecha.ToLocalTime().ToString("dd/MM/yyyy")</strong></div>
+                                                    <div style="grid-column: span 2;"><span style="color: var(--text-muted);">Comentarios:</span> <strong>@ev.Comentarios</strong></div>
                                                 </div>
                                             }
                                         </div>
@@ -826,110 +907,62 @@
                             </div>
                         </div>
 
-                        <!-- 3. Historial de versiones -->
-                        <div style="margin-bottom: .75rem;">
-                            <h4>Historial de versiones</h4>
-                        </div>
-
-
-
-                        @if (!sortedHistorial.Any())
-                        {
-                            <div class="empty-state">
-                                <div class="empty-state-icon">🕘</div>
-                                <h3>Sin historial de versiones</h3>
-                                <p>Aún no hay registros de versiones para este documento.</p>
-                            </div>
-                        }
-                        else
-                        {
-                            <div class="table-wrapper">
-                                <table>
-                                    <thead>
-                                        <tr>
-                                            <th>Versión</th>
-                                            <th>Estado</th>
-                                            <th>Fecha</th>
-                                            <th>Solicitante</th>
-                                            <th>Editor</th>
-                                            <th>Aprobador</th>
-                                            <th>Comparación de cambios</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        @foreach (var doc in sortedHistorial)
-                                        {
-                                            <tr>
-                                                <td>@doc.Version</td>
-                                                <td>
-                                                    <span class="badge @GetEstadoClass(doc.Estado)">@doc.Estado</span>
-                                                </td>
-                                                <td>@((doc.FechaPublicacion ?? doc.FechaDocumento).ToLocalTime().ToString("g"))</td>
-                                                <td>@(doc.SolicitanteNombre ?? "—")</td>
-                                                <td>@(doc.EditorNombre ?? "—")</td>
-                                                <td>@(doc.AprobadorNombre ?? "—")</td>
-                                                <td>
-                                                    @if (GetSolicitudForVersion(doc.Version) != null)
-                                                    {
-                                                        <button class="btn btn-secondary btn-sm" @onclick="() => expandedVersionChanges = (expandedVersionChanges == doc.Version ? null : doc.Version)">
-                                                            @(expandedVersionChanges == doc.Version ? "Ocultar" : "📊 Comparar")
-                                                        </button>
-                                                    }
-                                                    else
-                                                    {
-                                                        <span style="color:var(--text-muted); font-size:0.85rem;">(Versión inicial o directa)</span>
-                                                    }
-                                                </td>
-                                            </tr>
-                                            @if (expandedVersionChanges == doc.Version)
+                        <!-- SECCIÓN 3: Historial de Versiones -->
+                        <div style="margin-bottom: 1rem;">
+                            <h4 style="margin-bottom: 1rem; color: var(--color-primary); font-weight: 600;">Historial de versiones</h4>
+                            
+                            @if (!sortedHistorial.Any())
+                            {
+                                <div class="empty-state">
+                                    <div class="empty-state-icon">🕘</div>
+                                    <h3>Sin historial de versiones</h3>
+                                    <p>Aún no hay registros de versiones para este documento.</p>
+                                </div>
+                            }
+                            else
+                            {
+                                <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                                    @foreach (var doc in sortedHistorial)
+                                    {
+                                        <div class="version-horizontal-card" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 1rem; padding: 0.75rem 1.25rem; background: var(--surface-card); border: 1px solid @(doc.Estado == "Vigente" ? "var(--color-success, #22c55e)" : "var(--surface-border)"); border-left: 4px solid @(doc.Estado == "Vigente" ? "var(--color-success, #22c55e)" : "var(--text-muted, #64748b)"); border-radius: 6px; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.03);">
+                                            @foreach (var campo in listadoCampos.OrderBy(c => c.Orden))
                                             {
-                                                <tr>
-                                                    <td colspan="7" style="padding: 1rem; background: var(--surface-muted);">
-                                                        <div style="border: 1px solid var(--surface-border); border-radius: 6px; background: var(--surface-card); padding: 1rem; box-shadow: inset 0 2px 4px rgba(0,0,0,0.06);">
-                                                            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--surface-border); padding-bottom: 0.5rem; margin-bottom: 0.75rem;">
-                                                                <strong style="color:var(--color-primary);">Diferencias de cambios para Versión @doc.Version</strong>
-                                                                <button class="btn btn-ghost btn-sm" style="padding:0.15rem 0.5rem;" @onclick="() => expandedVersionChanges = null">✕ Cerrar</button>
-                                                            </div>
-                                                            @{
-                                                                var diffs = GetVersionDiffs(doc.Version);
-                                                            }
-                                                            @if (diffs == null || !diffs.Any())
+                                                <div>
+                                                    <span style="font-size: 0.75rem; color: var(--text-muted); display: block; text-transform: uppercase; font-weight: 500;">@campo.Nombre</span>
+                                                    <strong style="font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; max-width: 250px;" title="@GetValorDynamic(doc, campo.CampoClave)">
+                                                        @if (campo.CampoClave == "OneDriveUrl")
+                                                        {
+                                                            @if (IsValidUrl(doc.OneDriveUrl))
                                                             {
-                                                                <div style="text-align: center; color: var(--text-muted); font-size: 0.9rem; padding: 0.5rem;">
-                                                                    No se encontraron diferencias registradas para esta versión (puede ser la versión inicial o los metadatos son idénticos).
-                                                                </div>
+                                                                <a href="@doc.OneDriveUrl" target="_blank" rel="noopener noreferrer" style="color: var(--color-primary); text-decoration: underline; display: inline-flex; align-items: center; gap: 0.25rem;">
+                                                                    🔗 @(string.IsNullOrWhiteSpace(doc.ArchivoNombre) ? "Ver archivo" : doc.ArchivoNombre)
+                                                                </a>
                                                             }
                                                             else
                                                             {
-                                                                <table style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">
-                                                                    <thead>
-                                                                        <tr style="background: var(--surface-muted); border-bottom: 1px solid var(--surface-border);">
-                                                                            <th style="padding: 0.5rem; text-align: left; width: 30%; font-weight:600;">Campo modificado</th>
-                                                                            <th style="padding: 0.5rem; text-align: left; width: 35%; font-weight:600;">Valor anterior (Antes)</th>
-                                                                            <th style="padding: 0.5rem; text-align: left; width: 35%; font-weight:600;">Valor nuevo (Después)</th>
-                                                                        </tr>
-                                                                    </thead>
-                                                                    <tbody>
-                                                                        @foreach (var d in diffs)
-                                                                        {
-                                                                            <tr style="border-bottom: 1px dashed var(--surface-border);">
-                                                                                <td style="padding: 0.5rem; font-weight: 600; border-right: 1px solid var(--surface-border);">@d.Name</td>
-                                                                                <td style="padding: 0.5rem; color: #991b1b; background: #fee2e2; text-decoration: line-through; border-right: 1px solid var(--surface-border);">@d.OriginalValue</td>
-                                                                                <td style="padding: 0.5rem; color: #166534; background: #dcfce7; font-weight: 600;">@d.ProposedValue</td>
-                                                                            </tr>
-                                                                        }
-                                                                    </tbody>
-                                                                </table>
+                                                                @doc.OneDriveUrl
                                                             }
-                                                        </div>
-                                                    </td>
-                                                </tr>
+                                                        }
+                                                        else if (campo.CampoClave == "Estado")
+                                                        {
+                                                            <span class="badge @GetEstadoClass(doc.Estado)" style="font-size: 0.8rem; padding: 0.2rem 0.5rem;">@doc.Estado</span>
+                                                        }
+                                                        else
+                                                        {
+                                                            @GetValorDynamic(doc, campo.CampoClave)
+                                                        }
+                                                    </strong>
+                                                </div>
                                             }
-                                        }
-                                    </tbody>
-                                </table>
-                            </div>
-                        }
+                                            <div>
+                                                <span style="font-size: 0.75rem; color: var(--text-muted); display: block; text-transform: uppercase; font-weight: 500;">Fecha</span>
+                                                <strong style="font-size: 0.9rem;">@((doc.FechaPublicacion ?? doc.FechaDocumento).ToLocalTime().ToString("dd/MM/yyyy"))</strong>
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
                     }
                 }
             </div>
@@ -1097,7 +1130,7 @@
                                     {
                                         <tr style="border-bottom:1px solid var(--surface-border);">
                                             <td style="padding:0.75rem; font-weight:500; border-right:1px solid var(--surface-border);">@diff.Name</td>
-                                            <td style="padding:0.75rem; background-color:#fee2e2; color:#991b1b; text-decoration:line-through; border-right:1px solid var(--surface-border);">@diff.OriginalValue</td>
+                                            <td style="padding:0.75rem; background-color:#fee2e2; color:#991b1b; border-right:1px solid var(--surface-border);">@diff.OriginalValue</td>
                                             <td style="padding:0.75rem; background-color:#dcfce7; color:#166534; font-weight:500;">@diff.ProposedValue</td>
                                         </tr>
                                     }
@@ -1213,6 +1246,136 @@
                  OnCancelado="() => showOneDriveBrowser = false" />
 
 @code {
+    private RenderFragment<(DocumentoControlDto doc, bool isVigente)> RenderDocumentCard => context => __builder =>
+    {
+        var doc = context.doc;
+        var isVigente = context.isVigente;
+        <div style="border: 2px solid @(isVigente ? "var(--color-success)" : "var(--border)"); border-radius: 8px; padding: 1.25rem; background: var(--surface-card); margin-bottom: 1.5rem; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--surface-border); padding-bottom: 0.75rem; margin-bottom: 1rem;">
+                <h4 style="margin: 0; color: @(isVigente ? "var(--color-success)" : "var(--text-color)"); display: flex; align-items: center; gap: 0.5rem;">
+                    <span>@(isVigente ? "🟢" : "🕘")</span> @(isVigente ? "Versión Vigente Actual" : $"Versión Histórica {doc.Version}")
+                </h4>
+                <span class="badge @GetEstadoClass(doc.Estado)" style="font-size: 0.9rem; padding: 0.35rem 0.75rem;">@doc.Estado</span>
+            </div>
+
+            <!-- Metadata Section -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; font-size: 0.95rem; margin-bottom: 1rem;">
+                <div><span style="font-size: 0.8rem; color: var(--text-muted); display: block; text-transform: uppercase;">Documento</span><strong>@doc.Nombre</strong></div>
+                <div><span style="font-size: 0.8rem; color: var(--text-muted); display: block; text-transform: uppercase;">Código</span><code>@doc.Codigo</code></div>
+                <div><span style="font-size: 0.8rem; color: var(--text-muted); display: block; text-transform: uppercase;">Versión</span><strong>@doc.Version</strong></div>
+                <div><span style="font-size: 0.8rem; color: var(--text-muted); display: block; text-transform: uppercase;">Proceso Responsable</span><strong>@(string.IsNullOrWhiteSpace(doc.ProcesoResponsable) ? "—" : doc.ProcesoResponsable)</strong></div>
+                <div><span style="font-size: 0.8rem; color: var(--text-muted); display: block; text-transform: uppercase;">Área</span><strong>@(doc.AreaNombre ?? "—")</strong></div>
+                <div><span style="font-size: 0.8rem; color: var(--text-muted); display: block; text-transform: uppercase;">Fecha de publicación</span><strong>@((doc.FechaPublicacion ?? doc.FechaDocumento).ToLocalTime().ToString("g"))</strong></div>
+                <div><span style="font-size: 0.8rem; color: var(--text-muted); display: block; text-transform: uppercase;">Ubicación (Archivo)</span>
+                    @if (IsValidUrl(doc.OneDriveUrl))
+                    {
+                        <a href="@doc.OneDriveUrl" target="_blank" rel="noopener noreferrer" style="color: var(--color-primary); text-decoration: underline;">@(string.IsNullOrWhiteSpace(doc.ArchivoNombre) ? "Ver archivo" : doc.ArchivoNombre)</a>
+                    }
+                    else
+                    {
+                        <strong>@(string.IsNullOrWhiteSpace(doc.OneDriveUrl) ? "—" : doc.OneDriveUrl)</strong>
+                    }
+                </div>
+                <div><span style="font-size: 0.8rem; color: var(--text-muted); display: block; text-transform: uppercase;">Tiempo de retención</span><strong>@(string.IsNullOrWhiteSpace(doc.TiempoRetencion) ? "—" : doc.TiempoRetencion)</strong></div>
+                <div><span style="font-size: 0.8rem; color: var(--text-muted); display: block; text-transform: uppercase;">Disposición Final</span><strong>@(string.IsNullOrWhiteSpace(doc.DisposicionFinal) ? "—" : doc.DisposicionFinal)</strong></div>
+                <div><span style="font-size: 0.8rem; color: var(--text-muted); display: block; text-transform: uppercase;">Protección</span><strong>@(string.IsNullOrWhiteSpace(doc.Proteccion) ? "—" : doc.Proteccion)</strong></div>
+                <div><span style="font-size: 0.8rem; color: var(--text-muted); display: block; text-transform: uppercase;">Recuperación</span><strong>@(string.IsNullOrWhiteSpace(doc.Recuperacion) ? "—" : doc.Recuperacion)</strong></div>
+                <div><span style="font-size: 0.8rem; color: var(--text-muted); display: block; text-transform: uppercase;">Uso</span><strong>@(string.IsNullOrWhiteSpace(doc.Uso) ? "—" : doc.Uso)</strong></div>
+            </div>
+
+            <!-- Campos Dinámicos -->
+            @if (doc.CamposPersonalizados != null && doc.CamposPersonalizados.Any())
+            {
+                <div style="margin-top: 1rem; padding-top: 0.75rem; border-top: 1px dashed var(--surface-border);">
+                    <h5 style="margin: 0 0 0.5rem 0; color: var(--color-primary); font-size: 0.9rem;">Campos Personalizados</h5>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; font-size: 0.95rem;">
+                        @foreach (var kv in doc.CamposPersonalizados)
+                        {
+                            <div>
+                                <span style="font-size: 0.8rem; color: var(--text-muted); display: block; text-transform: uppercase;">@kv.Key</span>
+                                <strong>@(string.IsNullOrWhiteSpace(kv.Value) ? "—" : kv.Value)</strong>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+
+            <!-- Trazabilidad / Observaciones -->
+            <div style="margin-top: 1rem; padding-top: 0.75rem; border-top: 1px dashed var(--surface-border);">
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; font-size: 0.95rem;">
+                    <div><span style="font-size: 0.8rem; color: var(--text-muted); display: block; text-transform: uppercase;">Solicitante</span><strong>@(doc.SolicitanteNombre ?? "—")</strong></div>
+                    <div><span style="font-size: 0.8rem; color: var(--text-muted); display: block; text-transform: uppercase;">Editor</span><strong>@(doc.EditorNombre ?? "—")</strong></div>
+                    <div><span style="font-size: 0.8rem; color: var(--text-muted); display: block; text-transform: uppercase;">Aprobador</span><strong>@(doc.AprobadorNombre ?? "—")</strong></div>
+                </div>
+                <div style="margin-top: 0.75rem;">
+                    <span style="font-size: 0.8rem; color: var(--text-muted); display: block; text-transform: uppercase;">Observaciones</span>
+                    <p style="margin: 0.25rem 0 0 0; color: var(--text-secondary);">@(string.IsNullOrWhiteSpace(doc.Observaciones) ? "—" : doc.Observaciones)</p>
+                </div>
+                <div style="margin-top: 0.75rem;">
+                    <span style="font-size: 0.8rem; color: var(--text-muted); display: block; text-transform: uppercase;">Motivo del último cambio</span>
+                    <p style="margin: 0.25rem 0 0 0; font-style: italic; color: var(--text-secondary);">
+                        @(string.IsNullOrWhiteSpace(doc.MotivoCambio) ? doc.ComentarioCambio ?? "Sin registrar" : doc.MotivoCambio)
+                    </p>
+                </div>
+            </div>
+
+            @if (!isVigente)
+            {
+                <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--surface-border); display: flex; justify-content: flex-end; align-items: center;">
+                    @if (GetSolicitudForVersion(doc.Version) != null)
+                    {
+                        <button class="btn btn-secondary btn-sm" @onclick="() => expandedVersionChanges = (expandedVersionChanges == doc.Version ? null : doc.Version)">
+                            @(expandedVersionChanges == doc.Version ? "Ocultar cambios" : "📊 Comparar cambios con versión anterior")
+                        </button>
+                    }
+                    else
+                    {
+                        <span style="color:var(--text-muted); font-size:0.85rem;">(Versión inicial o directa, sin diff disponible)</span>
+                    }
+                </div>
+                @if (expandedVersionChanges == doc.Version)
+                {
+                    <div style="margin-top: 1rem; border: 1px solid var(--surface-border); border-radius: 6px; background: var(--surface-muted); padding: 1rem; box-shadow: inset 0 2px 4px rgba(0,0,0,0.06);">
+                        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--surface-border); padding-bottom: 0.5rem; margin-bottom: 0.75rem;">
+                            <strong style="color:var(--color-primary);">Diferencias registradas para la Versión @doc.Version</strong>
+                            <button class="btn btn-ghost btn-sm" style="padding:0.15rem 0.5rem;" @onclick="() => expandedVersionChanges = null">✕ Cerrar</button>
+                        </div>
+                        @{
+                            var diffs = GetVersionDiffs(doc.Version);
+                        }
+                        @if (diffs == null || !diffs.Any())
+                        {
+                            <div style="text-align: center; color: var(--text-muted); font-size: 0.9rem; padding: 0.5rem;">
+                                No se encontraron diferencias registradas (puede ser la versión inicial o metadatos idénticos).
+                            </div>
+                        }
+                        else
+                        {
+                            <table style="width: 100%; border-collapse: collapse; font-size: 0.85rem; background: var(--surface-card);">
+                                <thead>
+                                    <tr style="background: var(--surface-muted); border-bottom: 1px solid var(--surface-border);">
+                                        <th style="padding: 0.5rem; text-align: left; width: 30%; font-weight:600;">Campo modificado</th>
+                                        <th style="padding: 0.5rem; text-align: left; width: 35%; font-weight:600;">Valor anterior (Antes)</th>
+                                        <th style="padding: 0.5rem; text-align: left; width: 35%; font-weight:600;">Valor nuevo (Después)</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var d in diffs)
+                                    {
+                                        <tr style="border-bottom: 1px dashed var(--surface-border);">
+                                            <td style="padding: 0.5rem; font-weight: 600; border-right: 1px solid var(--surface-border);">@d.Name</td>
+                                            <td style="padding: 0.5rem; color: #991b1b; background: #fee2e2; border-right: 1px solid var(--surface-border);">@d.OriginalValue</td>
+                                            <td style="padding: 0.5rem; color: #166534; background: #dcfce7; font-weight: 600;">@d.ProposedValue</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        }
+                    </div>
+                }
+            }
+        </div>
+    };
     private Toast toast = null!;
     private bool loading = true;
     private bool editing = false;
@@ -1405,24 +1568,95 @@
         documentoSolicitudes = await ControlDocumentalApi.GetSolicitudesPorDocumentoAsync(id);
         versionesAnteriores = BuildVersionHistory(auditDocumentDetail, historial);
 
-        vigenteDoc = historial?.FirstOrDefault(h => h.Estado == "Vigente") ?? (auditDocumentDetail != null ? new DocumentoControlDto {
-            Nombre = auditDocumentDetail.Nombre,
-            Codigo = auditDocumentDetail.Codigo,
-            Version = auditDocumentDetail.Version,
-            Estado = auditDocumentDetail.Estado,
-            FechaPublicacion = auditDocumentDetail.FechaPublicacion,
-            FechaDocumento = auditDocumentDetail.FechaDocumento,
-            SolicitanteNombre = auditDocumentDetail.SolicitanteNombre,
-            EditorNombre = auditDocumentDetail.EditorNombre,
-            AprobadorNombre = auditDocumentDetail.AprobadorNombre,
-            MotivoCambio = auditDocumentDetail.MotivoCambio,
-            ComentarioCambio = auditDocumentDetail.ComentarioCambio
-        } : null);
+        if (auditDocumentDetail != null && auditDocumentDetail.Estado == "Vigente")
+        {
+            vigenteDoc = new DocumentoControlDto
+            {
+                Id = auditDocumentDetail.Id,
+                ListadoMaestroId = auditDocumentDetail.ListadoMaestroId,
+                ListadoMaestroNombre = auditDocumentDetail.ListadoMaestroNombre,
+                Codigo = auditDocumentDetail.Codigo,
+                Nombre = auditDocumentDetail.Nombre,
+                ProcesoResponsable = auditDocumentDetail.ProcesoResponsable,
+                Version = auditDocumentDetail.Version,
+                FechaDocumento = auditDocumentDetail.FechaDocumento,
+                OneDriveUrl = auditDocumentDetail.OneDriveUrl,
+                Estado = auditDocumentDetail.Estado,
+                AreaId = auditDocumentDetail.AreaId,
+                AreaNombre = auditDocumentDetail.AreaNombre,
+                Uso = auditDocumentDetail.Uso,
+                TiempoRetencion = auditDocumentDetail.TiempoRetencion,
+                Proteccion = auditDocumentDetail.Proteccion,
+                Recuperacion = auditDocumentDetail.Recuperacion,
+                DisposicionFinal = auditDocumentDetail.DisposicionFinal,
+                Observaciones = auditDocumentDetail.Observaciones,
+                ComentarioCambio = auditDocumentDetail.ComentarioCambio,
+                ArchivoNombre = auditDocumentDetail.ArchivoNombre,
+                CamposPersonalizados = auditDocumentDetail.CamposPersonalizados,
+                DocumentoOriginalId = auditDocumentDetail.DocumentoOriginalId,
+                SolicitanteId = auditDocumentDetail.SolicitanteId,
+                SolicitanteNombre = auditDocumentDetail.SolicitanteNombre,
+                EditorId = auditDocumentDetail.EditorId,
+                EditorNombre = auditDocumentDetail.EditorNombre,
+                AprobadorId = auditDocumentDetail.AprobadorId,
+                AprobadorNombre = auditDocumentDetail.AprobadorNombre,
+                FechaPublicacion = auditDocumentDetail.FechaPublicacion,
+                MotivoCambio = auditDocumentDetail.MotivoCambio,
+                DescripcionDetallada = auditDocumentDetail.DescripcionDetallada
+            };
+        }
+        else
+        {
+            vigenteDoc = historial?
+                .Where(h => h.Estado == "Vigente")
+                .OrderByDescending(h => {
+                    var vStr = h.Version ?? "0.0";
+                    if (!vStr.Contains(".")) vStr += ".0";
+                    if (System.Version.TryParse(vStr, out var v)) return v;
+                    return new System.Version(0, 0);
+                })
+                .ThenByDescending(h => h.FechaPublicacion ?? h.FechaDocumento)
+                .FirstOrDefault() ?? (auditDocumentDetail != null ? new DocumentoControlDto {
+                    Id = auditDocumentDetail.Id,
+                    ListadoMaestroId = auditDocumentDetail.ListadoMaestroId,
+                    ListadoMaestroNombre = auditDocumentDetail.ListadoMaestroNombre,
+                    Codigo = auditDocumentDetail.Codigo,
+                    Nombre = auditDocumentDetail.Nombre,
+                    ProcesoResponsable = auditDocumentDetail.ProcesoResponsable,
+                    Version = auditDocumentDetail.Version,
+                    FechaDocumento = auditDocumentDetail.FechaDocumento,
+                    OneDriveUrl = auditDocumentDetail.OneDriveUrl,
+                    Estado = auditDocumentDetail.Estado,
+                    AreaId = auditDocumentDetail.AreaId,
+                    AreaNombre = auditDocumentDetail.AreaNombre,
+                    Uso = auditDocumentDetail.Uso,
+                    TiempoRetencion = auditDocumentDetail.TiempoRetencion,
+                    Proteccion = auditDocumentDetail.Proteccion,
+                    Recuperacion = auditDocumentDetail.Recuperacion,
+                    DisposicionFinal = auditDocumentDetail.DisposicionFinal,
+                    Observaciones = auditDocumentDetail.Observaciones,
+                    ComentarioCambio = auditDocumentDetail.ComentarioCambio,
+                    ArchivoNombre = auditDocumentDetail.ArchivoNombre,
+                    CamposPersonalizados = auditDocumentDetail.CamposPersonalizados,
+                    DocumentoOriginalId = auditDocumentDetail.DocumentoOriginalId,
+                    SolicitanteId = auditDocumentDetail.SolicitanteId,
+                    SolicitanteNombre = auditDocumentDetail.SolicitanteNombre,
+                    EditorId = auditDocumentDetail.EditorId,
+                    EditorNombre = auditDocumentDetail.EditorNombre,
+                    AprobadorId = auditDocumentDetail.AprobadorId,
+                    AprobadorNombre = auditDocumentDetail.AprobadorNombre,
+                    FechaPublicacion = auditDocumentDetail.FechaPublicacion,
+                    MotivoCambio = auditDocumentDetail.MotivoCambio,
+                    DescripcionDetallada = auditDocumentDetail.DescripcionDetallada
+                } : null);
+        }
 
         sortedHistorial = historial?
             .OrderByDescending(h => h.Estado == "Vigente") // Vigente always first
             .ThenByDescending(h => {
-                if (System.Version.TryParse(h.Version, out var v)) return v;
+                var vStr = h.Version ?? "0.0";
+                if (!vStr.Contains(".")) vStr += ".0";
+                if (System.Version.TryParse(vStr, out var v)) return v;
                 return new System.Version(0, 0);
             })
             .ThenByDescending(h => h.FechaPublicacion ?? h.FechaDocumento)
@@ -1747,118 +1981,149 @@
             events.Add(new TimelineEvent
             {
                 Tipo = "Creacion",
-                Titulo = "Creación del documento",
+                Titulo = "📄 Documento Creado",
                 Fecha = baseDoc.FechaDocumento,
                 Usuario = baseDoc.SolicitanteNombre ?? baseDoc.EditorNombre ?? "Sistema",
-                Detalle1 = "Documento inicializado",
                 BadgeClass = "badge-success",
-                Icon = "🆕",
-                SortOrder = 1
+                Icon = "📄",
+                SortOrder = 1,
+                Codigo = baseDoc.Codigo,
+                Nombre = baseDoc.Nombre,
+                Version = baseDoc.Version,
+                Area = baseDoc.AreaNombre ?? "—"
             });
         }
 
         foreach (var sol in documentoSolicitudes.OrderBy(s => s.FechaCreacion))
         {
-            events.Add(new TimelineEvent
-            {
-                Tipo = "Solicitud",
-                Titulo = "Solicitud de Cambio",
-                Fecha = sol.FechaCreacion,
-                Usuario = sol.SolicitanteNombre ?? "Colaborador",
-                Detalle1 = $"Motivo: {(!string.IsNullOrWhiteSpace(sol.MotivoCambio) ? sol.MotivoCambio : sol.ComentarioSolicitud)}",
-                Detalle2 = !string.IsNullOrWhiteSpace(sol.DescripcionDetallada) ? $"Observaciones: {sol.DescripcionDetallada}" : string.Empty,
-                BadgeClass = "badge-warning",
-                Icon = "📝",
-                SortOrder = 2
-            });
-
-            // Document before the change request (Snapshot)
+            DocumentoControlDto? origDoc = null;
             if (!string.IsNullOrEmpty(sol.DatosOriginales))
             {
                 try
                 {
-                    var orig = System.Text.Json.JsonSerializer.Deserialize<TalentManagement.Shared.DTOs.ControlDocumental.DocumentoControlDto>(sol.DatosOriginales, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-                    if (orig != null)
-                    {
-                        events.Add(new TimelineEvent
-                        {
-                            Tipo = "SnapshotOriginal",
-                            Titulo = "Documento antes de la solicitud",
-                            Fecha = sol.FechaCreacion,
-                            Usuario = sol.SolicitanteNombre ?? "Colaborador",
-                            Detalle1 = $"Código: {orig.Codigo} | Versión: {orig.Version} | Estado: {orig.Estado}",
-                            Detalle2 = $"Nombre: {orig.Nombre} | Proceso: {orig.ProcesoResponsable}",
-                            BadgeClass = "badge-gray",
-                            Icon = "📄",
-                            SortOrder = 3
-                        });
-                    }
+                    origDoc = System.Text.Json.JsonSerializer.Deserialize<DocumentoControlDto>(sol.DatosOriginales, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
                 }
                 catch {}
             }
-
-            if (sol.FechaRevision.HasValue)
+            if (origDoc != null && string.IsNullOrEmpty(origDoc.AreaNombre) && origDoc.AreaId.HasValue)
             {
-                events.Add(new TimelineEvent
-                {
-                    Tipo = "Revision",
-                    Titulo = "Ingreso a Revisión",
-                    Fecha = sol.FechaRevision.Value,
-                    Usuario = sol.RevisorNombre ?? "Revisor",
-                    Detalle1 = !string.IsNullOrWhiteSpace(sol.ObservacionesRevision) ? $"Observaciones de revisión: {sol.ObservacionesRevision}" : "Revisión iniciada",
-                    BadgeClass = "badge-info",
-                    Icon = "🔍",
-                    SortOrder = 4
-                });
+                origDoc.AreaNombre = areas.FirstOrDefault(a => a.Id == origDoc.AreaId.Value)?.Nombre;
             }
+
+            events.Add(new TimelineEvent
+            {
+                Tipo = "Solicitud",
+                Titulo = "📝 Solicitud de Cambio",
+                Fecha = sol.FechaCreacion,
+                Usuario = sol.SolicitanteNombre ?? "Colaborador",
+                BadgeClass = "badge-warning",
+                Icon = "📝",
+                SortOrder = 2,
+                Motivo = !string.IsNullOrWhiteSpace(sol.MotivoCambio) ? sol.MotivoCambio : (sol.ComentarioSolicitud ?? "—"),
+                Observaciones = !string.IsNullOrWhiteSpace(sol.DescripcionDetallada) ? sol.DescripcionDetallada : "Ninguna",
+                SnapshotOriginal = origDoc
+            });
 
             if (sol.FechaEdicion.HasValue)
             {
+                List<DiffField> diffList = new();
+                if (origDoc != null && !string.IsNullOrEmpty(sol.DatosPropuestos))
+                {
+                    try
+                    {
+                        var propDoc = System.Text.Json.JsonSerializer.Deserialize<TalentManagement.Shared.DTOs.ControlDocumental.UpdateDocumentoControlDto>(sol.DatosPropuestos, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                        if (propDoc != null)
+                        {
+                            void CheckChange(string fieldName, string? oVal, string? pVal)
+                            {
+                                oVal = oVal?.Trim() ?? string.Empty;
+                                pVal = pVal?.Trim() ?? string.Empty;
+                                if (oVal != pVal)
+                                {
+                                    diffList.Add(new DiffField 
+                                    { 
+                                        Name = fieldName, 
+                                        OriginalValue = string.IsNullOrWhiteSpace(oVal) ? "—" : oVal, 
+                                        ProposedValue = string.IsNullOrWhiteSpace(pVal) ? "—" : pVal 
+                                    });
+                                }
+                            }
+
+                            CheckChange("Código", origDoc.Codigo, propDoc.Codigo);
+                            CheckChange("Nombre", origDoc.Nombre, propDoc.Nombre);
+                            CheckChange("Proceso responsable", origDoc.ProcesoResponsable, propDoc.ProcesoResponsable);
+                            CheckChange("Versión", origDoc.Version, propDoc.Version);
+                            CheckChange("Fecha documento", origDoc.FechaDocumento.ToLocalTime().ToString("d"), propDoc.FechaDocumento.ToLocalTime().ToString("d"));
+                            CheckChange("OneDrive URL", origDoc.OneDriveUrl, propDoc.OneDriveUrl);
+                            CheckChange("Nombre de archivo", origDoc.ArchivoNombre, propDoc.ArchivoNombre);
+                            CheckChange("Uso", origDoc.Uso, propDoc.Uso);
+                            CheckChange("Tiempo de retención", origDoc.TiempoRetencion, propDoc.TiempoRetencion);
+                            CheckChange("Protección", origDoc.Proteccion, propDoc.Proteccion);
+                            CheckChange("Recuperación", origDoc.Recuperacion, propDoc.Recuperacion);
+                            CheckChange("Disposición final", origDoc.DisposicionFinal, propDoc.DisposicionFinal);
+
+                            var origArea = areas.FirstOrDefault(a => a.Id == origDoc.AreaId)?.Nombre ?? "—";
+                            var propArea = areas.FirstOrDefault(a => a.Id == propDoc.AreaId)?.Nombre ?? "—";
+                            CheckChange("Área", origArea, propArea);
+
+                            var origKeys = origDoc.CamposPersonalizados?.Keys ?? Enumerable.Empty<string>();
+                            var propKeys = propDoc.CamposPersonalizados?.Keys ?? Enumerable.Empty<string>();
+                            var allKeys = origKeys.Union(propKeys).Distinct();
+
+                            foreach (var key in allKeys)
+                            {
+                                origDoc.CamposPersonalizados.TryGetValue(key, out var origVal);
+                                propDoc.CamposPersonalizados.TryGetValue(key, out var propVal);
+                                CheckChange(key, origVal, propVal);
+                            }
+                        }
+                    }
+                    catch {}
+                }
+
                 events.Add(new TimelineEvent
                 {
                     Tipo = "Edicion",
-                    Titulo = "Edición de borrador",
+                    Titulo = "✏️ Documento Editado",
                     Fecha = sol.FechaEdicion.Value,
-                    Usuario = sol.EditorNombre ?? sol.SolicitanteNombre ?? "Editor",
-                    Detalle1 = "Modificación de metadatos y borrador guardado",
-                    BadgeClass = "badge-primary",
+                    Usuario = !string.IsNullOrWhiteSpace(sol.EditorNombre) ? sol.EditorNombre : (!string.IsNullOrWhiteSpace(sol.SolicitanteNombre) ? sol.SolicitanteNombre : "Editor"),
+                    BadgeClass = "badge-info",
                     Icon = "✏️",
-                    SortOrder = 5
+                    SortOrder = 3,
+                    Estado = GetEstadoPropuestaLabel(sol.EstadoPropuesta),
+                    Cambios = diffList
                 });
             }
 
             if (sol.FechaResolucion.HasValue)
             {
                 bool esAprobada = sol.EstadoPropuesta == "Aprobada" || sol.EstadoPropuesta == "Publicada";
+                
+                string approverName = "Aprobador";
+                if (!string.IsNullOrWhiteSpace(sol.AprobadorNombre))
+                {
+                    approverName = sol.AprobadorNombre;
+                }
+                else if (!string.IsNullOrWhiteSpace(sol.EditorNombre))
+                {
+                    approverName = sol.EditorNombre;
+                }
+                else if (sol.AprobadorId.HasValue && sol.AprobadorId == sol.SolicitanteId && !string.IsNullOrWhiteSpace(sol.SolicitanteNombre))
+                {
+                    approverName = sol.SolicitanteNombre;
+                }
+
                 events.Add(new TimelineEvent
                 {
-                    Tipo = "Resolucion",
-                    Titulo = esAprobada ? "Aprobación de solicitud" : "Rechazo de solicitud",
+                    Tipo = "Aprobacion",
+                    Titulo = esAprobada ? "✅ Cambio Aprobado" : "❌ Cambio Rechazado",
                     Fecha = sol.FechaResolucion.Value,
-                    Usuario = sol.AprobadorNombre ?? "Aprobador",
-                    Detalle1 = !string.IsNullOrWhiteSpace(sol.ComentarioResolucion) ? $"Comentarios: {sol.ComentarioResolucion}" : string.Empty,
+                    Usuario = approverName,
                     BadgeClass = esAprobada ? "badge-success" : "badge-danger",
                     Icon = esAprobada ? "✅" : "❌",
-                    SortOrder = 6
+                    SortOrder = 4,
+                    Comentarios = !string.IsNullOrWhiteSpace(sol.ComentarioResolucion) ? sol.ComentarioResolucion : "Sin comentarios"
                 });
-
-                if (esAprobada)
-                {
-                    var versionDoc = historial.FirstOrDefault(d => d.Id == sol.BorradorDocumentoId || (d.DocumentoOriginalId == sol.DocumentoControlId && d.FechaPublicacion >= sol.FechaResolucion.Value.AddSeconds(-5) && d.FechaPublicacion <= sol.FechaResolucion.Value.AddSeconds(5)));
-                    string versionStr = versionDoc?.Version ?? "Nueva versión";
-                    
-                    events.Add(new TimelineEvent
-                    {
-                        Tipo = "Publicacion",
-                        Titulo = "Publicación de Nueva Versión",
-                        Fecha = sol.FechaResolucion.Value,
-                        Usuario = sol.AprobadorNombre ?? "Sistema",
-                        Detalle1 = $"Nueva versión vigente: Versión {versionStr}",
-                        BadgeClass = "badge-success",
-                        Icon = "📢",
-                        SortOrder = 7
-                    });
-                }
             }
         }
 
@@ -2054,6 +2319,24 @@
         public string BadgeClass { get; set; } = string.Empty;
         public string Icon { get; set; } = string.Empty;
         public int SortOrder { get; set; }
+
+        // Creacion specific
+        public string Codigo { get; set; } = string.Empty;
+        public string Nombre { get; set; } = string.Empty;
+        public string Version { get; set; } = string.Empty;
+        public string Area { get; set; } = string.Empty;
+
+        // Solicitud specific
+        public string Motivo { get; set; } = string.Empty;
+        public string Observaciones { get; set; } = string.Empty;
+        public DocumentoControlDto? SnapshotOriginal { get; set; }
+
+        // Edicion specific
+        public string Estado { get; set; } = string.Empty;
+        public List<DiffField> Cambios { get; set; } = new();
+
+        // Aprobacion specific
+        public string Comentarios { get; set; } = string.Empty;
     }
 
     private async Task IniciarRevision(int solicitudId)
@@ -2398,7 +2681,8 @@
                     Observaciones = form.Observaciones,
                     ComentarioCambio = form.ComentarioCambio,
                     AreaId = form.AreaId,
-                    CamposPersonalizados = form.CamposPersonalizados
+                    CamposPersonalizados = form.CamposPersonalizados,
+                    AutoApprove = true
                 };
 
                 HttpResponseMessage response;

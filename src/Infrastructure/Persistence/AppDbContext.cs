@@ -402,4 +402,37 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             ? parsed
             : GeneroColaborador.NoInformado;
     }
+
+    public override int SaveChanges()
+    {
+        SincronizarDocumentosControl();
+        return base.SaveChanges();
+    }
+
+    public override System.Threading.Tasks.Task<int> SaveChangesAsync(System.Threading.CancellationToken cancellationToken = default)
+    {
+        SincronizarDocumentosControl();
+        return base.SaveChangesAsync(cancellationToken);
+    }
+
+    private void SincronizarDocumentosControl()
+    {
+        var entries = ChangeTracker.Entries<DocumentoControl>()
+            .Where(e => e.State == EntityState.Added || e.State == EntityState.Modified);
+
+        foreach (var entry in entries)
+        {
+            var doc = entry.Entity;
+            
+            var prop = entry.Property(d => d.DatosPersonalizados);
+            if (prop.IsModified || entry.State == EntityState.Added)
+            {
+                doc.SincronizarDeDatosPersonalizados();
+            }
+            else
+            {
+                doc.SincronizarHaciaDatosPersonalizados();
+            }
+        }
+    }
 }

@@ -537,6 +537,8 @@ public class ControlDocumentalService(
                 : null
         };
 
+        SincronizarCamposPersonalizados(doc, dto.CamposPersonalizados);
+
         var created = await repository.CreateDocumentoAsync(doc);
         var log = await BuildAuditLogAsync(created.Id, created.Nombre, "Creado", dto.ComentarioCambio, usuarioEmail, created, null);
         await auditRepository.CreateAsync(log);
@@ -570,68 +572,166 @@ public class ControlDocumentalService(
 
         await ValidateCamposPersonalizados(dto.ListadoMaestroId, dto.CamposPersonalizados);
 
-        // In the new flow, an authorized user edit does NOT overwrite the vigente version.
-        // It generates a new version in state "En Revisión" and creates a change request in PendienteAprobacion.
-        var borrador = new DocumentoControl
+        // Check if editor has approval permission to auto-approve
+        var tienePermisoAprobar = editor.Rol == RolUsuario.Admin || 
+                                 await ValidarPermisoAsync(dto.ListadoMaestroId, editor.Id, "aprobar");
+
+        if (!tienePermisoAprobar)
         {
-            ListadoMaestroId = dto.ListadoMaestroId,
-            Codigo = dto.Codigo.Trim(),
-            Nombre = dto.Nombre.Trim(),
-            ProcesoResponsable = dto.ProcesoResponsable.Trim(),
-            Version = string.IsNullOrWhiteSpace(dto.Version) ? existing.Version : dto.Version.Trim(),
-            FechaDocumento = dto.FechaDocumento,
-            OneDriveUrl = dto.OneDriveUrl.Trim(),
-            OneDriveItemId = dto.OneDriveItemId?.Trim(),
-            ArchivoNombre = dto.ArchivoNombre?.Trim(),
-            Uso = dto.Uso?.Trim(),
-            TiempoRetencion = dto.TiempoRetencion?.Trim(),
-            Proteccion = dto.Proteccion?.Trim(),
-            Recuperacion = dto.Recuperacion?.Trim(),
-            DisposicionFinal = dto.DisposicionFinal?.Trim(),
-            Estado = "En Revisión",
-            Observaciones = dto.Observaciones?.Trim(),
-            ComentarioCambio = dto.ComentarioCambio?.Trim(),
-            AreaId = dto.AreaId,
-            DatosPersonalizados = dto.CamposPersonalizados is null
-                ? existing.DatosPersonalizados
-                : JsonSerializer.Serialize(dto.CamposPersonalizados),
-            DocumentoOriginalId = existing.Id,
-            Activo = true,
-            SolicitanteId = editor.Id,
-            EditorId = editor.Id
-        };
+            var (esJefe, areaId) = await EsJefeDeAreaAsync(editor.Id);
+            if (esJefe && editor.Rol == RolUsuario.Jefe && existing.AreaId == areaId)
+            {
+                tienePermisoAprobar = true;
+            }
+        }
 
-        var createdBorrador = await repository.CreateDocumentoAsync(borrador);
+        DocumentoControl createdDoc;
+        SolicitudCambioDocumentoControl solicitud;
+        AuditLog log;
 
-        var solicitud = new SolicitudCambioDocumentoControl
+        if (dto.AutoApprove && tienePermisoAprobar)
         {
-            DocumentoControlId = existing.Id,
-            SolicitanteId = editor.Id,
-            EditorId = editor.Id,
-            ComentarioSolicitud = dto.ComentarioCambio?.Trim() ?? "Edición directa de metadatos",
-            DatosPropuestos = JsonSerializer.Serialize(dto),
-            DatosOriginales = JsonSerializer.Serialize(MapToDto(existing)),
-            EstadoPropuesta = EstadoPropuesta.PendienteAprobacion,
-            FechaCreacion = DateTime.UtcNow,
-            FechaEdicion = DateTime.UtcNow,
-            MotivoCambio = dto.ComentarioCambio?.Trim() ?? "Edición directa por administrador/jefe",
-            DescripcionDetallada = "Modificación directa de versión vigente.",
-            BorradorDocumentoId = createdBorrador.Id
-        };
+            // 1. Deactivate old vigente document
+            existing.Estado = "Histórica";
+            existing.Activo = false;
+            await repository.UpdateDocumentoAsync(existing);
 
-        await repository.CreateSolicitudCambioAsync(solicitud);
+            // 2. Create new document direct as Vigente
+            var newDoc = new DocumentoControl
+            {
+                ListadoMaestroId = dto.ListadoMaestroId,
+                Codigo = dto.Codigo.Trim(),
+                Nombre = dto.Nombre.Trim(),
+                ProcesoResponsable = dto.ProcesoResponsable.Trim(),
+                Version = string.IsNullOrWhiteSpace(dto.Version) ? existing.Version : dto.Version.Trim(),
+                FechaDocumento = dto.FechaDocumento,
+                OneDriveUrl = dto.OneDriveUrl.Trim(),
+                OneDriveItemId = dto.OneDriveItemId?.Trim(),
+                ArchivoNombre = dto.ArchivoNombre?.Trim(),
+                Uso = dto.Uso?.Trim(),
+                TiempoRetencion = dto.TiempoRetencion?.Trim(),
+                Proteccion = dto.Proteccion?.Trim(),
+                Recuperacion = dto.Recuperacion?.Trim(),
+                DisposicionFinal = dto.DisposicionFinal?.Trim(),
+                Estado = "Vigente",
+                Observaciones = dto.Observaciones?.Trim(),
+                ComentarioCambio = dto.ComentarioCambio?.Trim() ?? "Edición directa de metadatos",
+                AreaId = dto.AreaId,
+                DatosPersonalizados = dto.CamposPersonalizados is null
+                    ? existing.DatosPersonalizados
+                    : JsonSerializer.Serialize(dto.CamposPersonalizados),
+                DocumentoOriginalId = existing.Id,
+                Activo = true,
+                SolicitanteId = editor.Id,
+                EditorId = editor.Id,
+                AprobadorId = editor.Id,
+                FechaPublicacion = DateTime.UtcNow,
+                MotivoCambio = dto.ComentarioCambio?.Trim() ?? "Edición directa por administrador/jefe",
+                DescripcionDetallada = "Modificación directa de versión vigente."
+            };
 
-        var log = await BuildAuditLogAsync(
-            existing.Id,
-            existing.Nombre,
-            "SolicitudCambioCreada",
-            $"Edición directa por {editor.Nombre} {editor.Apellido}. Se creó borrador en revisión ID {createdBorrador.Id}.",
-            usuarioEmail,
-            existing,
-            null);
-        await auditRepository.CreateAsync(log);
+            SincronizarCamposPersonalizados(newDoc, dto.CamposPersonalizados);
 
-        return MapToDto(createdBorrador);
+            createdDoc = await repository.CreateDocumentoAsync(newDoc);
+
+            // 3. Create solicitud as auto-approved and published
+            solicitud = new SolicitudCambioDocumentoControl
+            {
+                DocumentoControlId = existing.Id,
+                SolicitanteId = editor.Id,
+                EditorId = editor.Id,
+                AprobadorId = editor.Id,
+                ComentarioSolicitud = dto.ComentarioCambio?.Trim() ?? "Edición directa de metadatos",
+                DatosPropuestos = JsonSerializer.Serialize(dto),
+                DatosOriginales = JsonSerializer.Serialize(MapToDto(existing)),
+                EstadoPropuesta = EstadoPropuesta.Publicada,
+                FechaCreacion = DateTime.UtcNow,
+                FechaEdicion = DateTime.UtcNow,
+                FechaResolucion = DateTime.UtcNow,
+                ComentarioResolucion = "Auto-aprobado por edición directa de administrador/jefe",
+                MotivoCambio = dto.ComentarioCambio?.Trim() ?? "Edición directa por administrador/jefe",
+                DescripcionDetallada = "Modificación directa y auto-aprobada de versión vigente.",
+                BorradorDocumentoId = createdDoc.Id
+            };
+
+            await repository.CreateSolicitudCambioAsync(solicitud);
+
+            log = await BuildAuditLogAsync(
+                createdDoc.Id,
+                createdDoc.Nombre,
+                "SolicitudCambioAprobada",
+                $"Edición directa y auto-aprobación por {editor.Nombre} {editor.Apellido}. Nueva versión vigente ID {createdDoc.Id}.",
+                usuarioEmail,
+                createdDoc,
+                null);
+            await auditRepository.CreateAsync(log);
+        }
+        else
+        {
+            // Flow for users without approval permission (create draft & request approval)
+            var borrador = new DocumentoControl
+            {
+                ListadoMaestroId = dto.ListadoMaestroId,
+                Codigo = dto.Codigo.Trim(),
+                Nombre = dto.Nombre.Trim(),
+                ProcesoResponsable = dto.ProcesoResponsable.Trim(),
+                Version = string.IsNullOrWhiteSpace(dto.Version) ? existing.Version : dto.Version.Trim(),
+                FechaDocumento = dto.FechaDocumento,
+                OneDriveUrl = dto.OneDriveUrl.Trim(),
+                OneDriveItemId = dto.OneDriveItemId?.Trim(),
+                ArchivoNombre = dto.ArchivoNombre?.Trim(),
+                Uso = dto.Uso?.Trim(),
+                TiempoRetencion = dto.TiempoRetencion?.Trim(),
+                Proteccion = dto.Proteccion?.Trim(),
+                Recuperacion = dto.Recuperacion?.Trim(),
+                DisposicionFinal = dto.DisposicionFinal?.Trim(),
+                Estado = "En Revisión",
+                Observaciones = dto.Observaciones?.Trim(),
+                ComentarioCambio = dto.ComentarioCambio?.Trim(),
+                AreaId = dto.AreaId,
+                DatosPersonalizados = dto.CamposPersonalizados is null
+                    ? existing.DatosPersonalizados
+                    : JsonSerializer.Serialize(dto.CamposPersonalizados),
+                DocumentoOriginalId = existing.Id,
+                Activo = true,
+                SolicitanteId = editor.Id,
+                EditorId = editor.Id
+            };
+
+            SincronizarCamposPersonalizados(borrador, dto.CamposPersonalizados);
+
+            createdDoc = await repository.CreateDocumentoAsync(borrador);
+
+            solicitud = new SolicitudCambioDocumentoControl
+            {
+                DocumentoControlId = existing.Id,
+                SolicitanteId = editor.Id,
+                EditorId = editor.Id,
+                ComentarioSolicitud = dto.ComentarioCambio?.Trim() ?? "Edición directa de metadatos",
+                DatosPropuestos = JsonSerializer.Serialize(dto),
+                DatosOriginales = JsonSerializer.Serialize(MapToDto(existing)),
+                EstadoPropuesta = EstadoPropuesta.PendienteAprobacion,
+                FechaCreacion = DateTime.UtcNow,
+                FechaEdicion = DateTime.UtcNow,
+                MotivoCambio = dto.ComentarioCambio?.Trim() ?? "Edición directa por administrador/jefe",
+                DescripcionDetallada = "Modificación directa de versión vigente.",
+                BorradorDocumentoId = createdDoc.Id
+            };
+
+            await repository.CreateSolicitudCambioAsync(solicitud);
+
+            log = await BuildAuditLogAsync(
+                existing.Id,
+                existing.Nombre,
+                "SolicitudCambioCreada",
+                $"Edición directa por {editor.Nombre} {editor.Apellido}. Se creó borrador en revisión ID {createdDoc.Id}.",
+                usuarioEmail,
+                existing,
+                null);
+            await auditRepository.CreateAsync(log);
+        }
+
+        return MapToDto(createdDoc);
     }
 
     public async Task<SolicitudCambioDocumentoControlDto> CreateSolicitudCambioAsync(int documentoId, UpdateDocumentoControlDto propuesta, string usuarioEmail)
@@ -704,6 +804,18 @@ public class ControlDocumentalService(
         if (colaborador.Rol == RolUsuario.Admin || colaborador.Rol == RolUsuario.Jefe)
         {
             return solicitudes.Select(MapToSolicitudCambioDto).ToList();
+        }
+
+        // Permitir ver toda la trazabilidad si el colaborador tiene permisos explícitos sobre el listado
+        var doc = await repository.GetDocumentoByIdAsync(documentoId);
+        if (doc != null)
+        {
+            var tienePermiso = await ValidarPermisoAsync(doc.ListadoMaestroId, colaborador.Id, "ver")
+                               || await ValidarPermisoAsync(doc.ListadoMaestroId, colaborador.Id, "editar");
+            if (tienePermiso)
+            {
+                return solicitudes.Select(MapToSolicitudCambioDto).ToList();
+            }
         }
 
         return solicitudes
@@ -847,13 +959,17 @@ public class ControlDocumentalService(
             ? null
             : JsonSerializer.Serialize(borradorDto.CamposPersonalizados);
 
+        SincronizarCamposPersonalizados(borrador, borradorDto.CamposPersonalizados);
+
         await repository.UpdateDocumentoAsync(borrador);
+
+        solicitud.DatosPropuestos = JsonSerializer.Serialize(borradorDto);
 
         if (solicitud.EditorId != editor.Id)
         {
             solicitud.EditorId = editor.Id;
-            await repository.UpdateSolicitudCambioAsync(solicitud);
         }
+        await repository.UpdateSolicitudCambioAsync(solicitud);
     }
 
     public async Task EnviarAAprobacionAsync(int solicitudId, string usuarioEmail)
@@ -968,6 +1084,8 @@ public class ControlDocumentalService(
                 DescripcionDetallada = solicitud.DescripcionDetallada
             };
 
+            SincronizarCamposPersonalizados(newDoc, propuestaDto.CamposPersonalizados);
+
             finalVigente = await repository.CreateDocumentoAsync(newDoc);
             solicitud.BorradorDocumentoId = finalVigente.Id;
         }
@@ -1041,7 +1159,9 @@ public class ControlDocumentalService(
         DocumentoControlNombre = solicitud.DocumentoControl?.Nombre ?? string.Empty,
         DocumentoControlCodigo = solicitud.DocumentoControl?.Codigo ?? string.Empty,
         SolicitanteId = solicitud.SolicitanteId,
-        SolicitanteNombre = solicitud.Solicitante?.Nombre + " " + solicitud.Solicitante?.Apellido,
+        SolicitanteNombre = string.IsNullOrWhiteSpace(solicitud.Solicitante?.Nombre) && string.IsNullOrWhiteSpace(solicitud.Solicitante?.Apellido)
+            ? null
+            : $"{solicitud.Solicitante?.Nombre} {solicitud.Solicitante?.Apellido}".Trim(),
         EstadoPropuesta = solicitud.EstadoPropuesta.ToString(),
         ComentarioSolicitud = solicitud.ComentarioSolicitud,
         ComentarioResolucion = solicitud.ComentarioResolucion,
@@ -1051,8 +1171,16 @@ public class ControlDocumentalService(
         DatosPropuestos = solicitud.DatosPropuestos,
         DatosOriginales = solicitud.DatosOriginales,
         AprobadorId = solicitud.AprobadorId,
-        AprobadorNombre = solicitud.Aprobador?.Nombre + " " + solicitud.Aprobador?.Apellido,
-        EditorNombre = solicitud.Editor?.Nombre + " " + solicitud.Editor?.Apellido,
+        AprobadorNombre = !string.IsNullOrWhiteSpace(solicitud.Aprobador?.Nombre) || !string.IsNullOrWhiteSpace(solicitud.Aprobador?.Apellido)
+            ? $"{solicitud.Aprobador?.Nombre} {solicitud.Aprobador?.Apellido}".Trim()
+            : (solicitud.AprobadorId.HasValue && solicitud.AprobadorId == solicitud.EditorId && solicitud.Editor != null
+                ? $"{solicitud.Editor.Nombre} {solicitud.Editor.Apellido}".Trim()
+                : (solicitud.AprobadorId.HasValue && solicitud.AprobadorId == solicitud.SolicitanteId && solicitud.Solicitante != null
+                    ? $"{solicitud.Solicitante.Nombre} {solicitud.Solicitante.Apellido}".Trim()
+                    : null)),
+        EditorNombre = string.IsNullOrWhiteSpace(solicitud.Editor?.Nombre) && string.IsNullOrWhiteSpace(solicitud.Editor?.Apellido)
+            ? null
+            : $"{solicitud.Editor?.Nombre} {solicitud.Editor?.Apellido}".Trim(),
         
         RevisorId = solicitud.RevisorId,
         RevisorNombre = solicitud.Revisor != null ? $"{solicitud.Revisor.Nombre} {solicitud.Revisor.Apellido}" : null,
@@ -1487,10 +1615,79 @@ public class ControlDocumentalService(
         };
     }
 
+    private static void SincronizarCamposPersonalizados(DocumentoControl doc, Dictionary<string, string?>? campos)
+    {
+        if (campos == null) return;
+
+        foreach (var kvp in campos)
+        {
+            var keyNorm = kvp.Key.Trim().ToLowerInvariant()
+                .Replace("á", "a").Replace("é", "e").Replace("í", "i").Replace("ó", "o").Replace("ú", "u")
+                .Replace("ü", "u").Replace("ñ", "n").Replace("ç", "c").Replace(" ", string.Empty);
+
+            var value = kvp.Value?.Trim();
+            if (string.IsNullOrWhiteSpace(value)) continue;
+
+            if (keyNorm == "codigo")
+            {
+                doc.Codigo = value;
+            }
+            else if (keyNorm == "nombre")
+            {
+                doc.Nombre = value;
+            }
+            else if (keyNorm == "procesoresponsable" || keyNorm == "proceso" || keyNorm == "responsable")
+            {
+                doc.ProcesoResponsable = value;
+            }
+            else if (keyNorm == "version")
+            {
+                doc.Version = value;
+            }
+            else if (keyNorm == "fechadocumento" || keyNorm == "fecha")
+            {
+                if (DateTime.TryParse(value, out var parsedDate))
+                {
+                    doc.FechaDocumento = parsedDate;
+                }
+            }
+            else if (keyNorm == "uso")
+            {
+                doc.Uso = value;
+            }
+            else if (keyNorm == "tiempoderetenciondelregistro(anos)" || keyNorm == "tiempoderetencion" || keyNorm == "retencion")
+            {
+                doc.TiempoRetencion = value;
+            }
+            else if (keyNorm == "proteccion")
+            {
+                doc.Proteccion = value;
+            }
+            else if (keyNorm == "recuperacion")
+            {
+                doc.Recuperacion = value;
+            }
+            else if (keyNorm == "disposicionfinal" || keyNorm == "disposicion")
+            {
+                doc.DisposicionFinal = value;
+            }
+            else if (keyNorm == "estado")
+            {
+                doc.Estado = value;
+            }
+            else if (keyNorm == "observaciones")
+            {
+                doc.Observaciones = value;
+            }
+        }
+    }
+
     private static ListadoMaestroPermisoDto MapToPermisoDto(ListadoMaestroPermiso permiso) => new()
     {
         ColaboradorId = permiso.ColaboradorId,
-        ColaboradorNombre = permiso.Colaborador?.Nombre + " " + permiso.Colaborador?.Apellido,
+        ColaboradorNombre = string.IsNullOrWhiteSpace(permiso.Colaborador?.Nombre) && string.IsNullOrWhiteSpace(permiso.Colaborador?.Apellido)
+            ? null
+            : $"{permiso.Colaborador?.Nombre} {permiso.Colaborador?.Apellido}".Trim(),
         ColaboradorEmail = permiso.Colaborador?.Email ?? string.Empty,
         PuedeVer = permiso.PuedeVer,
         PuedeEditar = permiso.PuedeEditar,

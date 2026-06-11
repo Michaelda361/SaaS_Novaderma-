@@ -33,4 +33,5 @@ public class UpdateDocumentoControlDto
     public string? ComentarioCambio { get; set; }
     public int? AreaId { get; set; }
     public Dictionary<string, string?>? CamposPersonalizados { get; set; } = new Dictionary<string, string?>();
+    public bool AutoApprove { get; set; } = false;
 }

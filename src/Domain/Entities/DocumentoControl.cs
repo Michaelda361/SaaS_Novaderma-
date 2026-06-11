@@ -26,7 +26,141 @@ public class DocumentoControl : BaseEntity
     public string? Observaciones { get; set; }
     public string? ComentarioCambio { get; set; }
 
-    public string? DatosPersonalizados { get; set; }
+    private string? _datosPersonalizados;
+    public string? DatosPersonalizados
+    {
+        get => _datosPersonalizados;
+        set
+        {
+            _datosPersonalizados = value;
+            SincronizarDeDatosPersonalizados();
+        }
+    }
+
+    public void SincronizarDeDatosPersonalizados()
+    {
+        if (string.IsNullOrWhiteSpace(_datosPersonalizados)) return;
+        try
+        {
+            var campos = System.Text.Json.JsonSerializer.Deserialize<System.Collections.Generic.Dictionary<string, string?>>(_datosPersonalizados);
+            if (campos == null) return;
+
+            foreach (var kvp in campos)
+            {
+                var keyNorm = kvp.Key.Trim().ToLowerInvariant()
+                    .Replace("á", "a").Replace("é", "e").Replace("í", "i").Replace("ó", "o").Replace("ú", "u")
+                    .Replace("ü", "u").Replace("ñ", "n").Replace("ç", "c").Replace(" ", string.Empty);
+
+                var val = kvp.Value?.Trim();
+                if (string.IsNullOrWhiteSpace(val)) continue;
+
+                if (keyNorm == "codigo")
+                {
+                    Codigo = val;
+                }
+                else if (keyNorm == "nombre")
+                {
+                    Nombre = val;
+                }
+                else if (keyNorm == "procesoresponsable" || keyNorm == "proceso" || keyNorm == "responsable")
+                {
+                    ProcesoResponsable = val;
+                }
+                else if (keyNorm == "version")
+                {
+                    Version = val;
+                }
+                else if (keyNorm == "fechadocumento" || keyNorm == "fecha" || keyNorm.Contains("fecha"))
+                {
+                    if (DateTime.TryParse(val, out var parsedDate))
+                    {
+                        FechaDocumento = parsedDate;
+                    }
+                }
+                else if (keyNorm == "uso")
+                {
+                    Uso = val;
+                }
+                else if (keyNorm == "tiempoderetenciondelregistro(anos)" || keyNorm == "tiempoderetencion" || keyNorm == "retencion" || keyNorm.Contains("retencion"))
+                {
+                    TiempoRetencion = val;
+                }
+                else if (keyNorm == "proteccion")
+                {
+                    Proteccion = val;
+                }
+                else if (keyNorm == "recuperacion")
+                {
+                    Recuperacion = val;
+                }
+                else if (keyNorm == "disposicionfinal" || keyNorm == "disposicion")
+                {
+                    DisposicionFinal = val;
+                }
+                else if (keyNorm == "estado")
+                {
+                    Estado = val;
+                }
+                else if (keyNorm == "observaciones")
+                {
+                    Observaciones = val;
+                }
+            }
+        }
+        catch
+        {
+            // Ignorar errores de análisis JSON
+        }
+    }
+
+    public void SincronizarHaciaDatosPersonalizados()
+    {
+        if (string.IsNullOrWhiteSpace(_datosPersonalizados)) return;
+        try
+        {
+            var campos = System.Text.Json.JsonSerializer.Deserialize<System.Collections.Generic.Dictionary<string, string?>>(_datosPersonalizados)
+                         ?? new System.Collections.Generic.Dictionary<string, string?>();
+
+            UpdateJsonValue(campos, new[] { "codigo" }, Codigo);
+            UpdateJsonValue(campos, new[] { "nombre" }, Nombre);
+            UpdateJsonValue(campos, new[] { "procesoresponsable", "proceso", "responsable" }, ProcesoResponsable);
+            UpdateJsonValue(campos, new[] { "version" }, Version);
+            UpdateJsonValue(campos, new[] { "fechadocumento", "fecha" }, FechaDocumento.ToString("yyyy-MM-dd"));
+            UpdateJsonValue(campos, new[] { "uso" }, Uso);
+            UpdateJsonValue(campos, new[] { "tiempoderetenciondelregistro(anos)", "tiempoderetencion", "retencion" }, TiempoRetencion);
+            UpdateJsonValue(campos, new[] { "proteccion" }, Proteccion);
+            UpdateJsonValue(campos, new[] { "recuperacion" }, Recuperacion);
+            UpdateJsonValue(campos, new[] { "disposicionfinal", "disposicion" }, DisposicionFinal);
+            UpdateJsonValue(campos, new[] { "estado" }, Estado);
+            UpdateJsonValue(campos, new[] { "observaciones" }, Observaciones);
+
+            _datosPersonalizados = System.Text.Json.JsonSerializer.Serialize(campos);
+        }
+        catch
+        {
+            // Ignorar errores de análisis/serialización JSON
+        }
+    }
+
+    private void UpdateJsonValue(System.Collections.Generic.Dictionary<string, string?> campos, string[] keys, string? newValue)
+    {
+        foreach (var key in new System.Collections.Generic.List<string>(campos.Keys))
+        {
+            var keyNorm = key.Trim().ToLowerInvariant()
+                .Replace("á", "a").Replace("é", "e").Replace("í", "i").Replace("ó", "o").Replace("ú", "u")
+                .Replace("ü", "u").Replace("ñ", "n").Replace("ç", "c").Replace(" ", string.Empty);
+
+            foreach (var candidate in keys)
+            {
+                var candidateNorm = candidate.Trim().ToLowerInvariant().Replace(" ", string.Empty);
+                if (keyNorm == candidateNorm || (keyNorm.Contains("fecha") && candidateNorm.Contains("fecha")) || (keyNorm.Contains("retencion") && candidateNorm.Contains("retencion")))
+                {
+                    campos[key] = newValue;
+                    return;
+                }
+            }
+        }
+    }
 
     public int? AreaId { get; set; }
     public Area? Area { get; set; }
