@@ -558,7 +558,7 @@ public class PlantillaDocumentoService(
         if (extrasFiltrados is { Count: > 0 })
         {
             foreach (var (key, value) in extrasFiltrados)
-                variables[$"{{{{{key}}}}}"] = value;
+                variables[$"{{{{{key}}}}}"] = value ?? string.Empty;
         }
 
         return variables;
