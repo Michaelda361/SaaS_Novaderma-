@@ -66,6 +66,9 @@ public class PlantillaDocumentoService(
             VariablesEditables = dto.VariablesEditables.Count > 0
                 ? System.Text.Json.JsonSerializer.Serialize(dto.VariablesEditables)
                 : null,
+            CamposFormulario   = dto.CamposFormulario.Count > 0
+                ? System.Text.Json.JsonSerializer.Serialize(dto.CamposFormulario)
+                : null,
             Areas = dto.AreaIds.Select(id => new PlantillaDocumentoArea { AreaId = id }).ToList()
         };
 
@@ -105,6 +108,9 @@ public class PlantillaDocumentoService(
         plantilla.AplicaTodasAreas  = dto.AplicaTodasAreas;
         plantilla.VariablesEditables = dto.VariablesEditables.Count > 0
             ? System.Text.Json.JsonSerializer.Serialize(dto.VariablesEditables)
+            : null;
+        plantilla.CamposFormulario   = dto.CamposFormulario.Count > 0
+            ? System.Text.Json.JsonSerializer.Serialize(dto.CamposFormulario)
             : null;
         plantilla.Areas = dto.AreaIds.Select(aId => new PlantillaDocumentoArea
         {
@@ -188,6 +194,7 @@ public class PlantillaDocumentoService(
             ["area"]             = colaborador.Area?.Nombre ?? string.Empty,
             ["ciudad"]           = colaborador.Ciudad ?? string.Empty,
             ["fecha_expedicion"] = DateTime.Today.ToString("d 'de' MMMM 'de' yyyy", cultura),
+            ["fecha_actual"]     = DateTime.Today.ToString("dd/MM/yyyy"),
             ["tipo_contrato"]    = colaborador.TipoContrato ?? string.Empty,
             ["fecha_ingreso"]    = colaborador.FechaIngreso.ToString("d 'de' MMMM 'de' yyyy", cultura),
             ["sueldo_basico"]    = colaborador.SueldoBasico.HasValue ? colaborador.SueldoBasico.Value.ToString("C0", cultura) : string.Empty,
@@ -263,7 +270,8 @@ public class PlantillaDocumentoService(
 
     // ── Solicitudes con flujo de aprobación ──────────────────────────────────
 
-    public async Task<SolicitudDocumentoDto> EnviarSolicitudAsync(int plantillaId, string email, byte[] pdfBytes)
+    public async Task<SolicitudDocumentoDto> EnviarSolicitudAsync(
+        int plantillaId, string email, byte[] pdfBytes, Dictionary<string, string>? variablesCompletadas = null)
     {
         var colaborador = await colaboradorRepository.GetByEmailAsync(email)
             ?? throw new UnauthorizedAccessException("Usuario no registrado como colaborador");
@@ -276,6 +284,10 @@ public class PlantillaDocumentoService(
         using var ms = new MemoryStream(pdfBytes);
         var pdfFileKey = await storage.UploadAsync(ms, nombrePdf, ContenedorPdf, "application/pdf");
 
+        var variablesJson = variablesCompletadas is { Count: > 0 }
+            ? System.Text.Json.JsonSerializer.Serialize(variablesCompletadas)
+            : null;
+
         var solicitud = new SolicitudDocumento
         {
             PlantillaDocumentoId  = plantillaId,
@@ -284,6 +296,7 @@ public class PlantillaDocumentoService(
             Estado                = EstadoSolicitud.Pendiente,
             PdfFileKey            = pdfFileKey,
             NotificadoColaborador = true,
+            VariablesCompletadas  = variablesJson
         };
 
         await repository.CreateSolicitudAsync(solicitud);
@@ -302,6 +315,36 @@ public class PlantillaDocumentoService(
         s.ComentarioAdmin       = comentario;
         s.FechaResolucion       = DateTime.UtcNow;
         s.NotificadoColaborador = false;
+        await repository.UpdateSolicitudAsync(s);
+        return MapSolicitud(s);
+    }
+
+    public async Task<SolicitudDocumentoDto?> AprobarSolicitudConDocumentoAsync(
+        int solicitudId, string? comentario, byte[] pdfBytes, Dictionary<string, string> variablesFinales)
+    {
+        var s = await repository.GetSolicitudByIdAsync(solicitudId);
+        if (s is null) return null;
+
+        // 1. Eliminar el PDF viejo si existía en storage
+        if (!string.IsNullOrWhiteSpace(s.PdfFileKey))
+        {
+            try { await storage.DeleteAsync(s.PdfFileKey); } catch { }
+        }
+
+        // 2. Subir el nuevo PDF a storage
+        var nombrePdf = $"solicitud_{s.PlantillaDocumentoId}_{s.ColaboradorId}_{DateTime.UtcNow:yyyyMMddHHmmss}.pdf";
+        using var ms = new MemoryStream(pdfBytes);
+        var pdfFileKey = await storage.UploadAsync(ms, nombrePdf, ContenedorPdf, "application/pdf");
+
+        // 3. Actualizar campos
+        s.Estado                = EstadoSolicitud.Aprobada;
+        s.ComentarioAdmin       = comentario;
+        s.FechaResolucion       = DateTime.UtcNow;
+        s.NotificadoColaborador = false;
+        s.PdfFileKey            = pdfFileKey;
+        s.PdfBytes              = null; // Limpiar legacy
+        s.VariablesCompletadas  = System.Text.Json.JsonSerializer.Serialize(variablesFinales);
+
         await repository.UpdateSolicitudAsync(s);
         return MapSolicitud(s);
     }
@@ -338,6 +381,12 @@ public class PlantillaDocumentoService(
         if (s.Estado != EstadoSolicitud.Aprobada)
             throw new InvalidOperationException("La solicitud no está aprobada");
 
+        if (s.Descargado)
+            throw new InvalidOperationException("El documento ya ha sido descargado y solo se permite una descarga.");
+
+        s.Descargado = true;
+        await repository.UpdateSolicitudAsync(s);
+
         return await ObtenerPdfSolicitudAsync(s);
     }
 
@@ -366,20 +415,19 @@ public class PlantillaDocumentoService(
     public async Task<SolicitudDocumento?> GetSolicitudEntityAsync(int id) =>
         await repository.GetSolicitudByIdAsync(id);
 
-    /// <summary>
-    /// Devuelve el PDF de una solicitud si el solicitante tiene acceso.
-    /// Admin/jefe puede ver cualquiera; colaborador solo la suya.
-    /// </summary>
     public async Task<byte[]?> GetPdfSolicitudAsync(int solicitudId, string email)
     {
         var s = await repository.GetSolicitudByIdAsync(solicitudId);
         if (s is null) return null;
 
-        if (s.Colaborador.Email != email)
+        var solicitante = await colaboradorRepository.GetByEmailAsync(email)
+            ?? throw new UnauthorizedAccessException("Usuario no registrado como colaborador");
+
+        var esAdminOJefe = solicitante.Rol == RolUsuario.Jefe || solicitante.Rol == RolUsuario.Admin;
+
+        if (!esAdminOJefe)
         {
-            var solicitante = await colaboradorRepository.GetByEmailAsync(email);
-            if (solicitante is null ||
-                (solicitante.Rol != RolUsuario.Jefe && solicitante.Rol != RolUsuario.Admin))
+            if (s.Colaborador.Email != email || s.Estado != EstadoSolicitud.Aprobada)
                 throw new UnauthorizedAccessException("No tienes acceso a este PDF.");
         }
 
@@ -401,6 +449,33 @@ public class PlantillaDocumentoService(
         return s.PdfBytes;
     }
 
+    public async Task<Dictionary<string, string>> GetValoresPerfilPorEmailAsync(string email)
+    {
+        var colaborador = await colaboradorRepository.GetByEmailAsync(email)
+            ?? throw new UnauthorizedAccessException("Usuario no registrado como colaborador");
+
+        var cultura = new CultureInfo("es-CO");
+        return new Dictionary<string, string>
+        {
+            ["nombre_completo"]  = $"{colaborador.Nombre} {colaborador.Apellido}",
+            ["nombre"]           = colaborador.Nombre,
+            ["apellido"]         = colaborador.Apellido,
+            ["email"]            = colaborador.Email ?? string.Empty,
+            ["telefono"]         = colaborador.Telefono ?? string.Empty,
+            ["cedula"]           = colaborador.Cedula ?? string.Empty,
+            ["cargo"]            = colaborador.Cargo?.Nombre ?? string.Empty,
+            ["area"]             = colaborador.Area?.Nombre ?? string.Empty,
+            ["ciudad"]           = colaborador.Ciudad ?? string.Empty,
+            ["fecha_expedicion"] = DateTime.Today.ToString("d 'de' MMMM 'de' yyyy", cultura),
+            ["fecha_actual"]     = DateTime.Today.ToString("dd/MM/yyyy"),
+            ["tipo_contrato"]    = colaborador.TipoContrato ?? string.Empty,
+            ["fecha_ingreso"]    = colaborador.FechaIngreso.ToString("d 'de' MMMM 'de' yyyy", cultura),
+            ["sueldo_basico"]    = colaborador.SueldoBasico.HasValue ? colaborador.SueldoBasico.Value.ToString("C0", cultura) : string.Empty,
+            ["genero"]           = TextoGeneroParaDocumento(colaborador.Genero),
+            ["rol"]              = colaborador.Rol.ToString(),
+        };
+    }
+
     private static SolicitudDocumentoDto MapSolicitud(SolicitudDocumento s) => new()
     {
         Id                   = s.Id,
@@ -415,6 +490,10 @@ public class PlantillaDocumentoService(
         FechaResolucion      = s.FechaResolucion,
         TienePdf             = s.PdfFileKey is not null || s.PdfBytes is not null,
         TieneNovedad         = !s.NotificadoColaborador,
+        VariablesCompletadas = string.IsNullOrWhiteSpace(s.VariablesCompletadas)
+            ? []
+            : System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(s.VariablesCompletadas) ?? [],
+        Descargado           = s.Descargado
     };
 
     private static string TextoGeneroParaDocumento(GeneroColaborador g) => g switch
@@ -424,7 +503,7 @@ public class PlantillaDocumentoService(
         _                           => "el(la) señor(a)",
     };
 
-    private static Dictionary<string, string>? FiltrarExtrasParaPlantilla(
+    public static Dictionary<string, string>? FiltrarExtrasParaPlantilla(
         PlantillaDocumento plantilla,
         Dictionary<string, string>? extras,
         bool validarEditables)
@@ -448,7 +527,7 @@ public class PlantillaDocumentoService(
         return filtrados.Count == 0 ? null : filtrados;
     }
 
-    private static Dictionary<string, string> ConstruirVariablesDocumento(
+    public static Dictionary<string, string> ConstruirVariablesDocumento(
         Colaborador c, PlantillaDocumento p, Dictionary<string, string>? extrasFiltrados)
     {
         var cultura = new CultureInfo("es-CO");
@@ -469,6 +548,7 @@ public class PlantillaDocumentoService(
                 ? c.SueldoBasico.Value.ToString("C0", cultura) : string.Empty,
             ["{{ciudad}}"]           = c.Ciudad ?? string.Empty,
             ["{{fecha_expedicion}}"] = hoy.ToString("d 'de' MMMM 'de' yyyy", cultura),
+            ["{{fecha_actual}}"]     = hoy.ToString("dd/MM/yyyy"),
             ["{{nombre_firmante}}"]  = p.NombreFirmante ?? string.Empty,
             ["{{cargo_firmante}}"]   = p.CargoFirmante ?? string.Empty,
             ["{{genero}}"]           = TextoGeneroParaDocumento(c.Genero),
@@ -522,6 +602,9 @@ public class PlantillaDocumentoService(
         VariablesEditables = string.IsNullOrWhiteSpace(p.VariablesEditables)
             ? []
             : System.Text.Json.JsonSerializer.Deserialize<List<string>>(p.VariablesEditables) ?? [],
+        CamposFormulario   = string.IsNullOrWhiteSpace(p.CamposFormulario)
+            ? []
+            : System.Text.Json.JsonSerializer.Deserialize<List<CampoFormularioDto>>(p.CamposFormulario) ?? []
     };
 }
 

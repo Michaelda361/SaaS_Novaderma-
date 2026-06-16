@@ -33,4 +33,10 @@ public class SolicitudDocumento : BaseEntity
 
     /// <summary>False cuando hay una resolución nueva que el colaborador aún no ha visto.</summary>
     public bool NotificadoColaborador { get; set; } = true;
+
+    /// <summary>JSON conteniendo las variables completadas y aplicadas al documento.</summary>
+    public string? VariablesCompletadas { get; set; }
+
+    /// <summary>Indica si el documento ya fue descargado por el colaborador (límite de 1 descarga).</summary>
+    public bool Descargado { get; set; } = false;
 }

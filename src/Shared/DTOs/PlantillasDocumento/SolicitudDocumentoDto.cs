@@ -15,11 +15,14 @@ public class SolicitudDocumentoDto
     public bool TienePdf { get; set; }
     /// <summary>True si hay una resolución que el colaborador aún no ha visto.</summary>
     public bool TieneNovedad { get; set; }
+    public Dictionary<string, string> VariablesCompletadas { get; set; } = [];
+    public bool Descargado { get; set; }
 }
 
 public class ResolverSolicitudDto
 {
     public string? Comentario { get; set; }
+    public Dictionary<string, string> VariablesAprobador { get; set; } = [];
 }
 
 public class EnviarSolicitudDto

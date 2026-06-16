@@ -76,11 +76,27 @@ public class PlantillasDocumentoController(
 
     // ── Previsualización (HTML resuelto, sin registrar solicitud) ────────────
 
+    [HttpGet("valores-perfil")]
+    public async Task<IActionResult> GetValoresPerfil()
+    {
+        try
+        {
+            var email = currentUser.GetEmail();
+            var result = await service.GetValoresPerfilPorEmailAsync(email);
+            return Ok(result);
+        }
+        catch (UnauthorizedAccessException ex) { return Forbid(ex.Message); }
+        catch (Exception ex) { return StatusCode(500, ex.Message); }
+    }
+
     [HttpPost("{id:int}/previsualizar")]
     public async Task<IActionResult> Previsualizar(int id, [FromBody] GenerarPdfDto? dto = null)
     {
         try
         {
+            if (!await currentUser.PuedeResolverSolicitudesAsync() && !await currentUser.PuedeGestionarPlantillasAsync())
+                return Forbid();
+
             var email = currentUser.GetEmail();
             var validarExtras = !await currentUser.PuedeGestionarPlantillasAsync();
             var (htmlResuelto, plantilla, valoresPerfil) =
@@ -246,6 +262,9 @@ public class PlantillasDocumentoController(
     {
         try
         {
+            if (!await currentUser.PuedeResolverSolicitudesAsync() && !await currentUser.PuedeGestionarPlantillasAsync())
+                return Forbid();
+
             var email = currentUser.GetEmail();
             var validarExtras = !await currentUser.PuedeGestionarPlantillasAsync();
             var (htmlResuelto, plantilla, _) =
@@ -336,10 +355,12 @@ public class PlantillasDocumentoController(
             if (plantillaDto is null) return NotFound();
 
             byte[] pdfBytes;
+            Dictionary<string, string> variablesFinales;
 
             if (plantillaDto.TipoPlantilla == "docx")
             {
                 var (docxBytes, plantilla, variables) = await service.ObtenerDocxConVariablesAsync(id, email, dto?.Extras);
+                variablesFinales = dto?.Extras ?? [];
                 var payload = System.Text.Json.JsonSerializer.Serialize(new DocxReemplazoPayload
                 {
                     DocxBase64 = Convert.ToBase64String(docxBytes),
@@ -356,11 +377,12 @@ public class PlantillasDocumentoController(
             else
             {
                 // HTML: plantilla + variables de sistema + extras filtrados por VariablesEditables
-                var (htmlResuelto, plantilla, _) = await service.ResolverPlantillaAsync(id, email, dto?.Extras);
+                var (htmlResuelto, plantilla, colaborador) = await service.ResolverPlantillaAsync(id, email, dto?.Extras);
+                variablesFinales = dto?.Extras ?? [];
                 pdfBytes = pdfGenerator.GenerarPdfDesdeHtml(htmlResuelto, plantilla);
             }
 
-            var solicitud = await service.EnviarSolicitudAsync(id, email, pdfBytes);
+            var solicitud = await service.EnviarSolicitudAsync(id, email, pdfBytes, variablesFinales);
             await hub.Clients.Group("admins").SendAsync("NuevaSolicitud", solicitud);
             return Ok(solicitud);
         }
@@ -376,11 +398,85 @@ public class PlantillasDocumentoController(
         try
         {
             if (!await currentUser.PuedeResolverSolicitudesAsync()) return Forbid();
-            var resultado = await service.AprobarSolicitudAsync(solicitudId, dto.Comentario);
+
+            var solicitud = await service.GetSolicitudEntityAsync(solicitudId);
+            if (solicitud is null) return NotFound("Solicitud no encontrada.");
+
+            // 1. Validar variables del aprobador
+            var camposFormularioJson = solicitud.PlantillaDocumento.CamposFormulario;
+            var campos = string.IsNullOrWhiteSpace(camposFormularioJson)
+                ? new List<CampoFormularioDto>()
+                : System.Text.Json.JsonSerializer.Deserialize<List<CampoFormularioDto>>(camposFormularioJson) ?? [];
+
+            var camposAprobador = campos.Where(c => c.DiligenciadoPor == "Aprobador").ToList();
+            var missingFields = new List<string>();
+
+            foreach (var campo in camposAprobador)
+            {
+                var val = dto.VariablesAprobador.GetValueOrDefault(campo.Variable, string.Empty);
+                if (campo.Obligatorio && string.IsNullOrWhiteSpace(val))
+                {
+                    missingFields.Add(campo.Nombre);
+                }
+            }
+
+            if (missingFields.Any())
+            {
+                return BadRequest($"Falta diligenciar las siguientes variables obligatorias del aprobador: {string.Join(", ", missingFields)}");
+            }
+
+            // 2. Mezclar variables completadas del colaborador con las del aprobador
+            var variablesFinales = new Dictionary<string, string>();
+            if (!string.IsNullOrWhiteSpace(solicitud.VariablesCompletadas))
+            {
+                try
+                {
+                    variablesFinales = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(solicitud.VariablesCompletadas) ?? [];
+                }
+                catch { }
+            }
+
+            // Agregar/actualizar las variables del aprobador en el diccionario de variables finales
+            foreach (var kv in dto.VariablesAprobador)
+            {
+                variablesFinales[kv.Key] = kv.Value;
+            }
+
+            // 3. Generar el PDF final con todas las variables reemplazadas
+            byte[] pdfBytes;
+            var plantillaDto = await service.GetByIdAsync(solicitud.PlantillaDocumentoId);
+            if (plantillaDto is null) return NotFound("Plantilla no encontrada.");
+
+            if (plantillaDto.TipoPlantilla == "docx")
+            {
+                var (docxBytes, plantilla, variables) = await service.ObtenerDocxConVariablesAsync(solicitud.PlantillaDocumentoId, solicitud.Colaborador.Email!, variablesFinales);
+                var payload = System.Text.Json.JsonSerializer.Serialize(new DocxReemplazoPayload
+                {
+                    DocxBase64 = Convert.ToBase64String(docxBytes),
+                    Variables = variables,
+                });
+                var docxConVariables = pdfGenerator.GenerarDocx(payload);
+                var payloadFinal = System.Text.Json.JsonSerializer.Serialize(new DocxReemplazoPayload
+                {
+                    DocxBase64 = Convert.ToBase64String(docxConVariables),
+                    Variables = [],
+                });
+                pdfBytes = pdfGenerator.GenerarPdfDesdeDocx(payloadFinal);
+            }
+            else
+            {
+                var (htmlResuelto, plantilla, _) = await service.ResolverPlantillaAsync(solicitud.PlantillaDocumentoId, solicitud.Colaborador.Email!, variablesFinales);
+                pdfBytes = pdfGenerator.GenerarPdfDesdeHtml(htmlResuelto, plantilla);
+            }
+
+            // 4. Guardar cambios en base de datos y en almacenamiento
+            var resultado = await service.AprobarSolicitudConDocumentoAsync(solicitudId, dto.Comentario, pdfBytes, variablesFinales);
             if (resultado is null) return NotFound();
+
             var connIdAprobar = NotificacionesHub.GetConnectionId(resultado.ColaboradorId);
             if (connIdAprobar is not null)
                 await hub.Clients.Client(connIdAprobar).SendAsync("SolicitudResuelta", resultado);
+
             return Ok(resultado);
         }
         catch (Exception ex) { return StatusCode(500, ex.Message); }

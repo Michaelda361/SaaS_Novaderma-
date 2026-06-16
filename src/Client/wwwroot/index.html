@@ -188,6 +188,28 @@
             element.focus();
             document.execCommand('insertText', false, text);
         };
+
+        window.copiarTexto = function(text) {
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(text);
+                return true;
+            }
+            // Fallback for older browsers
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            textarea.style.position = 'fixed';
+            document.body.appendChild(textarea);
+            textarea.focus();
+            textarea.select();
+            try {
+                document.execCommand('copy');
+                document.body.removeChild(textarea);
+                return true;
+            } catch (err) {
+                document.body.removeChild(textarea);
+                return false;
+            }
+        };
     </script>
 </body>
 

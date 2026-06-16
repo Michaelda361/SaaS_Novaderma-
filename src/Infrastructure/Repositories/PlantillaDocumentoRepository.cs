@@ -26,6 +26,7 @@ public class PlantillaDocumentoRepository(AppDbContext context) : IPlantillaDocu
                 CargoFirmante = p.CargoFirmante,
                 AplicaTodasAreas = p.AplicaTodasAreas,
                 VariablesEditables = p.VariablesEditables,
+                CamposFormulario = p.CamposFormulario,
                 Activo = p.Activo,
                 Areas = p.Areas
             });
@@ -106,8 +107,9 @@ public class PlantillaDocumentoRepository(AppDbContext context) : IPlantillaDocu
                 s.Id, s.PlantillaDocumentoId, s.PlantillaDocumento,
                 s.ColaboradorId, s.Colaborador, s.FechaSolicitud,
                 s.Estado, s.ComentarioAdmin, s.FechaResolucion, s.Activo,
-                s.NotificadoColaborador,
-                TienePdf = s.PdfBytes != null,
+                s.NotificadoColaborador, s.VariablesCompletadas, s.Descargado,
+                s.PdfFileKey,
+                TienePdfBytes = s.PdfBytes != null,
             })
             .AsNoTracking().ToListAsync();
 
@@ -119,7 +121,10 @@ public class PlantillaDocumentoRepository(AppDbContext context) : IPlantillaDocu
             Estado = s.Estado, ComentarioAdmin = s.ComentarioAdmin,
             FechaResolucion = s.FechaResolucion, Activo = s.Activo,
             NotificadoColaborador = s.NotificadoColaborador,
-            PdfBytes = s.TienePdf ? [] : null,
+            VariablesCompletadas = s.VariablesCompletadas,
+            Descargado = s.Descargado,
+            PdfFileKey = s.PdfFileKey,
+            PdfBytes = s.TienePdfBytes ? [] : null,
         });
     }
 
@@ -134,7 +139,9 @@ public class PlantillaDocumentoRepository(AppDbContext context) : IPlantillaDocu
                 s.Id, s.PlantillaDocumentoId, s.PlantillaDocumento,
                 s.ColaboradorId, s.Colaborador, s.FechaSolicitud,
                 s.Estado, s.ComentarioAdmin, s.FechaResolucion, s.Activo,
-                TienePdf = s.PdfBytes != null,
+                s.VariablesCompletadas, s.Descargado,
+                s.PdfFileKey,
+                TienePdfBytes = s.PdfBytes != null,
             })
             .AsNoTracking().ToListAsync();
 
@@ -145,7 +152,10 @@ public class PlantillaDocumentoRepository(AppDbContext context) : IPlantillaDocu
             Colaborador = s.Colaborador, FechaSolicitud = s.FechaSolicitud,
             Estado = s.Estado, ComentarioAdmin = s.ComentarioAdmin,
             FechaResolucion = s.FechaResolucion, Activo = s.Activo,
-            PdfBytes = s.TienePdf ? [] : null,
+            VariablesCompletadas = s.VariablesCompletadas,
+            Descargado = s.Descargado,
+            PdfFileKey = s.PdfFileKey,
+            PdfBytes = s.TienePdfBytes ? [] : null,
         });
     }
 
@@ -161,7 +171,9 @@ public class PlantillaDocumentoRepository(AppDbContext context) : IPlantillaDocu
                 s.Id, s.PlantillaDocumentoId, s.PlantillaDocumento,
                 s.ColaboradorId, s.Colaborador, s.FechaSolicitud,
                 s.Estado, s.ComentarioAdmin, s.FechaResolucion, s.Activo,
-                TienePdf = s.PdfBytes != null,
+                s.VariablesCompletadas, s.Descargado,
+                s.PdfFileKey,
+                TienePdfBytes = s.PdfBytes != null,
             })
             .AsNoTracking().ToListAsync();
 
@@ -172,7 +184,10 @@ public class PlantillaDocumentoRepository(AppDbContext context) : IPlantillaDocu
             Colaborador = s.Colaborador, FechaSolicitud = s.FechaSolicitud,
             Estado = s.Estado, ComentarioAdmin = s.ComentarioAdmin,
             FechaResolucion = s.FechaResolucion, Activo = s.Activo,
-            PdfBytes = s.TienePdf ? [] : null,
+            VariablesCompletadas = s.VariablesCompletadas,
+            Descargado = s.Descargado,
+            PdfFileKey = s.PdfFileKey,
+            PdfBytes = s.TienePdfBytes ? [] : null,
         });
     }
 

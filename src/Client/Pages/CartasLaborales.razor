@@ -82,13 +82,8 @@ else
                     else
                     {
                         <button class="btn btn-primary btn-sm"
-                                disabled="@(cargandoPreview && plantillaSeleccionada?.Id == p.Id)"
-                                @onclick="() => AbrirPreview(plantilla)">
-                            @if (cargandoPreview && plantillaSeleccionada?.Id == p.Id)
-                            {
-                                <span class="spinner" style="width:.9rem;height:.9rem;border-width:2px;"></span>
-                            }
-                            else { <span>👁 Ver y solicitar</span> }
+                                @onclick="() => AbrirFormulario(plantilla)">
+                            <span>📥 Solicitar</span>
                         </button>
                     }
                 </div>
@@ -143,9 +138,16 @@ else
                             <td>
                                 @if (s.Estado == "Aprobada")
                                 {
-                                    <button class="btn btn-primary btn-sm" @onclick="() => DescargarAprobada(s.Id)">
-                                        ⬇ Descargar
-                                    </button>
+                                    @if (s.Descargado)
+                                    {
+                                        <span class="badge badge-gray" style="font-size:.75rem;padding:.35rem .75rem;opacity:.75;">⬇ Descargada</span>
+                                    }
+                                    else
+                                    {
+                                        <button class="btn btn-primary btn-sm" @onclick="() => DescargarAprobada(s.Id)">
+                                            ⬇ Descargar
+                                        </button>
+                                    }
                                 }
                                 else if (s.Estado == "Rechazada")
                                 {
@@ -175,12 +177,11 @@ else
     </div>
 }
 
-@* Modal de vista previa + solicitud *@
+@* Modal de solicitud simplificado (sin previsualización) *@
 @if (plantillaSeleccionada is not null)
 {
     <div class="modal-backdrop" @onclick="CerrarModal">
-        <div class="modal carta-modal"
-             @onclick:stopPropagation>
+        <div class="modal" style="max-width:500px;" @onclick:stopPropagation>
 
             <div class="modal-header">
                 <div style="display:flex;align-items:center;gap:.625rem;">
@@ -194,62 +195,138 @@ else
                 </div>
             </div>
 
-            <div class="carta-modal-body @(!plantillaSeleccionada.VariablesEditables.Any() ? "carta-modal-body--full" : "")">
-                @if (plantillaSeleccionada.VariablesEditables.Any())
-                {
-                    <div class="carta-modal-sidebar">
-                        <div class="carta-modal-sidebar-title">✏️ Personalizar</div>
-                        <p class="carta-modal-sidebar-hint">
-                            Solo puedes completar los datos indicados; el cuerpo de la carta lo define RRHH.
-                        </p>
-                        @foreach (var key in plantillaSeleccionada.VariablesEditables)
-                        {
-                            var k = key;
-                            <div class="form-group" style="margin-bottom:.75rem;">
-                                <label style="font-size:.8rem;">@EtiquetaVariable(k)</label>
-                                <input @key="k" type="text"
-                                       style="font-size:.875rem;"
-                                       value="@extrasActuales.GetValueOrDefault(k, "")"
-                                       placeholder="@PlaceholderVariable(k)"
-                                       @oninput="e => OnCampoInput(k, e.Value?.ToString() ?? string.Empty)" />
-                            </div>
-                        }
-                    </div>
-                }
-                <div class="carta-modal-preview">
-                    @if (cargandoPreview)
+            @if (plantillaSeleccionada.CamposFormulario != null && plantillaSeleccionada.CamposFormulario.Any(c => c.DiligenciadoPor != "Aprobador"))
+            {
+                <div class="modal-body" style="padding:1.5rem; max-height: 55vh; overflow-y: auto;">
+                    <div style="font-weight:600;font-size:1.1rem;margin-bottom:.5rem;color:var(--text);">✏️ Personalizar</div>
+                    <p style="font-size:.85rem;color:var(--text-muted);margin-bottom:1.25rem;">
+                        Por favor, completa la siguiente información requerida por la plantilla.
+                    </p>
+                    @foreach (var campo in plantillaSeleccionada.CamposFormulario.Where(c => c.DiligenciadoPor != "Aprobador"))
                     {
-                        <div class="loading carta-preview-loading">
-                            <div class="spinner"></div>
-                            <span>Generando vista previa...</span>
+                        var c = campo;
+                        var key = c.Variable;
+                        <div class="form-group" style="margin-bottom:1.25rem;">
+                            <label style="font-size:.875rem;font-weight:500;margin-bottom:.35rem;display:block;color:var(--text);">
+                                @c.Nombre @(c.Obligatorio ? "*" : "")
+                            </label>
+
+                            @if (c.Tipo == "Texto largo")
+                            {
+                                <textarea class="form-control"
+                                          style="font-size:.9rem;padding:.5rem .75rem;width:100%;border:1px solid var(--border);border-radius:var(--radius);height:80px;resize:none;"
+                                          value="@extrasActuales.GetValueOrDefault(key, "")"
+                                          placeholder="Escribe aquí..."
+                                          @oninput="e => OnCampoInput(key, e.Value?.ToString() ?? string.Empty)"></textarea>
+                            }
+                            else if (c.Tipo == "Número")
+                            {
+                                <input type="number" class="form-control"
+                                       style="font-size:.9rem;padding:.5rem .75rem;width:100%;border:1px solid var(--border);border-radius:var(--radius);"
+                                       value="@extrasActuales.GetValueOrDefault(key, "")"
+                                       placeholder="Ej: 123"
+                                       @oninput="e => OnCampoInput(key, e.Value?.ToString() ?? string.Empty)" />
+                            }
+                            else if (c.Tipo == "Fecha")
+                            {
+                                <input type="date" class="form-control"
+                                       style="font-size:.9rem;padding:.5rem .75rem;width:100%;border:1px solid var(--border);border-radius:var(--radius);"
+                                       value="@extrasActuales.GetValueOrDefault(key, "")"
+                                       @onchange="e => OnCampoInput(key, e.Value?.ToString() ?? string.Empty)" />
+                            }
+                            else if (c.Tipo == "Correo electrónico")
+                            {
+                                <input type="email" class="form-control"
+                                       style="font-size:.9rem;padding:.5rem .75rem;width:100%;border:1px solid var(--border);border-radius:var(--radius);"
+                                       value="@extrasActuales.GetValueOrDefault(key, "")"
+                                       placeholder="Ej: colaborador@empresa.com"
+                                       @oninput="e => OnCampoInput(key, e.Value?.ToString() ?? string.Empty)" />
+                            }
+                            else if (c.Tipo == "Selección única")
+                            {
+                                var opciones = c.Opciones?.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries).Select(o => o.Trim()).ToList() ?? [];
+                                <select class="form-control"
+                                        style="font-size:.9rem;padding:.5rem;width:100%;border:1px solid var(--border);border-radius:var(--radius);"
+                                        value="@extrasActuales.GetValueOrDefault(key, "")"
+                                        @onchange="e => OnCampoInput(key, e.Value?.ToString() ?? string.Empty)">
+                                    <option value="">-- Seleccionar --</option>
+                                    @foreach (var opt in opciones)
+                                    {
+                                        <option value="@opt">@opt</option>
+                                    }
+                                </select>
+                            }
+                            else if (c.Tipo == "Selección múltiple")
+                            {
+                                var opciones = c.Opciones?.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries).Select(o => o.Trim()).ToList() ?? [];
+                                var currentVal = extrasActuales.GetValueOrDefault(key, string.Empty);
+                                var selectedItems = currentVal.Split(new[] { ", " }, StringSplitOptions.RemoveEmptyEntries).ToList();
+                                <div style="display:flex; flex-direction:column; gap:0.4rem; padding: 0.5rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg); max-height: 120px; overflow-y: auto;">
+                                    @foreach (var opt in opciones)
+                                    {
+                                        var optionVal = opt;
+                                        <label style="display:flex; align-items:center; gap:0.4rem; cursor:pointer; font-size:0.85rem; margin:0;">
+                                            <input type="checkbox"
+                                                   checked="@selectedItems.Contains(optionVal)"
+                                                   @onchange="e => ToggleCheckOption(key, optionVal, (bool)e.Value!)" />
+                                            @optionVal
+                                        </label>
+                                    }
+                                </div>
+                            }
+                            else
+                            {
+                                // Texto corto (default)
+                                <input type="text" class="form-control"
+                                       style="font-size:.9rem;padding:.5rem .75rem;width:100%;border:1px solid var(--border);border-radius:var(--radius);"
+                                       value="@extrasActuales.GetValueOrDefault(key, "")"
+                                       placeholder="Escribe aquí..."
+                                       @oninput="e => OnCampoInput(key, e.Value?.ToString() ?? string.Empty)" />
+                            }
                         </div>
-                    }
-                    else if (preview is null)
-                    {
-                        <div class="carta-preview-error">
-                            <span>⚠️</span>
-                            <p>No se pudo cargar la vista previa.</p>
-                            <button class="btn btn-ghost btn-sm" style="margin-top:.5rem;"
-                                    @onclick="CargarPreviewAsync">🔄 Reintentar</button>
-                        </div>
-                    }
-                    else
-                    {
-                        <iframe @ref="iframeRef"
-                                class="carta-preview-iframe"
-                                title="Vista previa del documento"></iframe>
                     }
                 </div>
-            </div>
+            }
+            else if (plantillaSeleccionada.VariablesEditables.Any())
+            {
+                // FALLBACK: Legacy
+                <div class="modal-body" style="padding:1.5rem; max-height: 55vh; overflow-y: auto;">
+                    <div style="font-weight:600;font-size:1.1rem;margin-bottom:.5rem;color:var(--text);">✏️ Personalizar</div>
+                    <p style="font-size:.85rem;color:var(--text-muted);margin-bottom:1.25rem;">
+                        Por favor, completa la siguiente información requerida por la plantilla de la carta laboral.
+                    </p>
+                    @foreach (var key in plantillaSeleccionada.VariablesEditables)
+                    {
+                        var k = key;
+                        <div class="form-group" style="margin-bottom:1rem;">
+                            <label style="font-size:.875rem;font-weight:500;margin-bottom:.25rem;display:block;color:var(--text);">@EtiquetaVariable(k)</label>
+                            <input @key="k" type="text"
+                                   class="form-control"
+                                   style="font-size:.9rem;padding:.5rem .75rem;width:100%;border:1px solid var(--border);border-radius:var(--radius);"
+                                   value="@extrasActuales.GetValueOrDefault(k, "")"
+                                   placeholder="@PlaceholderVariable(k)"
+                                   @oninput="e => OnCampoInput(k, e.Value?.ToString() ?? string.Empty)" />
+                        </div>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="modal-body" style="padding:2.5rem 1.5rem;text-align:center;">
+                    <span style="font-size:3rem;display:block;margin-bottom:1rem;">📄</span>
+                    <p style="font-size:.95rem;color:var(--text);margin-bottom:.5rem;font-weight:500;">Esta plantilla no requiere datos adicionales.</p>
+                    <p style="font-size:.85rem;color:var(--text-muted);">¿Deseas enviar la solicitud para su revisión directa?</p>
+                </div>
+            }
 
             <div class="modal-footer">
                 <button class="btn btn-ghost" @onclick="CerrarModal">Cerrar</button>
                 <button class="btn btn-primary"
-                        disabled="@(enviando || cargandoPreview || preview is null)"
+                        disabled="@enviando"
                         @onclick="EnviarSolicitud">
                     @if (enviando)
                     {
-                        <span class="spinner" style="width:.9rem;height:.9rem;border-width:2px;border-color:rgba(255,255,255,.3);border-top-color:#fff;"></span>
+                        <span class="spinner" style="width:.9rem;height:.9rem;border-width:2px;border-color:rgba(255,255,255,.3);border-top-color:#fff;margin-right:.5rem;"></span>
                         <span>Enviando...</span>
                     }
                     else { <span>📤 Enviar solicitud</span> }
@@ -265,23 +342,20 @@ else
     private List<SolicitudDocumentoDto> solicitudes = [];
     private bool cargando = true;
     private bool enviando = false;
-    private bool cargandoPreview = false;
-    private bool primeraVez = true;
 
     private PlantillaDocumentoDto? plantillaSeleccionada;
     private Dictionary<string, string> extrasActuales = [];
-    private PrevisualizarDto? preview;
-    private ElementReference iframeRef;
-    private string? iframePendiente;
-    private CancellationTokenSource? _debounce;
+    private Dictionary<string, string> valoresPerfil = [];
 
     protected override async Task OnInitializedAsync()
     {
         var t1 = ApiService.GetDisponiblesAsync();
         var t2 = ApiService.GetMisSolicitudesAsync();
-        await Task.WhenAll(t1, t2);
+        var t3 = ApiService.GetValoresPerfilAsync();
+        await Task.WhenAll(t1, t2, t3);
         plantillas = t1.Result;
         solicitudes = t2.Result;
+        valoresPerfil = t3.Result ?? [];
         cargando = false;
 
         // Si hay novedades no vistas, marcarlas como vistas en background
@@ -312,6 +386,33 @@ else
     private async Task EnviarSolicitud()
     {
         if (plantillaSeleccionada is null) return;
+
+        // Validaciones de obligatoriedad
+        if (plantillaSeleccionada.CamposFormulario != null && plantillaSeleccionada.CamposFormulario.Any(c => c.DiligenciadoPor != "Aprobador"))
+        {
+            foreach (var campo in plantillaSeleccionada.CamposFormulario.Where(c => c.DiligenciadoPor != "Aprobador"))
+            {
+                var val = extrasActuales.GetValueOrDefault(campo.Variable, string.Empty);
+                if (campo.Obligatorio && string.IsNullOrWhiteSpace(val))
+                {
+                    await toast.Show($"⚠️ El campo '{campo.Nombre}' es obligatorio.", "warning");
+                    return;
+                }
+            }
+        }
+        else
+        {
+            foreach (var key in plantillaSeleccionada.VariablesEditables)
+            {
+                var val = extrasActuales.GetValueOrDefault(key, string.Empty);
+                if (string.IsNullOrWhiteSpace(val))
+                {
+                    await toast.Show($"⚠️ El campo '{EtiquetaVariable(key)}' es obligatorio.", "warning");
+                    return;
+                }
+            }
+        }
+
         enviando = true;
         StateHasChanged();
 
@@ -347,16 +448,30 @@ else
     private async Task DescargarAprobada(int solicitudId)
     {
         var (bytes, fileName) = await ApiService.DescargarAprobadaAsync(solicitudId);
-        if (bytes is null) { await toast.Show("No se pudo descargar el documento.", "error"); return; }
+        if (bytes is null) 
+        { 
+            await toast.Show("No se pudo descargar el documento. Puede que ya haya sido descargado.", "error"); 
+            var sList = await ApiService.GetMisSolicitudesAsync();
+            if (sList is not null) solicitudes = sList;
+            StateHasChanged();
+            return; 
+        }
         await JS.InvokeVoidAsync("descargarArchivo", Convert.ToBase64String(bytes),
             fileName ?? "carta.pdf", "application/pdf");
         await toast.Show("Documento descargado.");
+
+        var sol = solicitudes.FirstOrDefault(x => x.Id == solicitudId);
+        if (sol is not null)
+        {
+            sol.Descargado = true;
+        }
+        StateHasChanged();
     }
 
     private async Task ReSolicitar(int plantillaId)
     {
         var p = plantillas.FirstOrDefault(x => x.Id == plantillaId);
-        if (p is not null) await AbrirPreview(p);
+        if (p is not null) AbrirFormulario(p);
     }
 
     public async ValueTask DisposeAsync()
@@ -365,127 +480,55 @@ else
         await Notificaciones.DisposeAsync();
     }
 
-    private async Task AbrirPreview(PlantillaDocumentoDto p)
+    private void ToggleCheckOption(string variable, string opcion, bool checked_)
+    {
+        var currentVal = extrasActuales.GetValueOrDefault(variable, string.Empty);
+        var items = currentVal.Split(new[] { ", " }, StringSplitOptions.RemoveEmptyEntries).ToList();
+        if (checked_)
+        {
+            if (!items.Contains(opcion)) items.Add(opcion);
+        }
+        else
+        {
+            items.Remove(opcion);
+        }
+        extrasActuales[variable] = string.Join(", ", items);
+    }
+
+    private void AbrirFormulario(PlantillaDocumentoDto p)
     {
         plantillaSeleccionada = p;
-        extrasActuales = p.VariablesEditables.ToDictionary(k => k, _ => string.Empty);
-        preview = null;
-        primeraVez = true;
-        await CargarPreviewAsync();
+        extrasActuales = [];
+
+        if (p.VariablesEditables != null)
+        {
+            foreach (var key in p.VariablesEditables)
+            {
+                extrasActuales[key] = valoresPerfil.GetValueOrDefault(key, string.Empty);
+            }
+        }
+
+        if (p.CamposFormulario != null)
+        {
+            foreach (var campo in p.CamposFormulario.Where(c => c.DiligenciadoPor != "Aprobador"))
+            {
+                if (!extrasActuales.ContainsKey(campo.Variable))
+                {
+                    extrasActuales[campo.Variable] = valoresPerfil.GetValueOrDefault(campo.Variable, string.Empty);
+                }
+            }
+        }
     }
 
     private void CerrarModal()
     {
         plantillaSeleccionada = null;
-        preview = null;
         extrasActuales = [];
-        iframePendiente = null;
-        primeraVez = true;
-        _debounce?.Cancel();
-    }
-
-    private async Task CargarPreviewAsync()
-    {
-        if (plantillaSeleccionada is null) return;
-        cargandoPreview = true;
-        iframePendiente = null;
-
-        if (primeraVez)
-        {
-            StateHasChanged();
-            var dto0 = new GenerarPdfDto { Extras = new(extrasActuales) };
-            preview = await ApiService.PrevisualizarAsync(plantillaSeleccionada.Id, dto0);
-
-            if (preview is not null && preview.ValoresPerfil.Count > 0)
-            {
-                foreach (var key in extrasActuales.Keys.ToList())
-                {
-                    if (string.IsNullOrEmpty(extrasActuales[key]) &&
-                        preview.ValoresPerfil.TryGetValue(key, out var valorPerfil) &&
-                        !string.IsNullOrEmpty(valorPerfil))
-                        extrasActuales[key] = valorPerfil;
-                }
-            }
-            primeraVez = false;
-        }
-
-        cargandoPreview = false;
-
-        if (preview is not null)
-        {
-            if (preview.TipoPlantilla == "docx")
-            {
-                var pdfBase64 = await ApiService.PrevisualizarDocxBase64Async(
-                    plantillaSeleccionada.Id,
-                    extrasActuales.Count > 0 ? extrasActuales : null);
-                if (pdfBase64 is not null)
-                    iframePendiente = $"data:application/pdf;base64,{pdfBase64}";
-            }
-            else
-            {
-                var dto = new GenerarPdfDto { Extras = new(extrasActuales) };
-                var actualizado = await ApiService.PrevisualizarAsync(plantillaSeleccionada.Id, dto);
-                if (actualizado is not null)
-                {
-                    preview = actualizado;
-                    iframePendiente = BuildPreviewHtml(preview);
-                }
-            }
-        }
-
-        StateHasChanged();
-    }
-
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        if (iframePendiente is not null)
-        {
-            var content = iframePendiente;
-            iframePendiente = null;
-            if (content.StartsWith("data:application/pdf"))
-                await JS.InvokeVoidAsync("setPdfIframeSrc", iframeRef, content);
-            else
-                await JS.InvokeVoidAsync("setIframeContent", iframeRef, content);
-        }
     }
 
     private void OnCampoInput(string key, string valor)
     {
         extrasActuales[key] = valor;
-        _ = RefrescarPreviewAsync();
-    }
-
-    private async Task RefrescarPreviewAsync()
-    {
-        _debounce?.Cancel();
-        _debounce = new CancellationTokenSource();
-        var token = _debounce.Token;
-        try
-        {
-            await Task.Delay(800, token);
-            if (!token.IsCancellationRequested) await CargarPreviewAsync();
-        }
-        catch (TaskCanceledException) { }
-    }
-
-    private static string BuildPreviewHtml(PrevisualizarDto p)
-    {
-        var imgTag = !string.IsNullOrWhiteSpace(p.FirmaImagenBase64)
-            ? $"<img src=\"{p.FirmaImagenBase64}\" style=\"max-height:70px;display:block;margin-bottom:6px;\" />"
-            : string.Empty;
-        var cargoTag = !string.IsNullOrWhiteSpace(p.CargoFirmante)
-            ? $"<div style=\"font-size:9pt;color:#555;\">{p.CargoFirmante}</div>"
-            : string.Empty;
-        var firma = !string.IsNullOrWhiteSpace(p.NombreFirmante)
-            ? $"<div style=\"margin-top:3rem;\">{imgTag}<div style=\"border-top:1px solid #555;padding-top:4px;width:220px;\"><strong style=\"font-size:10pt;\">{p.NombreFirmante}</strong>{cargoTag}</div></div>"
-            : string.Empty;
-        const string css =
-            "html,body{margin:0;padding:0}" +
-            "body{font-family:Arial,Helvetica,sans-serif;font-size:11pt;line-height:1.6;color:#111;background:#fff;padding:2cm 2.5cm;}" +
-            "p,div{margin:0 0 .4em 0}b,strong{font-weight:bold}i,em{font-style:italic}u{text-decoration:underline}" +
-            "ul{list-style:disc;margin-left:1.5em;margin-bottom:.5em}ol{list-style:decimal;margin-left:1.5em;margin-bottom:.5em}li{margin-bottom:.2em}";
-        return "<!DOCTYPE html><html lang=\"es\"><head><meta charset=\"utf-8\"/>"
-             + $"<style>{css}</style></head><body>" + p.Html + firma + "</body></html>";
     }
 
     private static string EtiquetaVariable(string key) => key switch

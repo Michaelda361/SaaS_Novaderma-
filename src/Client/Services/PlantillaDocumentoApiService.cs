@@ -190,4 +190,7 @@ public class PlantillaDocumentoApiService(HttpClient http)
             ?? $"carta_{plantillaId}_{colaboradorId}.pdf";
         return (bytes, fileName);
     }
+
+    public Task<Dictionary<string, string>?> GetValoresPerfilAsync() =>
+        http.GetFromJsonAsync<Dictionary<string, string>>($"{Base}/valores-perfil");
 }

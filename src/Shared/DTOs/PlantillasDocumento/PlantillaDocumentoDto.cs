@@ -16,4 +16,7 @@ public class PlantillaDocumentoDto
     public List<string> AreaNombres { get; set; } = [];
     /// <summary>Variables que el colaborador puede editar antes de generar, ej: ["destinatario","motivo"]</summary>
     public List<string> VariablesEditables { get; set; } = [];
+
+    /// <summary>Configuración detallada de campos dinámicos para el formulario.</summary>
+    public List<CampoFormularioDto> CamposFormulario { get; set; } = [];
 }

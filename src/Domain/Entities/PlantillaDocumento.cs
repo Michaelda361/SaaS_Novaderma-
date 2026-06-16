@@ -43,6 +43,9 @@ public class PlantillaDocumento : BaseEntity
     /// </summary>
     public string? VariablesEditables { get; set; }
 
+    /// <summary>JSON array con los detalles de los campos del formulario dinámico del colaborador.</summary>
+    public string? CamposFormulario { get; set; }
+
     public ICollection<PlantillaDocumentoArea> Areas { get; set; } = [];
     public ICollection<SolicitudDocumento> Solicitudes { get; set; } = [];
 }

@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using TalentManagement.Infrastructure.Persistence;
 
@@ -11,9 +12,11 @@ using TalentManagement.Infrastructure.Persistence;
 namespace TalentManagement.Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260616135046_AddVariablesCompletadasToSolicitud")]
+    partial class AddVariablesCompletadasToSolicitud
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -853,9 +856,6 @@ namespace TalentManagement.Infrastructure.Migrations
                         .HasColumnType("varbinary(max)")
                         .HasColumnName("ArchivoDocx");
 
-                    b.Property<string>("CamposFormulario")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<string>("CargoFirmante")
                         .HasColumnType("nvarchar(max)");
 
@@ -1194,9 +1194,6 @@ namespace TalentManagement.Infrastructure.Migrations
 
                     b.Property<string>("ComentarioAdmin")
                         .HasColumnType("nvarchar(max)");
-
-                    b.Property<bool>("Descargado")
-                        .HasColumnType("bit");
 
                     b.Property<string>("Estado")
                         .IsRequired()
