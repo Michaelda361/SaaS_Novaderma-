@@ -2,8 +2,10 @@
 @attribute [PageTitle("Permisos - Control Documental")]
 @attribute [Authorize(Roles = "Admin")]
 @using TalentManagement.Shared.DTOs.ControlDocumental
+@using TalentManagement.Shared.DTOs.Areas
 @inject ControlDocumentalApiService ControlDocumentalApi
 @inject ColaboradorApiService ColaboradorApi
+@inject AreaApiService AreaApi
 @inject IJSRuntime JS
 
 <Toast @ref="toast" />
@@ -47,9 +49,9 @@ else
         <div class="section-header" style="display:flex; justify-content:space-between; align-items:center; gap:1rem; margin-bottom:1rem;">
             <div>
                 <h3 style="margin:0;">Gestión de permisos</h3>
-                <p style="margin:0.25rem 0 0; color:var(--text-muted);">Asigna roles a colaboradores para este listado.</p>
+                <p style="margin:0.25rem 0 0; color:var(--text-muted);">Asigna roles a colaboradores o áreas completas para este listado.</p>
             </div>
-            <button class="btn btn-primary" @onclick="AgregarFila">+ Agregar colaborador</button>
+            <button class="btn btn-primary" @onclick="AgregarFila">+ Agregar permiso</button>
         </div>
 
         @if (!permisos.Any() && !nuevosPermisos.Any())
@@ -57,7 +59,7 @@ else
             <div class="empty-state">
                 <div class="empty-state-icon">👥</div>
                 <h3>Sin permisos configurados</h3>
-                <p>Haz clic en "Agregar colaborador" para comenzar a asignar permisos.</p>
+                <p>Haz clic en "+ Agregar permiso" para comenzar a asignar permisos.</p>
             </div>
         }
         else
@@ -66,8 +68,9 @@ else
                 <table>
                     <thead>
                         <tr>
-                            <th>Colaborador</th>
-                            <th>Email</th>
+                            <th>Tipo</th>
+                            <th>Asignado a</th>
+                            <th>Detalle / Email</th>
                             <th style="text-align:center;">Puede Ver</th>
                             <th style="text-align:center;">Puede Editar</th>
                             <th style="text-align:center;">Puede Aprobar</th>
@@ -78,8 +81,17 @@ else
                         @foreach (var (permiso, index) in permisos.Select((p, i) => (p, i)))
                         {
                             <tr>
-                                <td>@permiso.ColaboradorNombre</td>
-                                <td>@permiso.ColaboradorEmail</td>
+                                <td>
+                                    <span class="badge @(permiso.ColaboradorId.HasValue ? "badge-primary" : "badge-info")" style="font-size: 0.8rem; padding: 0.2rem 0.5rem;">
+                                        @(permiso.ColaboradorId.HasValue ? "Colaborador" : "Área")
+                                    </span>
+                                </td>
+                                <td>
+                                    @(permiso.ColaboradorId.HasValue ? permiso.ColaboradorNombre : permiso.AreaNombre)
+                                </td>
+                                <td>
+                                    @(permiso.ColaboradorId.HasValue ? permiso.ColaboradorEmail : "Todos los integrantes del área")
+                                </td>
                                 <td style="text-align:center;">
                                      <input type="checkbox" checked="@permiso.PuedeVer" 
                                          @onchange='(ChangeEventArgs e) => ActualizarPermiso(index, "ver", (bool)e.Value!)' />
@@ -102,16 +114,43 @@ else
                         {
                             <tr style="background:var(--surface-muted);">
                                 <td>
-                                    <select class="form-control" @bind="nuevoPermiso.ColaboradorId">
-                                        <option value="">Selecciona colaborador</option>
-                                        @foreach (var colab in colaboradores)
-                                        {
-                                            <option value="@colab.Id">@colab.Nombre @colab.Apellido</option>
-                                        }
+                                    <select class="form-control" value="@(nuevoPermiso.AreaId.HasValue ? "area" : "colab")" 
+                                            @onchange='(ChangeEventArgs e) => CambiarTipoNuevoPermiso(nuevoPermiso, (string)e.Value!)'>
+                                        <option value="colab">Colaborador</option>
+                                        <option value="area">Área</option>
                                     </select>
                                 </td>
                                 <td>
-                                    @(colaboradores.FirstOrDefault(c => c.Id == nuevoPermiso.ColaboradorId)?.Email ?? "—")
+                                    @if (nuevoPermiso.AreaId.HasValue)
+                                    {
+                                        <select class="form-control" @bind="nuevoPermiso.AreaId">
+                                            <option value="0">Selecciona área</option>
+                                            @foreach (var area in areas)
+                                            {
+                                                <option value="@area.Id">@area.Nombre</option>
+                                            }
+                                        </select>
+                                    }
+                                    else
+                                    {
+                                        <select class="form-control" @bind="nuevoPermiso.ColaboradorId">
+                                            <option value="0">Selecciona colaborador</option>
+                                            @foreach (var colab in colaboradores)
+                                            {
+                                                <option value="@colab.Id">@colab.Nombre @colab.Apellido</option>
+                                            }
+                                        </select>
+                                    }
+                                </td>
+                                <td>
+                                    @if (nuevoPermiso.AreaId.HasValue)
+                                    {
+                                        <span>Todos los integrantes del área</span>
+                                    }
+                                    else
+                                    {
+                                        @(colaboradores.FirstOrDefault(c => c.Id == nuevoPermiso.ColaboradorId)?.Email ?? "—")
+                                    }
                                 </td>
                                 <td style="text-align:center;">
                                     <input type="checkbox" checked="@nuevoPermiso.PuedeVer" 
@@ -151,6 +190,7 @@ else
     private List<ListadoMaestroPermisoDto> permisos = [];
     private List<ListadoMaestroPermisoUpdateDto> nuevosPermisos = [];
     private List<ColaboradorDto> colaboradores = [];
+    private List<AreaDto> areas = [];
     private int? selectedListadoId;
     private bool loading;
     private bool tieneCambios;
@@ -160,6 +200,7 @@ else
     {
         await CargarListados();
         await CargarColaboradores();
+        await CargarAreas();
     }
 
     private async Task CargarListados()
@@ -183,6 +224,18 @@ else
         catch (Exception ex)
         {
             await (toast?.Show($"Error al cargar colaboradores: {ex.Message}", "error") ?? Task.CompletedTask);
+        }
+    }
+
+    private async Task CargarAreas()
+    {
+        try
+        {
+            areas = await AreaApi.GetAllAsync() ?? [];
+        }
+        catch (Exception ex)
+        {
+            await (toast?.Show($"Error al cargar áreas: {ex.Message}", "error") ?? Task.CompletedTask);
         }
     }
 
@@ -213,11 +266,26 @@ else
         nuevosPermisos.Add(new ListadoMaestroPermisoUpdateDto
         {
             ColaboradorId = 0,
+            AreaId = null,
             PuedeVer = false,
             PuedeEditar = false,
             PuedeAprobar = false
         });
         tieneCambios = true;
+    }
+
+    private void CambiarTipoNuevoPermiso(ListadoMaestroPermisoUpdateDto p, string tipo)
+    {
+        if (tipo == "colab")
+        {
+            p.ColaboradorId = 0;
+            p.AreaId = null;
+        }
+        else
+        {
+            p.ColaboradorId = null;
+            p.AreaId = 0;
+        }
     }
 
     private void CancelarFila(int index)
@@ -268,15 +336,17 @@ else
         {
             // Combinar permisos existentes modificados con nuevos
             var todosLosPermisos = permisos
-                .Cast<ListadoMaestroPermisoUpdateDto>()
                 .Select(p => new ListadoMaestroPermisoUpdateDto
                 {
                     ColaboradorId = p.ColaboradorId,
+                    AreaId = p.AreaId,
                     PuedeVer = p.PuedeVer,
                     PuedeEditar = p.PuedeEditar,
                     PuedeAprobar = p.PuedeAprobar
                 })
-                .Concat(nuevosPermisos.Where(p => p.ColaboradorId > 0))
+                .Concat(nuevosPermisos.Where(p => 
+                    (p.ColaboradorId.HasValue && p.ColaboradorId.Value > 0) || 
+                    (p.AreaId.HasValue && p.AreaId.Value > 0)))
                 .ToList();
 
             var response = await ControlDocumentalApi.UpdateListadoPermisosAsync(selectedListadoId.Value, todosLosPermisos);

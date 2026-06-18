@@ -58,12 +58,12 @@
     </div>
 </div>
 
-<div class="card" style="margin-bottom:1rem; padding: 1rem;">
-    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem;">
+<div class="card selector-card">
+    <div class="selector-container">
         <!-- Selector de Listado Maestro -->
-        <div style="display:flex; align-items:center; gap:0.75rem; flex:1; min-width:280px;">
-            <label style="font-weight:600; margin-bottom:0; white-space:nowrap; color:var(--text-primary);">Listado Maestro:</label>
-            <select class="form-control" value="@selectedListadoId" @onchange="OnListadoChanged" style="max-width:350px;">
+        <div class="selector-group">
+            <label>Listado Maestro:</label>
+            <select class="form-control" value="@selectedListadoId" @onchange="OnListadoChanged">
                 <option value="">Seleccione un listado...</option>
                 @foreach (var listado in listados)
                 {
@@ -73,7 +73,7 @@
         </div>
         
         <!-- Acciones del Listado -->
-        <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
+        <div class="selector-actions">
             @if (AuthInfo.EsAdmin || AuthInfo.EsJefe)
             {
                 <button class="btn btn-secondary" @onclick="AbrirNuevoListado" title="Crear un nuevo listado maestro vacío">
@@ -101,7 +101,6 @@
     <div class="card" style="margin-bottom:1rem;">
         <!-- Accordion Header -->
         <div class="accordion-header" 
-             style="display:flex; justify-content:space-between; align-items:center; gap:1rem; padding:1rem; cursor:pointer; user-select:none; border-radius:4px; transition:background-color 0.2s ease;" 
              @onclick="TogglePendingRequests" 
              @onkeydown="HandleAccordionKeyDown">
             <div style="flex:1;">
@@ -133,7 +132,7 @@
         <!-- Accordion Content -->
         @if (showPendingRequests)
         {
-            <div id="accordion-content-solicitudes" style="border-top:1px solid var(--surface-border); padding:1rem;">
+            <div id="accordion-content-solicitudes" class="accordion-content">
                 @if (loadingSolicitudes)
                 {
                     <div class="loading"><div class="spinner"></div> Cargando solicitudes...</div>
@@ -344,12 +343,12 @@
         </div>
 
         <!-- Paginación Premium -->
-        <div class="pagination-container" style="display: flex; justify-content: space-between; align-items: center; margin-top: 1rem; padding: 0.5rem 1.25rem; background: var(--surface-card, #ffffff); border-radius: 8px; border: 1px solid var(--border-color, #e2e8f0); flex-wrap: wrap; gap: 1rem;">
-            <div class="pagination-info" style="font-size: 0.875rem; color: var(--text-secondary, #64748b);">
+        <div class="pagination-container">
+            <div class="pagination-info">
                 Mostrando página <strong>@currentPage</strong> de <strong>@totalPages</strong> (Total: <strong>@totalRecords</strong> registros)
             </div>
-            <div class="pagination-controls" style="display: flex; gap: 0.35rem; align-items: center;">
-                <button class="btn btn-outline btn-sm pagination-btn" disabled="@(currentPage <= 1)" @onclick="() => currentPage--" style="font-weight: 500; min-width: 80px;">
+            <div class="pagination-controls">
+                <button class="btn btn-outline btn-sm pagination-btn" disabled="@(currentPage <= 1)" @onclick="() => currentPage--">
                     ◀ Anterior
                 </button>
 
@@ -359,10 +358,10 @@
                     
                     if (startPage > 1)
                     {
-                        <button class="btn btn-outline btn-sm pagination-btn" @onclick="() => currentPage = 1" style="min-width: 32px;">1</button>
+                        <button class="btn btn-outline btn-sm pagination-btn" @onclick="() => currentPage = 1">1</button>
                         if (startPage > 2)
                         {
-                            <span style="padding: 0 0.25rem; color: var(--text-muted, #94a3b8); font-size: 0.875rem;">...</span>
+                            <span class="text-muted">...</span>
                         }
                     }
 
@@ -370,9 +369,8 @@
                     {
                         var pageNumber = i;
                         var isCurrent = pageNumber == currentPage;
-                        <button class="btn btn-sm pagination-btn @(isCurrent ? "btn-primary active" : "btn-outline")"
-                                @onclick="() => currentPage = pageNumber"
-                                style="min-width: 32px; @(isCurrent ? "background: var(--color-primary, #3b82f6); color: #ffffff; border-color: var(--color-primary, #3b82f6); font-weight: 600;" : "")">
+                        <button class="btn btn-sm pagination-btn @(isCurrent ? "active" : "btn-outline")"
+                                @onclick="() => currentPage = pageNumber">
                             @pageNumber
                         </button>
                     }
@@ -381,13 +379,13 @@
                     {
                         if (endPage < totalPages - 1)
                         {
-                            <span style="padding: 0 0.25rem; color: var(--text-muted, #94a3b8); font-size: 0.875rem;">...</span>
+                            <span class="text-muted">...</span>
                         }
-                        <button class="btn btn-outline btn-sm pagination-btn" @onclick="() => currentPage = totalPages" style="min-width: 32px;">@totalPages</button>
+                        <button class="btn btn-outline btn-sm pagination-btn" @onclick="() => currentPage = totalPages">@totalPages</button>
                     }
                 }
 
-                <button class="btn btn-outline btn-sm pagination-btn" disabled="@(currentPage >= totalPages)" @onclick="() => currentPage++" style="font-weight: 500; min-width: 80px;">
+                <button class="btn btn-outline btn-sm pagination-btn" disabled="@(currentPage >= totalPages)" @onclick="() => currentPage++">
                     Siguiente ▶
                 </button>
             </div>
@@ -628,17 +626,18 @@
                     <div class="section-header" style="display:flex; justify-content:space-between; align-items:center; gap:1rem; margin-bottom:1rem;">
                         <div>
                             <h3 style="margin:0;">Permisos del listado</h3>
-                            <p style="margin:0.25rem 0 0; color:var(--text-muted);">Define quién puede ver, editar y aprobar cambios en este listado.</p>
+                            <p style="margin:0.25rem 0 0; color:var(--text-muted);">Define quién puede ver, editar y aprobar cambios en este listado por colaborador o área.</p>
                         </div>
-                        <button class="btn btn-primary" @onclick="AgregarPermiso">+ Agregar colaborador</button>
+                        <button class="btn btn-primary" @onclick="AgregarPermiso">+ Agregar permiso</button>
                     </div>
 
                     <div class="table-wrapper">
                         <table>
                             <thead>
                                 <tr>
-                                    <th>Colaborador</th>
-                                    <th>Email</th>
+                                    <th>Tipo</th>
+                                    <th>Asignado a</th>
+                                    <th>Detalle / Email</th>
                                     <th style="text-align:center;">Ver</th>
                                     <th style="text-align:center;">Editar</th>
                                     <th style="text-align:center;">Aprobar</th>
@@ -649,8 +648,17 @@
                                 @foreach (var (permiso, index) in listadoPermisos.Select((p, i) => (p, i)))
                                 {
                                     <tr>
-                                        <td>@permiso.ColaboradorNombre</td>
-                                        <td>@permiso.ColaboradorEmail</td>
+                                        <td>
+                                            <span class="badge @(permiso.ColaboradorId.HasValue ? "badge-primary" : "badge-info")" style="font-size: 0.8rem; padding: 0.2rem 0.5rem;">
+                                                @(permiso.ColaboradorId.HasValue ? "Colaborador" : "Área")
+                                            </span>
+                                        </td>
+                                        <td>
+                                            @(permiso.ColaboradorId.HasValue ? permiso.ColaboradorNombre : permiso.AreaNombre)
+                                        </td>
+                                        <td>
+                                            @(permiso.ColaboradorId.HasValue ? permiso.ColaboradorEmail : "Todos los integrantes del área")
+                                        </td>
                                         <td style="text-align:center;">
                                             <input type="checkbox" checked="@permiso.PuedeVer" @onchange="(ChangeEventArgs e) => { permiso.PuedeVer = (bool)e.Value!; MarcarCambioPermisos(); }" />
                                         </td>
@@ -669,15 +677,44 @@
                                 {
                                     <tr style="background:var(--surface-muted);">
                                         <td>
-                                            <select class="form-control" value="@nuevoPermiso.ColaboradorId" @onchange="@( (ChangeEventArgs e) => { if (int.TryParse(e.Value?.ToString(), out var value)) { nuevoPermiso.ColaboradorId = value; } MarcarCambioPermisos(); } )">
-                                                <option value="0">Selecciona colaborador</option>
-                                                @foreach (var colab in colaboradores)
-                                                {
-                                                    <option value="@colab.Id">@colab.Nombre @colab.Apellido</option>
-                                                }
+                                            <select class="form-control" value="@(nuevoPermiso.AreaId.HasValue ? "area" : "colab")" 
+                                                    @onchange='(ChangeEventArgs e) => CambiarTipoNuevoPermisoListado(nuevoPermiso, (string)e.Value!)'>
+                                                <option value="colab">Colaborador</option>
+                                                <option value="area">Área</option>
                                             </select>
                                         </td>
-                                        <td>@(colaboradores.FirstOrDefault(c => c.Id == nuevoPermiso.ColaboradorId)?.Email ?? "—")</td>
+                                        <td>
+                                            @if (nuevoPermiso.AreaId.HasValue)
+                                            {
+                                                <select class="form-control" value="@nuevoPermiso.AreaId" @onchange="@( (ChangeEventArgs e) => { if (int.TryParse(e.Value?.ToString(), out var value)) { nuevoPermiso.AreaId = value; } MarcarCambioPermisos(); } )">
+                                                    <option value="0">Selecciona área</option>
+                                                    @foreach (var area in areas)
+                                                    {
+                                                        <option value="@area.Id">@area.Nombre</option>
+                                                    }
+                                                </select>
+                                            }
+                                            else
+                                            {
+                                                <select class="form-control" value="@nuevoPermiso.ColaboradorId" @onchange="@( (ChangeEventArgs e) => { if (int.TryParse(e.Value?.ToString(), out var value)) { nuevoPermiso.ColaboradorId = value; } MarcarCambioPermisos(); } )">
+                                                    <option value="0">Selecciona colaborador</option>
+                                                    @foreach (var colab in colaboradores)
+                                                    {
+                                                        <option value="@colab.Id">@colab.Nombre @colab.Apellido</option>
+                                                    }
+                                                </select>
+                                            }
+                                        </td>
+                                        <td>
+                                            @if (nuevoPermiso.AreaId.HasValue)
+                                            {
+                                                <span>Todos los integrantes del área</span>
+                                            }
+                                            else
+                                            {
+                                                @(colaboradores.FirstOrDefault(c => c.Id == nuevoPermiso.ColaboradorId)?.Email ?? "—")
+                                            }
+                                        </td>
                                         <td style="text-align:center;">
                                             <input type="checkbox" checked="@nuevoPermiso.PuedeVer" @onchange="(ChangeEventArgs e) => { nuevoPermiso.PuedeVer = (bool)e.Value!; MarcarCambioPermisos(); }" />
                                         </td>
@@ -803,23 +840,23 @@
                         }
 
                         <!-- SECCIÓN 2: Línea de Tiempo Documental -->
-                        <div style="margin-bottom: 2rem; border-bottom: 1px solid var(--surface-border); padding-bottom: 1.5rem;">
-                            <h4 style="margin-bottom: 1rem; color: var(--color-primary); font-weight: 600;">Línea de tiempo de trazabilidad</h4>
+                        <div style="margin-bottom: 2rem; border-bottom: 1px solid var(--border); padding-bottom: 1.5rem;">
+                            <h4 style="margin-bottom: 1rem; color: var(--primary); font-weight: 600;">Línea de tiempo de trazabilidad</h4>
                             
-                            <div class="timeline-container" style="position: relative; padding-left: 2.5rem; margin: 1.5rem 0 1.5rem 0.5rem; border-left: 2px solid var(--surface-border);">
+                            <div class="timeline-container">
                                 @foreach (var ev in BuildTimeline())
                                 {
-                                    <div class="timeline-item" style="position: relative; margin-bottom: 1.5rem;">
+                                    <div class="timeline-item">
                                         <!-- Icon dot -->
-                                        <div class="timeline-badge" style="position: absolute; left: -3.35rem; top: 0; width: 1.75rem; height: 1.75rem; border-radius: 50%; background: var(--surface-card); border: 2px solid @(ev.Tipo == "Creacion" ? "#22c55e" : ev.Tipo == "Solicitud" ? "#eab308" : ev.Tipo == "Edicion" ? "#06b6d4" : "#22c55e"); display: flex; align-items: center; justify-content: center; font-size: 0.95rem; z-index: 2; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                                        <div class="timeline-badge" style="border: 2px solid @(ev.Tipo == "Creacion" ? "#22c55e" : ev.Tipo == "Solicitud" ? "#eab308" : ev.Tipo == "Edicion" ? "#06b6d4" : "#22c55e");">
                                             @ev.Icon
                                         </div>
                                         
                                         <!-- Event Card -->
-                                        <div class="timeline-content" style="background: var(--surface-card); border: 1px solid var(--surface-border); border-left: 4px solid @(ev.Tipo == "Creacion" ? "#22c55e" : ev.Tipo == "Solicitud" ? "#eab308" : ev.Tipo == "Edicion" ? "#06b6d4" : ev.BadgeClass == "badge-danger" ? "#ef4444" : "#22c55e"); border-radius: 6px; padding: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                                        <div class="timeline-content" style="border-left: 4px solid @(ev.Tipo == "Creacion" ? "#22c55e" : ev.Tipo == "Solicitud" ? "#eab308" : ev.Tipo == "Edicion" ? "#06b6d4" : ev.BadgeClass == "badge-danger" ? "#ef4444" : "#22c55e");">
                                             <!-- Event Title & Date -->
-                                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; border-bottom: 1px dashed var(--surface-border); padding-bottom: 0.25rem;">
-                                                <span style="font-weight: 600; font-size: 1rem; color: var(--text-color);">@ev.Titulo</span>
+                                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; border-bottom: 1px dashed var(--border); padding-bottom: 0.25rem;">
+                                                <span style="font-weight: 600; font-size: 1rem; color: var(--text);">@ev.Titulo</span>
                                                 <span style="font-size: 0.8rem; color: var(--text-muted); font-weight: 500;">@ev.Fecha.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</span>
                                             </div>
 
@@ -863,23 +900,23 @@
                                                 </div>
                                                 @if (ev.Cambios != null && ev.Cambios.Any())
                                                 {
-                                                    <div style="margin-top: 0.75rem; padding: 0.5rem 0.75rem; background: var(--surface-muted); border-radius: 4px; border: 1px solid var(--surface-border);">
-                                                        <div style="font-size: 0.75rem; font-weight: 600; text-transform: uppercase; color: var(--text-muted); margin-bottom: 0.25rem;">Cambios detectados:</div>
-                                                        <table style="width: 100%; border-collapse: collapse; font-size: 0.8rem;">
+                                                    <div class="diff-viewer">
+                                                        <div style="font-size: 0.75rem; font-weight: 600; text-transform: uppercase; color: var(--text-muted); padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border);">Cambios detectados:</div>
+                                                        <table>
                                                             <thead>
-                                                                <tr style="border-bottom: 1px solid var(--surface-border); text-align: left; color: var(--text-muted);">
-                                                                    <th style="padding: 0.25rem; width: 30%;">Campo</th>
-                                                                    <th style="padding: 0.25rem; width: 35%;">Antes</th>
-                                                                    <th style="padding: 0.25rem; width: 35%;">Después</th>
+                                                                <tr>
+                                                                    <th style="width: 30%;">Campo</th>
+                                                                    <th style="width: 35%;">Antes</th>
+                                                                    <th style="width: 35%;">Después</th>
                                                                 </tr>
                                                             </thead>
                                                             <tbody>
                                                                 @foreach (var c in ev.Cambios)
                                                                 {
-                                                                    <tr style="border-bottom: 1px dashed var(--surface-border);">
-                                                                        <td style="padding: 0.25rem; font-weight: 600;">@c.Name</td>
-                                                                        <td style="padding: 0.25rem; color: #991b1b; background: #fee2e2;">@c.OriginalValue</td>
-                                                                        <td style="padding: 0.25rem; color: #166534; font-weight: 600; background: #dcfce7;">@c.ProposedValue</td>
+                                                                    <tr>
+                                                                        <td style="font-weight: 600;">@c.Name</td>
+                                                                        <td class="diff-row-deleted">@c.OriginalValue</td>
+                                                                        <td class="diff-row-added">@c.ProposedValue</td>
                                                                     </tr>
                                                                 }
                                                             </tbody>
@@ -1494,12 +1531,15 @@
                 .Select(p => new ListadoMaestroPermisoUpdateDto
                 {
                     ColaboradorId = p.ColaboradorId,
+                    AreaId = p.AreaId,
                     PuedeVer = p.PuedeVer,
                     PuedeEditar = p.PuedeEditar,
                     PuedeAprobar = p.PuedeAprobar
                 })
-                .Concat(nuevosPermisosListado.Where(p => p.ColaboradorId > 0))
-                .GroupBy(p => p.ColaboradorId)
+                .Concat(nuevosPermisosListado.Where(p => 
+                    (p.ColaboradorId.HasValue && p.ColaboradorId.Value > 0) || 
+                    (p.AreaId.HasValue && p.AreaId.Value > 0)))
+                .GroupBy(p => new { p.ColaboradorId, p.AreaId })
                 .Select(g => g.Last())
                 .ToList();
 
@@ -1531,10 +1571,26 @@
         nuevosPermisosListado.Add(new ListadoMaestroPermisoUpdateDto
         {
             ColaboradorId = 0,
+            AreaId = null,
             PuedeVer = false,
             PuedeEditar = false,
             PuedeAprobar = false
         });
+        tieneCambiosPermisos = true;
+    }
+
+    private void CambiarTipoNuevoPermisoListado(ListadoMaestroPermisoUpdateDto p, string tipo)
+    {
+        if (tipo == "colab")
+        {
+            p.ColaboradorId = 0;
+            p.AreaId = null;
+        }
+        else
+        {
+            p.ColaboradorId = null;
+            p.AreaId = 0;
+        }
         tieneCambiosPermisos = true;
     }
 

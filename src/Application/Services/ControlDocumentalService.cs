@@ -1625,9 +1625,23 @@ public class ControlDocumentalService(
             return null;
 
         var permisos = await repository.GetPermisosPorListadoAsync(listadoId);
-        var permiso = permisos.FirstOrDefault(p => p.ColaboradorId == colaborador.Id);
-        
-        return permiso is null ? null : MapToPermisoDto(permiso);
+        var permisosUsuario = permisos.Where(p => 
+            p.ColaboradorId == colaborador.Id || 
+            (p.AreaId.HasValue && p.AreaId == colaborador.AreaId)
+        ).ToList();
+
+        if (!permisosUsuario.Any())
+            return null;
+
+        return new ListadoMaestroPermisoDto
+        {
+            ColaboradorId = colaborador.Id,
+            ColaboradorNombre = $"{colaborador.Nombre} {colaborador.Apellido}".Trim(),
+            ColaboradorEmail = colaborador.Email,
+            PuedeVer = permisosUsuario.Any(p => p.PuedeVer),
+            PuedeEditar = permisosUsuario.Any(p => p.PuedeEditar),
+            PuedeAprobar = permisosUsuario.Any(p => p.PuedeAprobar)
+        };
     }
 
     public async Task UpdateListadoPermisosAsync(int listadoId, IEnumerable<ListadoMaestroPermisoUpdateDto> permisos, string usuarioEmail)
@@ -1647,18 +1661,38 @@ public class ControlDocumentalService(
         var nuevosPermisos = new List<ListadoMaestroPermiso>();
         foreach (var permisoDto in permisos)
         {
-            var colaborador = await colaboradorRepository.GetByIdAsync(permisoDto.ColaboradorId);
-            if (colaborador is null)
-                continue;
-
-            nuevosPermisos.Add(new ListadoMaestroPermiso
+            if (permisoDto.ColaboradorId.HasValue && permisoDto.ColaboradorId > 0)
             {
-                ListadoMaestroId = listadoId,
-                ColaboradorId = permisoDto.ColaboradorId,
-                PuedeVer = permisoDto.PuedeVer,
-                PuedeEditar = permisoDto.PuedeEditar,
-                PuedeAprobar = permisoDto.PuedeAprobar
-            });
+                var colaborador = await colaboradorRepository.GetByIdAsync(permisoDto.ColaboradorId.Value);
+                if (colaborador is null)
+                    continue;
+
+                nuevosPermisos.Add(new ListadoMaestroPermiso
+                {
+                    ListadoMaestroId = listadoId,
+                    ColaboradorId = permisoDto.ColaboradorId,
+                    AreaId = null,
+                    PuedeVer = permisoDto.PuedeVer,
+                    PuedeEditar = permisoDto.PuedeEditar,
+                    PuedeAprobar = permisoDto.PuedeAprobar
+                });
+            }
+            else if (permisoDto.AreaId.HasValue && permisoDto.AreaId > 0)
+            {
+                var area = await areaRepository.GetByIdAsync(permisoDto.AreaId.Value);
+                if (area is null)
+                    continue;
+
+                nuevosPermisos.Add(new ListadoMaestroPermiso
+                {
+                    ListadoMaestroId = listadoId,
+                    ColaboradorId = null,
+                    AreaId = permisoDto.AreaId,
+                    PuedeVer = permisoDto.PuedeVer,
+                    PuedeEditar = permisoDto.PuedeEditar,
+                    PuedeAprobar = permisoDto.PuedeAprobar
+                });
+            }
         }
 
         if (nuevosPermisos.Any())
@@ -1670,7 +1704,7 @@ public class ControlDocumentalService(
             listadoId,
             listado.Nombre,
             "PermisosActualizados",
-            $"Se actualizaron permisos para {nuevosPermisos.Count} colaborador(es)",
+            $"Se actualizaron permisos para {nuevosPermisos.Count} colaborador(es)/área(s)",
             usuarioEmail,
             new DocumentoControl { Id = 0, Nombre = listado.Nombre },
             null);
@@ -1679,17 +1713,24 @@ public class ControlDocumentalService(
 
     private async Task<bool> ValidarPermisoAsync(int listadoId, int colaboradorId, string tipoPermiso)
     {
-        var permisos = await repository.GetPermisosPorListadoAsync(listadoId);
-        var permiso = permisos.FirstOrDefault(p => p.ColaboradorId == colaboradorId);
+        var colaborador = await colaboradorRepository.GetByIdAsync(colaboradorId);
+        if (colaborador is null)
+            return false;
 
-        if (permiso is null)
+        var permisos = await repository.GetPermisosPorListadoAsync(listadoId);
+        var permisosAplicables = permisos.Where(p => 
+            p.ColaboradorId == colaboradorId || 
+            (p.AreaId.HasValue && p.AreaId == colaborador.AreaId)
+        ).ToList();
+
+        if (!permisosAplicables.Any())
             return false;
 
         return tipoPermiso switch
         {
-            "ver" => permiso.PuedeVer,
-            "editar" => permiso.PuedeEditar || permiso.PuedeAprobar,
-            "aprobar" => permiso.PuedeAprobar,
+            "ver" => permisosAplicables.Any(p => p.PuedeVer),
+            "editar" => permisosAplicables.Any(p => p.PuedeEditar || p.PuedeAprobar),
+            "aprobar" => permisosAplicables.Any(p => p.PuedeAprobar),
             _ => false
         };
     }
@@ -1764,10 +1805,12 @@ public class ControlDocumentalService(
     private static ListadoMaestroPermisoDto MapToPermisoDto(ListadoMaestroPermiso permiso) => new()
     {
         ColaboradorId = permiso.ColaboradorId,
-        ColaboradorNombre = string.IsNullOrWhiteSpace(permiso.Colaborador?.Nombre) && string.IsNullOrWhiteSpace(permiso.Colaborador?.Apellido)
-            ? string.Empty
-            : $"{permiso.Colaborador?.Nombre} {permiso.Colaborador?.Apellido}".Trim(),
+        ColaboradorNombre = permiso.ColaboradorId.HasValue
+            ? $"{permiso.Colaborador?.Nombre} {permiso.Colaborador?.Apellido}".Trim()
+            : string.Empty,
         ColaboradorEmail = permiso.Colaborador?.Email ?? string.Empty,
+        AreaId = permiso.AreaId,
+        AreaNombre = permiso.Area?.Nombre ?? string.Empty,
         PuedeVer = permiso.PuedeVer,
         PuedeEditar = permiso.PuedeEditar,
         PuedeAprobar = permiso.PuedeAprobar

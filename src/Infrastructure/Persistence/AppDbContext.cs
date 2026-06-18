@@ -161,9 +161,21 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .HasOne(p => p.Colaborador)
             .WithMany()
             .HasForeignKey(p => p.ColaboradorId)
-            .OnDelete(DeleteBehavior.Restrict);
+            .OnDelete(DeleteBehavior.Restrict)
+            .IsRequired(false);
+        modelBuilder.Entity<ListadoMaestroPermiso>()
+            .HasOne(p => p.Area)
+            .WithMany()
+            .HasForeignKey(p => p.AreaId)
+            .OnDelete(DeleteBehavior.Restrict)
+            .IsRequired(false);
         modelBuilder.Entity<ListadoMaestroPermiso>()
             .HasIndex(p => new { p.ListadoMaestroId, p.ColaboradorId })
+            .HasFilter("[ColaboradorId] IS NOT NULL")
+            .IsUnique();
+        modelBuilder.Entity<ListadoMaestroPermiso>()
+            .HasIndex(p => new { p.ListadoMaestroId, p.AreaId })
+            .HasFilter("[AreaId] IS NOT NULL")
             .IsUnique();
         modelBuilder.Entity<DocumentoControl>()
             .HasOne(d => d.Area)

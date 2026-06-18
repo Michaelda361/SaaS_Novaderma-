@@ -263,14 +263,19 @@ public class ControlDocumentalRepository(AppDbContext context) : IControlDocumen
         return true;
     }
 
-    public async Task<IEnumerable<ListadoMaestroPermiso>> GetPermisosPorListadoAsync(int listadoId) =>
-        await context.ListadoMaestroPermisos
+    public async Task<IEnumerable<ListadoMaestroPermiso>> GetPermisosPorListadoAsync(int listadoId)
+    {
+        var list = await context.ListadoMaestroPermisos
             .Include(p => p.Colaborador)
+            .Include(p => p.Area)
             .Where(p => p.ListadoMaestroId == listadoId)
-            .OrderBy(p => p.Colaborador.Nombre)
-            .ThenBy(p => p.Colaborador.Apellido)
             .AsNoTracking()
             .ToListAsync();
+
+        return list.OrderBy(p => p.Colaborador != null 
+            ? $"{p.Colaborador.Nombre} {p.Colaborador.Apellido}" 
+            : p.Area?.Nombre ?? string.Empty);
+    }
 
     public async Task<IEnumerable<ListadoMaestroPermiso>> CreatePermisosAsync(IEnumerable<ListadoMaestroPermiso> permisos)
     {
@@ -288,13 +293,20 @@ public class ControlDocumentalRepository(AppDbContext context) : IControlDocumen
         await context.SaveChangesAsync();
     }
 
-    public async Task<IEnumerable<ListadoMaestroPermiso>> GetPermisosPorColaboradorAsync(int colaboradorId) =>
-        await context.ListadoMaestroPermisos
+    public async Task<IEnumerable<ListadoMaestroPermiso>> GetPermisosPorColaboradorAsync(int colaboradorId)
+    {
+        var colaborador = await context.Colaboradores.FindAsync(colaboradorId);
+        if (colaborador is null)
+            return Enumerable.Empty<ListadoMaestroPermiso>();
+
+        return await context.ListadoMaestroPermisos
             .Include(p => p.Colaborador)
-            .Where(p => p.ColaboradorId == colaboradorId)
+            .Include(p => p.Area)
+            .Where(p => p.ColaboradorId == colaboradorId || (p.AreaId.HasValue && p.AreaId == colaborador.AreaId))
             .OrderBy(p => p.ListadoMaestroId)
             .AsNoTracking()
             .ToListAsync();
+    }
 
     public async Task DeleteDocumentoAsync(DocumentoControl documento)
     {

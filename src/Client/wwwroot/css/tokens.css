@@ -1,5 +1,5 @@
-﻿/* =============================================
-   VARIABLES â€” edit here to retheme the whole app
+/* =============================================
+   VARIABLES — edit here to retheme the whole app
    ============================================= */
 
 :root {
@@ -31,18 +31,19 @@
     --shadow-lg:      0 20px 40px rgba(0,0,0,0.14), 0 4px 8px rgba(0,0,0,0.06);
     --transition:     0.15s ease;
     --font:           'Inter', system-ui, -apple-system, sans-serif;
-    /* Secundarios / alias (instructivos, chips de variable, tarjetas de Ã¡rea) */
+    /* Secundarios / alias (instructivos, chips de variable, tarjetas de área) */
     --surface-alt:    #f9fafb;
     --bg-secondary:   #eceef1;
     --bg-hover:       #e5e7eb;
     --text-primary:   var(--text);
     --text-secondary: var(--text-muted);
+    --surface-card:   var(--surface);
+    --surface-border: var(--border);
 }
 
 /* =============================================
    RESET & BASE
    ============================================= */
-
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 html { scroll-behavior: smooth; }
