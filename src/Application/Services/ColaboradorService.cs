@@ -78,8 +78,16 @@ public class ColaboradorService(IColaboradorRepository repository)
         colaborador.SueldoBasico = dto.SueldoBasico;
         colaborador.Ciudad = dto.Ciudad;
         colaborador.Genero = ParseGenero(dto.Genero);
-        colaborador.AreaId = dto.AreaId;
-        colaborador.CargoId = dto.CargoId;
+        if (colaborador.AreaId != dto.AreaId)
+        {
+            colaborador.AreaId = dto.AreaId;
+            colaborador.Area = null!;
+        }
+        if (colaborador.CargoId != dto.CargoId)
+        {
+            colaborador.CargoId = dto.CargoId;
+            colaborador.Cargo = null!;
+        }
         colaborador.SupervisorId = dto.SupervisorId;
 
         var updated = await repository.UpdateAsync(colaborador);

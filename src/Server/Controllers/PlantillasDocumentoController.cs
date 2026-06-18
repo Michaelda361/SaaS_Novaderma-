@@ -25,13 +25,15 @@ public class PlantillasDocumentoController(
     public async Task<IActionResult> GetAll()
     {
         if (!await currentUser.PuedeGestionarPlantillasAsync()) return Forbid();
-        return Ok(await service.GetAllAsync());
+        var email = currentUser.GetEmail();
+        return Ok(await service.GetAllAsync(email));
     }
 
     [HttpGet("{id:int}")]
     public async Task<IActionResult> GetById(int id)
     {
-        var result = await service.GetByIdAsync(id);
+        var email = currentUser.GetEmail();
+        var result = await service.GetByIdAsync(id, email);
         return result is null ? NotFound() : Ok(result);
     }
 
@@ -39,7 +41,8 @@ public class PlantillasDocumentoController(
     public async Task<IActionResult> Create([FromBody] CreatePlantillaDocumentoDto dto)
     {
         if (!await currentUser.PuedeGestionarPlantillasAsync()) return Forbid();
-        var created = await service.CreateAsync(dto);
+        var email = currentUser.GetEmail();
+        var created = await service.CreateAsync(dto, email);
         return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
     }
 
@@ -47,7 +50,8 @@ public class PlantillasDocumentoController(
     public async Task<IActionResult> Update(int id, [FromBody] CreatePlantillaDocumentoDto dto)
     {
         if (!await currentUser.PuedeGestionarPlantillasAsync()) return Forbid();
-        var result = await service.UpdateAsync(id, dto);
+        var email = currentUser.GetEmail();
+        var result = await service.UpdateAsync(id, dto, email);
         return result is null ? NotFound() : Ok(result);
     }
 
@@ -55,7 +59,8 @@ public class PlantillasDocumentoController(
     public async Task<IActionResult> Delete(int id)
     {
         if (!await currentUser.PuedeGestionarPlantillasAsync()) return Forbid();
-        var ok = await service.DeleteAsync(id);
+        var email = currentUser.GetEmail();
+        var ok = await service.DeleteAsync(id, email);
         return ok ? NoContent() : NotFound();
     }
 
@@ -160,7 +165,7 @@ public class PlantillasDocumentoController(
         try
         {
             var email = currentUser.GetEmail();
-            var plantilla = await service.GetByIdAsync(id);
+            var plantilla = await service.GetByIdAsync(id, email);
             if (plantilla is null) return NotFound();
 
             var entidad = new TalentManagement.Domain.Entities.PlantillaDocumento
@@ -314,33 +319,29 @@ public class PlantillasDocumentoController(
     [HttpPost("{plantillaId:int}/generar-para/{colaboradorId:int}")]
     public async Task<IActionResult> GenerarParaColaborador(int plantillaId, int colaboradorId)
     {
-        try
+        if (!await currentUser.PuedeGestionarPlantillasAsync()) return Forbid();
+        var email = currentUser.GetEmail();
+
+        var plantillaDto = await service.GetByIdAsync(plantillaId, email);
+        if (plantillaDto is null) return NotFound();
+
+        var (contenidoResuelto, plantilla, colaborador) =
+            await service.ResolverParaColaboradorAsync(plantillaId, colaboradorId, email);
+
+        byte[] archivoBytes;
+        var nombreBase = $"{plantillaDto.Nombre.Replace(" ", "_")}_{colaborador.Nombre}_{colaborador.Apellido}_{DateTime.Today:yyyyMMdd}";
+
+        if (plantilla.TipoPlantilla == TalentManagement.Domain.Enums.TipoPlantilla.Docx)
         {
-            if (!await currentUser.PuedeGestionarPlantillasAsync()) return Forbid();
-
-            var plantillaDto = await service.GetByIdAsync(plantillaId);
-            if (plantillaDto is null) return NotFound();
-
-            var (contenidoResuelto, plantilla, colaborador) =
-                await service.ResolverParaColaboradorAsync(plantillaId, colaboradorId);
-
-            byte[] archivoBytes;
-            var nombreBase = $"{plantillaDto.Nombre.Replace(" ", "_")}_{colaborador.Nombre}_{colaborador.Apellido}_{DateTime.Today:yyyyMMdd}";
-
-            if (plantilla.TipoPlantilla == TalentManagement.Domain.Enums.TipoPlantilla.Docx)
-            {
-                // contenidoResuelto ya es el JSON payload serializado por ReemplazarVariablesEnDocx
-                archivoBytes = pdfGenerator.GenerarPdfDesdeDocx(contenidoResuelto);
-            }
-            else
-            {
-                archivoBytes = pdfGenerator.GenerarPdfDesdeHtml(contenidoResuelto, plantilla);
-            }
-
-            return File(archivoBytes, "application/pdf", $"{nombreBase}.pdf");
+            // contenidoResuelto ya es el JSON payload serializado por ReemplazarVariablesEnDocx
+            archivoBytes = pdfGenerator.GenerarPdfDesdeDocx(contenidoResuelto);
         }
-        catch (KeyNotFoundException ex) { return NotFound(ex.Message); }
-        catch (Exception ex) { return StatusCode(500, ex.Message); }
+        else
+        {
+            archivoBytes = pdfGenerator.GenerarPdfDesdeHtml(contenidoResuelto, plantilla);
+        }
+
+        return File(archivoBytes, "application/pdf", $"{nombreBase}.pdf");
     }
 
     // ── Flujo de solicitud y aprobación ──────────────────────────────────────
@@ -351,7 +352,7 @@ public class PlantillasDocumentoController(
         try
         {
             var email = currentUser.GetEmail();
-            var plantillaDto = await service.GetByIdAsync(id);
+            var plantillaDto = await service.GetByIdAsync(id, email);
             if (plantillaDto is null) return NotFound();
 
             byte[] pdfBytes;
@@ -443,8 +444,9 @@ public class PlantillasDocumentoController(
             }
 
             // 3. Generar el PDF final con todas las variables reemplazadas
+            var email = currentUser.GetEmail();
             byte[] pdfBytes;
-            var plantillaDto = await service.GetByIdAsync(solicitud.PlantillaDocumentoId);
+            var plantillaDto = await service.GetByIdAsync(solicitud.PlantillaDocumentoId, email);
             if (plantillaDto is null) return NotFound("Plantilla no encontrada.");
 
             if (plantillaDto.TipoPlantilla == "docx")
@@ -470,7 +472,7 @@ public class PlantillasDocumentoController(
             }
 
             // 4. Guardar cambios en base de datos y en almacenamiento
-            var resultado = await service.AprobarSolicitudConDocumentoAsync(solicitudId, dto.Comentario, pdfBytes, variablesFinales);
+            var resultado = await service.AprobarSolicitudConDocumentoAsync(solicitudId, dto.Comentario, pdfBytes, variablesFinales, email);
             if (resultado is null) return NotFound();
 
             var connIdAprobar = NotificacionesHub.GetConnectionId(resultado.ColaboradorId);
@@ -488,7 +490,8 @@ public class PlantillasDocumentoController(
         try
         {
             if (!await currentUser.PuedeResolverSolicitudesAsync()) return Forbid();
-            var resultado = await service.RechazarSolicitudAsync(solicitudId, dto.Comentario);
+            var email = currentUser.GetEmail();
+            var resultado = await service.RechazarSolicitudAsync(solicitudId, dto.Comentario, email);
             if (resultado is null) return NotFound();
             var connIdRechazar = NotificacionesHub.GetConnectionId(resultado.ColaboradorId);
             if (connIdRechazar is not null)
@@ -556,7 +559,8 @@ public class PlantillasDocumentoController(
     public async Task<IActionResult> GetTodasSolicitudes()
     {
         if (!await currentUser.PuedeResolverSolicitudesAsync()) return Forbid();
-        var result = await service.GetTodasSolicitudesAsync();
+        var email = currentUser.GetEmail();
+        var result = await service.GetTodasSolicitudesAsync(email);
         return Ok(result);
     }
 
@@ -564,7 +568,8 @@ public class PlantillasDocumentoController(
     public async Task<IActionResult> GetPendientes()
     {
         if (!await currentUser.PuedeResolverSolicitudesAsync()) return Forbid();
-        var result = await service.GetPendientesAsync();
+        var email = currentUser.GetEmail();
+        var result = await service.GetPendientesAsync(email);
         return Ok(result);
     }
 
@@ -572,6 +577,7 @@ public class PlantillasDocumentoController(
     public async Task<IActionResult> CountPendientes()
     {
         if (!await currentUser.PuedeResolverSolicitudesAsync()) return Ok(new { count = 0 });
-        return Ok(new { count = await service.CountPendientesAsync() });
+        var email = currentUser.GetEmail();
+        return Ok(new { count = await service.CountPendientesAsync(email) });
     }
 }

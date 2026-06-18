@@ -30,11 +30,15 @@ public class DocumentoControl : BaseEntity
     public string? DatosPersonalizados
     {
         get => _datosPersonalizados;
-        set
-        {
-            _datosPersonalizados = value;
-            SincronizarDeDatosPersonalizados();
-        }
+        set => _datosPersonalizados = value;
+    }
+
+    private static string NormalizarClave(string key)
+    {
+        if (string.IsNullOrWhiteSpace(key)) return string.Empty;
+        return key.Trim().ToLowerInvariant()
+            .Replace("á", "a").Replace("é", "e").Replace("í", "i").Replace("ó", "o").Replace("ú", "u")
+            .Replace("ü", "u").Replace("ñ", "n").Replace("ç", "c").Replace(" ", string.Empty);
     }
 
     public void SincronizarDeDatosPersonalizados()
@@ -47,10 +51,7 @@ public class DocumentoControl : BaseEntity
 
             foreach (var kvp in campos)
             {
-                var keyNorm = kvp.Key.Trim().ToLowerInvariant()
-                    .Replace("á", "a").Replace("é", "e").Replace("í", "i").Replace("ó", "o").Replace("ú", "u")
-                    .Replace("ü", "u").Replace("ñ", "n").Replace("ç", "c").Replace(" ", string.Empty);
-
+                var keyNorm = NormalizarClave(kvp.Key);
                 var val = kvp.Value?.Trim();
                 if (string.IsNullOrWhiteSpace(val)) continue;
 
@@ -70,7 +71,7 @@ public class DocumentoControl : BaseEntity
                 {
                     Version = val;
                 }
-                else if (keyNorm == "fechadocumento" || keyNorm == "fecha" || keyNorm.Contains("fecha"))
+                else if (keyNorm == "fechadocumento" || keyNorm == "fecha" || keyNorm == "fechadedocumento")
                 {
                     if (DateTime.TryParse(val, out var parsedDate))
                     {
@@ -81,7 +82,7 @@ public class DocumentoControl : BaseEntity
                 {
                     Uso = val;
                 }
-                else if (keyNorm == "tiempoderetenciondelregistro(anos)" || keyNorm == "tiempoderetencion" || keyNorm == "retencion" || keyNorm.Contains("retencion"))
+                else if (keyNorm == "tiempoderetenciondelregistro(anos)" || keyNorm == "tiempoderetencion" || keyNorm == "retencion" || keyNorm == "tiemporetencion")
                 {
                     TiempoRetencion = val;
                 }
@@ -146,14 +147,12 @@ public class DocumentoControl : BaseEntity
     {
         foreach (var key in new System.Collections.Generic.List<string>(campos.Keys))
         {
-            var keyNorm = key.Trim().ToLowerInvariant()
-                .Replace("á", "a").Replace("é", "e").Replace("í", "i").Replace("ó", "o").Replace("ú", "u")
-                .Replace("ü", "u").Replace("ñ", "n").Replace("ç", "c").Replace(" ", string.Empty);
+            var keyNorm = NormalizarClave(key);
 
             foreach (var candidate in keys)
             {
-                var candidateNorm = candidate.Trim().ToLowerInvariant().Replace(" ", string.Empty);
-                if (keyNorm == candidateNorm || (keyNorm.Contains("fecha") && candidateNorm.Contains("fecha")) || (keyNorm.Contains("retencion") && candidateNorm.Contains("retencion")))
+                var candidateNorm = NormalizarClave(candidate);
+                if (keyNorm == candidateNorm)
                 {
                     campos[key] = newValue;
                     return;

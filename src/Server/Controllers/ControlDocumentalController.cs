@@ -30,55 +30,68 @@ public class ControlDocumentalController(
     [HttpGet("listados-maestros/{id:int}")]
     public async Task<IActionResult> GetListadoMaestro(int id)
     {
-        var listado = await service.GetListadoAsync(id);
-        return listado is null ? NotFound() : Ok(listado);
+        try
+        {
+            var email = currentUser.GetEmail();
+            var listado = await service.GetListadoAsync(id, email);
+            return listado is null ? NotFound() : Ok(listado);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
     }
 
     [HttpGet("listados-maestros/{id:int}/export")]
     public async Task<IActionResult> ExportListadoMaestro(int id)
     {
-        var listado = await service.GetListadoAsync(id);
-        if (listado is null)
+        try
         {
-            return NotFound();
-        }
+            var email = currentUser.GetEmail();
+            var listado = await service.GetListadoAsync(id, email);
+            if (listado is null)
+            {
+                return NotFound();
+            }
 
-        Console.WriteLine($"[EXPORT DIAGNOSTIC] Encabezados recuperados para exportación: {listado.Campos.Count} columnas registradas en la base de datos.");
 
-        using var workbook = new XLWorkbook();
-        var sheetName = SanitizeSheetName(listado.Nombre);
-        var documentosSheet = workbook.AddWorksheet(sheetName);
-        
-        var camposOrdenados = listado.Campos.OrderBy(c => c.Orden).ToList();
-        for (int colIndex = 0; colIndex < camposOrdenados.Count; colIndex++)
-        {
-            documentosSheet.Cell(1, colIndex + 1).Value = camposOrdenados[colIndex].Nombre;
-        }
-
-        var documentos = await service.GetDocumentosAsync(id, null, null, null, null, null);
-        Console.WriteLine($"[EXPORT DIAGNOSTIC] Registros recuperados para exportación: {documentos.Count} documentos.");
-
-        var docRow = 2;
-        foreach (var doc in documentos)
-        {
+            using var workbook = new XLWorkbook();
+            var sheetName = SanitizeSheetName(listado.Nombre);
+            var documentosSheet = workbook.AddWorksheet(sheetName);
+            
+            var camposOrdenados = listado.Campos.OrderBy(c => c.Orden).ToList();
             for (int colIndex = 0; colIndex < camposOrdenados.Count; colIndex++)
             {
-                var campo = camposOrdenados[colIndex];
-                var value = GetValorDynamic(doc, campo.CampoClave);
-                documentosSheet.Cell(docRow, colIndex + 1).Value = value;
+                documentosSheet.Cell(1, colIndex + 1).Value = camposOrdenados[colIndex].Nombre;
             }
-            docRow++;
+
+            var documentos = await service.GetDocumentosAsync(id, null, null, null, null, null, email);
+
+            var docRow = 2;
+            foreach (var doc in documentos)
+            {
+                for (int colIndex = 0; colIndex < camposOrdenados.Count; colIndex++)
+                {
+                    var campo = camposOrdenados[colIndex];
+                    var value = GetValorDynamic(doc, campo.CampoClave);
+                    documentosSheet.Cell(docRow, colIndex + 1).Value = value;
+                }
+                docRow++;
+            }
+            documentosSheet.Columns().AdjustToContents();
+
+
+            await using var stream = new MemoryStream();
+            workbook.SaveAs(stream);
+            stream.Seek(0, SeekOrigin.Begin);
+
+            var fileName = SanitizeFileName(listado.Nombre) + ".xlsx";
+            return File(stream.ToArray(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
         }
-        documentosSheet.Columns().AdjustToContents();
-
-        Console.WriteLine($"[EXPORT DIAGNOSTIC] Exportación completada. Hoja '{sheetName}' escrita con {docRow - 2} documentos. Cantidad de columnas exportadas: {camposOrdenados.Count}.");
-
-        await using var stream = new MemoryStream();
-        workbook.SaveAs(stream);
-        stream.Seek(0, SeekOrigin.Begin);
-
-        var fileName = SanitizeFileName(listado.Nombre) + ".xlsx";
-        return File(stream.ToArray(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
     }
 
     private static string GetValorDynamic(DocumentoControlDto item, string campoClave)
@@ -158,30 +171,29 @@ public class ControlDocumentalController(
         }
     }
 
+    private static string NormalizarClave(string key)
+    {
+        if (string.IsNullOrWhiteSpace(key)) return string.Empty;
+        return key.Trim().ToLowerInvariant()
+            .Replace("á", "a").Replace("é", "e").Replace("í", "i").Replace("ó", "o").Replace("ú", "u")
+            .Replace("ü", "u").Replace("ñ", "n").Replace("ç", "c").Replace(" ", string.Empty);
+    }
+
     private static string? GetValorCamposPersonalizados(Dictionary<string, string?>? campos, params string[] clavesCandidatas)
     {
         if (campos == null || !campos.Any()) return null;
-        foreach (var clave in clavesCandidatas)
+
+        var normalizedCandidates = clavesCandidatas.Select(NormalizarClave).ToHashSet();
+
+        foreach (var kvp in campos)
         {
-            if (campos.TryGetValue(clave, out var val))
+            var keyNorm = NormalizarClave(kvp.Key);
+            if (normalizedCandidates.Contains(keyNorm))
             {
-                return val;
-            }
-            var keyMatch = campos.Keys.FirstOrDefault(k => string.Equals(k, clave, StringComparison.OrdinalIgnoreCase));
-            if (keyMatch != null)
-            {
-                return campos[keyMatch];
+                return kvp.Value;
             }
         }
-        foreach (var clave in clavesCandidatas)
-        {
-            var keyNorm = clave.ToLowerInvariant();
-            var fuzzyMatch = campos.Keys.FirstOrDefault(k => k.ToLowerInvariant().Contains(keyNorm));
-            if (fuzzyMatch != null)
-            {
-                return campos[fuzzyMatch];
-            }
-        }
+
         return null;
     }
 
@@ -210,37 +222,31 @@ public class ControlDocumentalController(
             return BadRequest("El archivo debe tener extensión .xlsx.");
         }
 
-        Console.WriteLine($"[IMPORT DIAGNOSTIC] Archivo recibido: '{file.FileName}', Tamaño: {file.Length} bytes.");
 
         try
         {
             using var workbook = new XLWorkbook(file.OpenReadStream());
             var dto = ParseListadoMaestroWorkbook(workbook, file.FileName);
             
-            Console.WriteLine($"[IMPORT DIAGNOSTIC] Registros listos para persistir. Listado: '{dto.Nombre}', Campos/Columnas: {dto.Campos.Count}, Documentos/Filas: {dto.Documentos.Count}.");
 
             var email = currentUser.GetEmail();
             var created = await service.ImportListadoAsync(dto, email);
             
-            Console.WriteLine($"[IMPORT DIAGNOSTIC] Registros guardados exitosamente. Listado ID: {created.Id}, Nombre: '{created.Nombre}'.");
 
             return CreatedAtAction(nameof(GetListadoMaestro), new { id = created.Id }, created);
         }
         catch (ArgumentException ex)
         {
-            Console.WriteLine($"[IMPORT DIAGNOSTIC] Error de validación al importar listado: {ex.Message}");
             return BadRequest(ex.Message);
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[IMPORT DIAGNOSTIC] Error inesperado al importar listado: {ex.Message}");
             return BadRequest($"No se pudo leer el archivo XLSX: {ex.Message}");
         }
     }
 
     private static CreateListadoMaestroDto ParseListadoMaestroWorkbook(XLWorkbook workbook, string fileName)
     {
-        Console.WriteLine($"[IMPORT DIAGNOSTIC] Iniciando parsing del libro de Excel. Nombre de archivo: '{fileName}'. Hojas disponibles: {string.Join(", ", workbook.Worksheets.Select(w => w.Name))}");
 
         var dto = new CreateListadoMaestroDto
         {
@@ -249,13 +255,11 @@ public class ControlDocumentalController(
 
         // 1. Leer metadatos del listado
         ParseMetadataSheet(workbook, dto);
-        Console.WriteLine($"[IMPORT DIAGNOSTIC] Metadatos leídos. Nombre de listado a crear: '{dto.Nombre}', Descripción: '{dto.Descripcion ?? "ninguna"}'.");
 
         // 2. Intentar leer la hoja "Campos" si existe
         var (camposSheet, camposHeaderRow) = FindWorksheetWithHeaders(workbook, "CampoClave", "Nombre");
         if (camposSheet is not null && camposHeaderRow is not null)
         {
-            Console.WriteLine($"[IMPORT DIAGNOSTIC] Hoja 'Campos' detectada en '{camposSheet.Name}'. Leyendo configuraciones de columnas.");
             ParseCamposSheet(camposSheet, camposHeaderRow, dto);
         }
 
@@ -266,10 +270,8 @@ public class ControlDocumentalController(
             throw new ArgumentException("No se encontró una hoja de documentos válida que contenga columnas identificables como 'Codigo' y 'Nombre' en la primera fila.");
         }
 
-        Console.WriteLine($"[IMPORT DIAGNOSTIC] Hoja seleccionada para datos: '{documentosSheet.Name}'. Leyendo encabezados.");
 
         var headerDefinitions = BuildHeaderDefinitions(documentosHeaderRow);
-        Console.WriteLine($"[IMPORT DIAGNOSTIC] Encabezados detectados ({headerDefinitions.Count} columnas): {string.Join(", ", headerDefinitions.Select(h => $"{h.OriginalName} ({h.Key} -> index {h.Index})"))}");
 
         var customHeaderMap = new Dictionary<int, string>();
         var usedClave = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -314,7 +316,6 @@ public class ControlDocumentalController(
         var headerMap = BuildHeaderMap(documentosHeaderRow);
         ParseDocumentoRows(documentosSheet, documentosHeaderRow, headerMap, headerDefinitions, customHeaderMap, dto);
 
-        Console.WriteLine($"[IMPORT DIAGNOSTIC] Fin de parsing. Total de columnas dinámicas generadas en DTO: {dto.Campos.Count}. Total de registros parsed en DTO: {dto.Documentos.Count}.");
 
         return dto;
     }
@@ -445,8 +446,6 @@ public class ControlDocumentalController(
         CreateListadoMaestroDto dto)
     {
         var totalRowsUsed = sheet.RowsUsed().Count();
-        Console.WriteLine($"[IMPORT DIAGNOSTIC] Iniciando parsing de filas en '{sheet.Name}'. Filas usadas totales: {totalRowsUsed}. Fila de cabecera: {headerRow.RowNumber()}.");
-        Console.WriteLine($"[IMPORT DIAGNOSTIC] Total de filas detectadas con datos en la hoja: {totalRowsUsed - headerRow.RowNumber()}.");
 
         var headerRowNumber = headerRow.RowNumber();
 
@@ -477,7 +476,6 @@ public class ControlDocumentalController(
 
             if (customValues.Count == 0 || customValues.Values.All(IsEffectivelyEmpty))
             {
-                Console.WriteLine($"[IMPORT DIAGNOSTIC] Fila {row.RowNumber()} omitida por estar vacía.");
                 continue;
             }
 
@@ -893,7 +891,6 @@ public class ControlDocumentalController(
         {
             // Its header is always row 1
             var docRow = documentosSheet.Row(1);
-            Console.WriteLine($"[IMPORT DIAGNOSTIC] Found dedicated 'Documentos' sheet. Using row 1 as header.");
             return (documentosSheet, docRow);
         }
 
@@ -954,11 +951,9 @@ public class ControlDocumentalController(
 
         if (bestSheet is not null)
         {
-            Console.WriteLine($"[IMPORT DIAGNOSTIC] Found document header in sheet '{bestSheet.Name}' at row {bestHeader!.RowNumber()} with {bestScore} columns.");
         }
         else
         {
-            Console.WriteLine($"[IMPORT DIAGNOSTIC] WARNING: No sheet with 'Codigo'+'Nombre' header columns found. Import will fail validation.");
         }
 
         // Do NOT fall back silently — return null so the caller throws a clear error.
@@ -1140,15 +1135,31 @@ public class ControlDocumentalController(
         [FromQuery] string? proceso,
         [FromQuery] string? estado)
     {
-        var documentos = await service.GetDocumentosAsync(listadoMaestroId, areaId, busqueda, codigo, proceso, estado);
-        return Ok(documentos);
+        try
+        {
+            var email = currentUser.GetEmail();
+            var documentos = await service.GetDocumentosAsync(listadoMaestroId, areaId, busqueda, codigo, proceso, estado, email);
+            return Ok(documentos);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
     }
 
     [HttpGet("documentos/{id:int}")]
     public async Task<IActionResult> GetDocumento(int id)
     {
-        var documento = await service.GetDocumentoAsync(id);
-        return documento is null ? NotFound() : Ok(documento);
+        try
+        {
+            var email = currentUser.GetEmail();
+            var documento = await service.GetDocumentoAsync(id, email);
+            return documento is null ? NotFound() : Ok(documento);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
     }
 
     [HttpPost("documentos")]
@@ -1414,8 +1425,16 @@ public class ControlDocumentalController(
     [HttpGet("documentos/{id:int}/auditoria")]
     public async Task<IActionResult> GetHistorial(int id)
     {
-        var historial = await service.GetHistorialAsync(id);
-        return Ok(historial);
+        try
+        {
+            var email = currentUser.GetEmail();
+            var historial = await service.GetHistorialAsync(id, email);
+            return Ok(historial);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
     }
 
     [HttpGet("documentos/{documentoId:int}/solicitudes")]
@@ -1433,8 +1452,13 @@ public class ControlDocumentalController(
     {
         try
         {
-            var permisos = await service.GetListadoPermisosAsync(listadoId);
+            var email = currentUser.GetEmail();
+            var permisos = await service.GetListadoPermisosAsync(listadoId, email);
             return Ok(permisos);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
         }
         catch (Exception ex)
         {

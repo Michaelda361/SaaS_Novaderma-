@@ -41,15 +41,17 @@ else
     builder.Services.AddMicrosoftIdentityWebApiAuthentication(builder.Configuration);
 }
 
-// PostConfigure garantiza que se aplica DESPUÉS de que Microsoft.Identity.Web
-// registre sus propias opciones, evitando que las sobreescriba.
-builder.Services.PostConfigure<Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerOptions>(
-    Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerDefaults.AuthenticationScheme,
-    options =>
-    {
-        options.TokenValidationParameters.ValidateIssuer = false;
-        options.TokenValidationParameters.ValidateAudience = false;
-    });
+if (esModoDev)
+{
+    // En desarrollo: relaja la validación de JWT para facilitar pruebas con distintos tenants
+    builder.Services.PostConfigure<Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerOptions>(
+        Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerDefaults.AuthenticationScheme,
+        options =>
+        {
+            options.TokenValidationParameters.ValidateIssuer = false;
+            options.TokenValidationParameters.ValidateAudience = false;
+        });
+}
 
 builder.Services.AddOpenApi();
 builder.Services.AddRazorPages();
@@ -102,6 +104,8 @@ if (esModoDev)
     await TalentManagement.Infrastructure.Persistence.DbSeeder.CorregirHistoricosHuerfanosAsync(db);
     await TalentManagement.Infrastructure.Persistence.DbSeeder.RunIntegrationTestsAsync(scope.ServiceProvider);
 }
+
+app.UseMiddleware<TalentManagement.Server.ExceptionHandlingMiddleware>();
 
 app.UseCors();
 app.UseResponseCompression();
@@ -156,6 +160,7 @@ if (esModoDev)
         return Results.Ok(new { email = store.ActiveEmail, activo = store.ActiveEmail != null });
     }).AllowAnonymous();
 }
+
 
 if (!esModoDev)
     app.UseHttpsRedirection();

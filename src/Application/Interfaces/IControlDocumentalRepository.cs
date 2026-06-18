@@ -40,4 +40,5 @@ public interface IControlDocumentalRepository
     Task<bool> DeleteListadoAsync(int id);
     Task DeleteDocumentoAsync(DocumentoControl documento);
     Task<IEnumerable<DocumentoControl>> GetDocumentosIgnoreFiltersAsync(int documentoId);
+    Task ExecuteInTransactionAsync(Func<Task> action);
 }

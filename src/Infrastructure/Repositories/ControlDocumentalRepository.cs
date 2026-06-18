@@ -76,7 +76,6 @@ public class ControlDocumentalRepository(AppDbContext context) : IControlDocumen
             .OrderByDescending(d => d.FechaPublicacion ?? d.FechaDocumento)
             .ThenByDescending(d => d.Id)
             .ToListAsync();
-        Console.WriteLine($"[RETRIEVAL DIAGNOSTIC] Registros recuperados posteriormente: {results.Count} documentos recuperados de la base de datos para el listado ID {listadoId}.");
         return results;
     }
 
@@ -328,5 +327,20 @@ public class ControlDocumentalRepository(AppDbContext context) : IControlDocumen
         return list
             .OrderByDescending(d => d.Estado == "Vigente")
             .ThenByDescending(d => d.Id);
+    }
+
+    public async Task ExecuteInTransactionAsync(Func<Task> action)
+    {
+        using var transaction = await context.Database.BeginTransactionAsync();
+        try
+        {
+            await action();
+            await transaction.CommitAsync();
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
     }
 }

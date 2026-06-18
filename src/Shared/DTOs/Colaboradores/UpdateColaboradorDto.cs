@@ -24,10 +24,10 @@ public class UpdateColaboradorDto
     public string Genero { get; set; } = "NoInformado";
     public Dictionary<string, string?>? CamposAdicionales { get; set; }
 
-    [Required]
+    [Range(1, int.MaxValue, ErrorMessage = "El área es requerida")]
     public int AreaId { get; set; }
 
-    [Required]
+    [Range(1, int.MaxValue, ErrorMessage = "El cargo es requerido")]
     public int CargoId { get; set; }
 
     public int? SupervisorId { get; set; }

@@ -16,10 +16,28 @@ public class PlantillaDocumentoService(
 
     // ── Listado ──────────────────────────────────────────────────────────────
 
-    public async Task<List<PlantillaDocumentoDto>> GetAllAsync()
+    public async Task<List<PlantillaDocumentoDto>> GetAllAsync(string email)
     {
+        var colaborador = await colaboradorRepository.GetByEmailAsync(email)
+            ?? throw new UnauthorizedAccessException("Usuario no registrado como colaborador");
+
         var items = await repository.GetAllAsync();
-        return items.Select(MapToDto).ToList();
+        if (colaborador.Rol == RolUsuario.Admin)
+        {
+            return items.Select(MapToDto).ToList();
+        }
+        else if (colaborador.Rol == RolUsuario.Jefe)
+        {
+            // Un jefe sólo ve las plantillas que aplican a todas las áreas o a su área específica.
+            return items
+                .Where(p => p.AplicaTodasAreas || p.Areas.Any(a => a.AreaId == colaborador.AreaId))
+                .Select(MapToDto)
+                .ToList();
+        }
+        else
+        {
+            throw new UnauthorizedAccessException("No tiene permisos para ver las plantillas.");
+        }
     }
 
     public async Task<List<PlantillaDocumentoDto>> GetDisponiblesParaColaboradorAsync(string email)
@@ -31,16 +49,38 @@ public class PlantillaDocumentoService(
         return items.Select(MapToDto).ToList();
     }
 
-    public async Task<PlantillaDocumentoDto?> GetByIdAsync(int id)
+    public async Task<PlantillaDocumentoDto?> GetByIdAsync(int id, string email)
     {
         var p = await repository.GetByIdAsync(id);
-        return p is null ? null : MapToDto(p);
+        if (p is null) return null;
+
+        var colaborador = await colaboradorRepository.GetByEmailAsync(email)
+            ?? throw new UnauthorizedAccessException("Usuario no registrado como colaborador");
+
+        var esAdminOJefe = colaborador.Rol == RolUsuario.Jefe || colaborador.Rol == RolUsuario.Admin;
+        if (!esAdminOJefe && !p.AplicaTodasAreas && !p.Areas.Any(a => a.AreaId == colaborador.AreaId))
+            throw new UnauthorizedAccessException("No tienes acceso a esta plantilla");
+
+        return MapToDto(p);
     }
 
     // ── CRUD Admin ───────────────────────────────────────────────────────────
 
-    public async Task<PlantillaDocumentoDto> CreateAsync(CreatePlantillaDocumentoDto dto)
+    public async Task<PlantillaDocumentoDto> CreateAsync(CreatePlantillaDocumentoDto dto, string email)
     {
+        var colaborador = await colaboradorRepository.GetByEmailAsync(email)
+            ?? throw new UnauthorizedAccessException("Usuario no registrado como colaborador");
+
+        if (colaborador.Rol != RolUsuario.Admin)
+        {
+            if (colaborador.Rol != RolUsuario.Jefe)
+                throw new UnauthorizedAccessException("No tiene permisos para crear plantillas.");
+
+            // Un jefe sólo puede crear plantillas para su propia área
+            if (dto.AplicaTodasAreas || dto.AreaIds.Count != 1 || dto.AreaIds[0] != colaborador.AreaId)
+                throw new UnauthorizedAccessException("Un jefe de área sólo puede crear plantillas asociadas exclusivamente a su área.");
+        }
+
         string? docxFileKey = null;
         if (!string.IsNullOrWhiteSpace(dto.ArchivoDocxBase64))
         {
@@ -76,10 +116,26 @@ public class PlantillaDocumentoService(
         return MapToDto(created);
     }
 
-    public async Task<PlantillaDocumentoDto?> UpdateAsync(int id, CreatePlantillaDocumentoDto dto)
+    public async Task<PlantillaDocumentoDto?> UpdateAsync(int id, CreatePlantillaDocumentoDto dto, string email)
     {
+        var colaborador = await colaboradorRepository.GetByEmailAsync(email)
+            ?? throw new UnauthorizedAccessException("Usuario no registrado como colaborador");
+
         var plantilla = await repository.GetByIdAsync(id);
         if (plantilla is null) return null;
+
+        if (colaborador.Rol != RolUsuario.Admin)
+        {
+            if (colaborador.Rol != RolUsuario.Jefe)
+                throw new UnauthorizedAccessException("No tiene permisos para modificar plantillas.");
+
+            // Un jefe sólo puede modificar plantillas de su propia área
+            if (plantilla.AplicaTodasAreas || !plantilla.Areas.Any(a => a.AreaId == colaborador.AreaId))
+                throw new UnauthorizedAccessException("No tiene permisos para modificar una plantilla fuera de su área.");
+
+            if (dto.AplicaTodasAreas || dto.AreaIds.Count != 1 || dto.AreaIds[0] != colaborador.AreaId)
+                throw new UnauthorizedAccessException("No tiene permisos para reasignar esta plantilla a otra área o a todas.");
+        }
 
         // Si llega un nuevo DOCX, subir al storage y eliminar el anterior
         if (!string.IsNullOrWhiteSpace(dto.ArchivoDocxBase64))
@@ -122,10 +178,23 @@ public class PlantillaDocumentoService(
         return MapToDto(updated);
     }
 
-    public async Task<bool> DeleteAsync(int id)
+    public async Task<bool> DeleteAsync(int id, string email)
     {
+        var colaborador = await colaboradorRepository.GetByEmailAsync(email)
+            ?? throw new UnauthorizedAccessException("Usuario no registrado como colaborador");
+
         var p = await repository.GetByIdAsync(id);
         if (p is null) return false;
+
+        if (colaborador.Rol != RolUsuario.Admin)
+        {
+            if (colaborador.Rol != RolUsuario.Jefe)
+                throw new UnauthorizedAccessException("No tiene permisos para eliminar plantillas.");
+
+            // Un jefe sólo puede eliminar plantillas de su propia área
+            if (p.AplicaTodasAreas || !p.Areas.Any(a => a.AreaId == colaborador.AreaId))
+                throw new UnauthorizedAccessException("No tiene permisos para eliminar una plantilla fuera de su área.");
+        }
 
         if (!string.IsNullOrWhiteSpace(p.DocxFileKey))
             await storage.DeleteAsync(p.DocxFileKey);
@@ -214,16 +283,25 @@ public class PlantillaDocumentoService(
 
     /// <summary>
     /// Resuelve la plantilla para un colaborador específico por Id.
-    /// Solo para uso del admin — no valida restricción de área.
+    /// Valida que el aprobador/jefe pertenezca a la misma área si no es admin.
     /// </summary>
     public async Task<(string htmlResuelto, PlantillaDocumento plantilla, Colaborador colaborador)>
-        ResolverParaColaboradorAsync(int plantillaId, int colaboradorId)
+        ResolverParaColaboradorAsync(int plantillaId, int colaboradorId, string usuarioEmail)
     {
+        var aprobador = await colaboradorRepository.GetByEmailAsync(usuarioEmail)
+            ?? throw new UnauthorizedAccessException("Aprobador no registrado como colaborador");
+
         var plantilla = await repository.GetByIdAsync(plantillaId)
             ?? throw new KeyNotFoundException("Plantilla no encontrada");
 
         var colaborador = await colaboradorRepository.GetByIdAsync(colaboradorId)
             ?? throw new KeyNotFoundException("Colaborador no encontrado");
+
+        if (aprobador.Rol != RolUsuario.Admin)
+        {
+            if (aprobador.Rol != RolUsuario.Jefe || colaborador.AreaId != aprobador.AreaId)
+                throw new UnauthorizedAccessException("No tiene permisos para generar documentos para este colaborador.");
+        }
 
         string contenidoResuelto;
         if (plantilla.TipoPlantilla == TipoPlantilla.Docx)
@@ -307,10 +385,20 @@ public class PlantillaDocumentoService(
         return MapSolicitud(solicitud);
     }
 
-    public async Task<SolicitudDocumentoDto?> AprobarSolicitudAsync(int solicitudId, string? comentario)
+    public async Task<SolicitudDocumentoDto?> AprobarSolicitudAsync(int solicitudId, string? comentario, string usuarioEmail)
     {
+        var aprobador = await colaboradorRepository.GetByEmailAsync(usuarioEmail)
+            ?? throw new UnauthorizedAccessException("Aprobador no registrado como colaborador");
+
         var s = await repository.GetSolicitudByIdAsync(solicitudId);
         if (s is null) return null;
+
+        if (aprobador.Rol != RolUsuario.Admin)
+        {
+            if (aprobador.Rol != RolUsuario.Jefe || s.Colaborador.AreaId != aprobador.AreaId)
+                throw new UnauthorizedAccessException("No tiene permisos para aprobar esta solicitud.");
+        }
+
         s.Estado                = EstadoSolicitud.Aprobada;
         s.ComentarioAdmin       = comentario;
         s.FechaResolucion       = DateTime.UtcNow;
@@ -320,39 +408,65 @@ public class PlantillaDocumentoService(
     }
 
     public async Task<SolicitudDocumentoDto?> AprobarSolicitudConDocumentoAsync(
-        int solicitudId, string? comentario, byte[] pdfBytes, Dictionary<string, string> variablesFinales)
+        int solicitudId, string? comentario, byte[] pdfBytes, Dictionary<string, string> variablesFinales, string usuarioEmail)
     {
+        var aprobador = await colaboradorRepository.GetByEmailAsync(usuarioEmail)
+            ?? throw new UnauthorizedAccessException("Aprobador no registrado como colaborador");
+
         var s = await repository.GetSolicitudByIdAsync(solicitudId);
         if (s is null) return null;
 
-        // 1. Eliminar el PDF viejo si existía en storage
-        if (!string.IsNullOrWhiteSpace(s.PdfFileKey))
+        if (aprobador.Rol != RolUsuario.Admin)
         {
-            try { await storage.DeleteAsync(s.PdfFileKey); } catch { }
+            if (aprobador.Rol != RolUsuario.Jefe || s.Colaborador.AreaId != aprobador.AreaId)
+                throw new UnauthorizedAccessException("No tiene permisos para aprobar esta solicitud.");
         }
 
-        // 2. Subir el nuevo PDF a storage
-        var nombrePdf = $"solicitud_{s.PlantillaDocumentoId}_{s.ColaboradorId}_{DateTime.UtcNow:yyyyMMddHHmmss}.pdf";
-        using var ms = new MemoryStream(pdfBytes);
-        var pdfFileKey = await storage.UploadAsync(ms, nombrePdf, ContenedorPdf, "application/pdf");
+        SolicitudDocumentoDto? result = null;
 
-        // 3. Actualizar campos
-        s.Estado                = EstadoSolicitud.Aprobada;
-        s.ComentarioAdmin       = comentario;
-        s.FechaResolucion       = DateTime.UtcNow;
-        s.NotificadoColaborador = false;
-        s.PdfFileKey            = pdfFileKey;
-        s.PdfBytes              = null; // Limpiar legacy
-        s.VariablesCompletadas  = System.Text.Json.JsonSerializer.Serialize(variablesFinales);
+        await repository.ExecuteInTransactionAsync(async () =>
+        {
+            // 1. Eliminar el PDF viejo si existía en storage
+            if (!string.IsNullOrWhiteSpace(s.PdfFileKey))
+            {
+                try { await storage.DeleteAsync(s.PdfFileKey); } catch { }
+            }
 
-        await repository.UpdateSolicitudAsync(s);
-        return MapSolicitud(s);
+            // 2. Subir el nuevo PDF a storage
+            var nombrePdf = $"solicitud_{s.PlantillaDocumentoId}_{s.ColaboradorId}_{DateTime.UtcNow:yyyyMMddHHmmss}.pdf";
+            using var ms = new MemoryStream(pdfBytes);
+            var pdfFileKey = await storage.UploadAsync(ms, nombrePdf, ContenedorPdf, "application/pdf");
+
+            // 3. Actualizar campos
+            s.Estado                = EstadoSolicitud.Aprobada;
+            s.ComentarioAdmin       = comentario;
+            s.FechaResolucion       = DateTime.UtcNow;
+            s.NotificadoColaborador = false;
+            s.PdfFileKey            = pdfFileKey;
+            s.PdfBytes              = null; // Limpiar legacy
+            s.VariablesCompletadas  = System.Text.Json.JsonSerializer.Serialize(variablesFinales);
+
+            await repository.UpdateSolicitudAsync(s);
+            result = MapSolicitud(s);
+        });
+
+        return result;
     }
 
-    public async Task<SolicitudDocumentoDto?> RechazarSolicitudAsync(int solicitudId, string? comentario)
+    public async Task<SolicitudDocumentoDto?> RechazarSolicitudAsync(int solicitudId, string? comentario, string usuarioEmail)
     {
+        var aprobador = await colaboradorRepository.GetByEmailAsync(usuarioEmail)
+            ?? throw new UnauthorizedAccessException("Aprobador no registrado como colaborador");
+
         var s = await repository.GetSolicitudByIdAsync(solicitudId);
         if (s is null) return null;
+
+        if (aprobador.Rol != RolUsuario.Admin)
+        {
+            if (aprobador.Rol != RolUsuario.Jefe || s.Colaborador.AreaId != aprobador.AreaId)
+                throw new UnauthorizedAccessException("No tiene permisos para rechazar esta solicitud.");
+        }
+
         s.Estado                = EstadoSolicitud.Rechazada;
         s.ComentarioAdmin       = comentario;
         s.FechaResolucion       = DateTime.UtcNow;
@@ -398,19 +512,70 @@ public class PlantillaDocumentoService(
         return solicitudes.Select(MapSolicitud).ToList();
     }
 
-    public async Task<List<SolicitudDocumentoDto>> GetTodasSolicitudesAsync()
+    public async Task<List<SolicitudDocumentoDto>> GetTodasSolicitudesAsync(string email)
     {
+        var colaborador = await colaboradorRepository.GetByEmailAsync(email)
+            ?? throw new UnauthorizedAccessException("Usuario no registrado como colaborador");
+
         var solicitudes = await repository.GetTodasSolicitudesAsync();
-        return solicitudes.Select(MapSolicitud).ToList();
+
+        if (colaborador.Rol == RolUsuario.Admin)
+        {
+            return solicitudes.Select(MapSolicitud).ToList();
+        }
+        else if (colaborador.Rol == RolUsuario.Jefe)
+        {
+            return solicitudes
+                .Where(s => s.Colaborador.AreaId == colaborador.AreaId)
+                .Select(MapSolicitud)
+                .ToList();
+        }
+        else
+        {
+            throw new UnauthorizedAccessException("No tiene permisos para ver todas las solicitudes.");
+        }
     }
 
-    public async Task<List<SolicitudDocumentoDto>> GetPendientesAsync()
+    public async Task<List<SolicitudDocumentoDto>> GetPendientesAsync(string email)
     {
+        var colaborador = await colaboradorRepository.GetByEmailAsync(email)
+            ?? throw new UnauthorizedAccessException("Usuario no registrado como colaborador");
+
         var solicitudes = await repository.GetSolicitudesPendientesAsync();
-        return solicitudes.Select(MapSolicitud).ToList();
+
+        if (colaborador.Rol == RolUsuario.Admin)
+        {
+            return solicitudes.Select(MapSolicitud).ToList();
+        }
+        else if (colaborador.Rol == RolUsuario.Jefe)
+        {
+            return solicitudes
+                .Where(s => s.Colaborador.AreaId == colaborador.AreaId)
+                .Select(MapSolicitud)
+                .ToList();
+        }
+        else
+        {
+            throw new UnauthorizedAccessException("No tiene permisos para ver las solicitudes pendientes.");
+        }
     }
 
-    public Task<int> CountPendientesAsync() => repository.CountPendientesAsync();
+    public async Task<int> CountPendientesAsync(string email)
+    {
+        var colaborador = await colaboradorRepository.GetByEmailAsync(email);
+        if (colaborador is null) return 0;
+
+        if (colaborador.Rol == RolUsuario.Admin)
+        {
+            return await repository.CountPendientesAsync();
+        }
+        else if (colaborador.Rol == RolUsuario.Jefe)
+        {
+            var solicitudes = await repository.GetSolicitudesPendientesAsync();
+            return solicitudes.Count(s => s.Colaborador.AreaId == colaborador.AreaId);
+        }
+        return 0;
+    }
 
     public async Task<SolicitudDocumento?> GetSolicitudEntityAsync(int id) =>
         await repository.GetSolicitudByIdAsync(id);
@@ -423,9 +588,10 @@ public class PlantillaDocumentoService(
         var solicitante = await colaboradorRepository.GetByEmailAsync(email)
             ?? throw new UnauthorizedAccessException("Usuario no registrado como colaborador");
 
-        var esAdminOJefe = solicitante.Rol == RolUsuario.Jefe || solicitante.Rol == RolUsuario.Admin;
+        var esAdmin = solicitante.Rol == RolUsuario.Admin;
+        var esJefeDeArea = solicitante.Rol == RolUsuario.Jefe && s.Colaborador.AreaId == solicitante.AreaId;
 
-        if (!esAdminOJefe)
+        if (!esAdmin && !esJefeDeArea)
         {
             if (s.Colaborador.Email != email || s.Estado != EstadoSolicitud.Aprobada)
                 throw new UnauthorizedAccessException("No tienes acceso a este PDF.");

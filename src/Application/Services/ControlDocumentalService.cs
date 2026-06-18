@@ -45,8 +45,23 @@ public class ControlDocumentalService(
             .ToList();
     }
 
-    public async Task<ListadoMaestroDto?> GetListadoAsync(int id)
+    private async Task<bool> TienePermisoAccesoAsync(int listadoId, string usuarioEmail, string tipoPermiso)
     {
+        var colaborador = await TryResolverColaboradorAsync(usuarioEmail);
+        if (colaborador is null)
+            return false;
+
+        if (colaborador.Rol == RolUsuario.Admin || colaborador.Rol == RolUsuario.Jefe)
+            return true;
+
+        return await ValidarPermisoAsync(listadoId, colaborador.Id, tipoPermiso);
+    }
+
+    public async Task<ListadoMaestroDto?> GetListadoAsync(int id, string usuarioEmail)
+    {
+        if (!await TienePermisoAccesoAsync(id, usuarioEmail, "ver"))
+            throw new UnauthorizedAccessException("No tiene permisos para acceder a este listado maestro.");
+
         var listado = await repository.GetListadoByIdAsync(id);
         if (listado is null) return null;
         var dto = MapToListadoDto(listado);
@@ -57,18 +72,25 @@ public class ControlDocumentalService(
 
     public async Task<List<DocumentoControlDto>> GetDocumentosAsync(
         int listadoId, int? areaId, string? busqueda, string? codigo,
-        string? proceso, string? estado)
+        string? proceso, string? estado, string usuarioEmail)
     {
+        if (!await TienePermisoAccesoAsync(listadoId, usuarioEmail, "ver"))
+            throw new UnauthorizedAccessException("No tiene permisos para ver documentos de este listado maestro.");
+
         var docs = await repository.GetDocumentosAsync(listadoId, areaId, busqueda, codigo, proceso, estado);
         var docList = docs.ToList();
-        Console.WriteLine($"[RETRIEVAL DIAGNOSTIC] Registros recuperados para visualización: {docList.Count} documentos obtenidos para el listado ID {listadoId}.");
         return docList.Select(MapToDto).ToList();
     }
 
-    public async Task<DocumentoControlDetalleDto?> GetDocumentoAsync(int id)
+    public async Task<DocumentoControlDetalleDto?> GetDocumentoAsync(int id, string usuarioEmail)
     {
         var doc = await repository.GetDocumentoByIdAsync(id);
-        return doc is null ? null : MapToDetalleDto(doc);
+        if (doc is null) return null;
+
+        if (!await TienePermisoAccesoAsync(doc.ListadoMaestroId, usuarioEmail, "ver"))
+            throw new UnauthorizedAccessException("No tiene permisos para ver este documento.");
+
+        return MapToDetalleDto(doc);
     }
 
     public async Task<ListadoMaestroDto> CreateListadoAsync(CreateListadoMaestroDto dto, string usuarioEmail)
@@ -78,7 +100,6 @@ public class ControlDocumentalService(
         if (creador is null || (creador.Rol != Domain.Enums.RolUsuario.Admin && creador.Rol != Domain.Enums.RolUsuario.Jefe))
             throw new UnauthorizedAccessException("No tiene permisos para crear listados maestros.");
 
-        Console.WriteLine($"[PERSISTENCE DIAGNOSTIC] Registros enviados a persistencia para creación: {dto.Documentos?.Count ?? 0} documentos and {dto.Campos?.Count ?? 0} columnas.");
 
         var listado = new ListadoMaestro
         {
@@ -87,7 +108,6 @@ public class ControlDocumentalService(
         };
 
         var created = await repository.CreateListadoAsync(listado);
-        Console.WriteLine($"[PERSISTENCE DIAGNOSTIC] Listado Maestro guardado en base de datos. ID: {created.Id}, Nombre: '{created.Nombre}'");
 
         if (dto.Campos is not null && dto.Campos.Any())
         {
@@ -118,7 +138,6 @@ public class ControlDocumentalService(
                 MapTemplateToDocumento(docDto, doc, GetAreaId(docDto.Area));
 
                 var createdDoc = await repository.CreateDocumentoAsync(doc);
-                Console.WriteLine($"[PERSISTENCE DIAGNOSTIC] Registro/Documento guardado en base de datos: Código='{createdDoc.Codigo}', Nombre='{createdDoc.Nombre}', ID={createdDoc.Id}");
 
                 var log = await BuildAuditLogAsync(
                     createdDoc.Id,
@@ -147,7 +166,6 @@ public class ControlDocumentalService(
         if (editor is null || (editor.Rol != Domain.Enums.RolUsuario.Admin && editor.Rol != Domain.Enums.RolUsuario.Jefe))
             throw new UnauthorizedAccessException("No tiene permisos para actualizar listados maestros.");
 
-        Console.WriteLine($"[PERSISTENCE DIAGNOSTIC] Registros enviados a persistencia para actualización del listado ID {id}: {dto.Documentos?.Count ?? 0} documentos y {dto.Campos?.Count ?? 0} columnas.");
 
         var existing = await repository.GetListadoByIdAsync(id);
         if (existing is null) return null;
@@ -156,7 +174,6 @@ public class ControlDocumentalService(
         existing.Descripcion = dto.Descripcion?.Trim();
 
         var updated = await repository.UpdateListadoAsync(existing);
-        Console.WriteLine($"[PERSISTENCE DIAGNOSTIC] Listado Maestro actualizado en base de datos. ID: {updated.Id}, Nombre: '{updated.Nombre}'");
 
         if (dto.Documentos is not null && dto.Documentos.Any())
         {
@@ -208,14 +225,22 @@ public class ControlDocumentalService(
 
     public async Task<ListadoMaestroDto> ImportListadoAsync(CreateListadoMaestroDto dto, string usuarioEmail)
     {
-        var existing = await repository.GetListadoByNombreAsync(dto.Nombre.Trim());
-        if (existing is null)
-        {
-            return await CreateListadoAsync(dto, usuarioEmail);
-        }
+        ListadoMaestroDto? result = null;
 
-        var updated = await UpdateListadoAsync(existing.Id, dto, usuarioEmail);
-        return updated ?? await CreateListadoAsync(dto, usuarioEmail);
+        await repository.ExecuteInTransactionAsync(async () =>
+        {
+            var existing = await repository.GetListadoByNombreAsync(dto.Nombre.Trim());
+            if (existing is null)
+            {
+                result = await CreateListadoAsync(dto, usuarioEmail);
+                return;
+            }
+
+            var updated = await UpdateListadoAsync(existing.Id, dto, usuarioEmail);
+            result = updated ?? await CreateListadoAsync(dto, usuarioEmail);
+        });
+
+        return result!;
     }
 
     private static bool IsPlaceholderCode(string? code)
@@ -223,9 +248,10 @@ public class ControlDocumentalService(
         if (string.IsNullOrWhiteSpace(code)) return true;
         var norm = code.Trim().ToUpperInvariant();
         return norm == "N.A" || norm == "N/A" || norm == "NA" || norm == "NO APLICA" || norm == "N/D" || norm == "ND";
-    }    private async Task SyncImportDocumentsAsync(int listadoId, IEnumerable<TemplateDocumentoDto> documentos, string usuarioEmail)
+    }
+
+    private async Task SyncImportDocumentsAsync(int listadoId, IEnumerable<TemplateDocumentoDto> documentos, string usuarioEmail)
     {
-        Console.WriteLine($"[PERSISTENCE DIAGNOSTIC] Iniciando sincronización inteligente (Upsert) para listado ID {listadoId}. Importando {documentos.Count()} registros.");
 
         // 1. Obtener todos los documentos activos actuales en base de datos
         var activeDbDocs = (await repository.GetDocumentosAsync(listadoId, null, null, null, null, null))
@@ -233,12 +259,21 @@ public class ControlDocumentalService(
             .ToList();
 
         var dbDocsByCodigo = new Dictionary<string, DocumentoControl>(StringComparer.OrdinalIgnoreCase);
+        var dbDocsPlaceholderByNombre = new Dictionary<string, DocumentoControl>(StringComparer.OrdinalIgnoreCase);
+
         foreach (var doc in activeDbDocs)
         {
             var fullDoc = await repository.GetDocumentoByIdAsync(doc.Id);
             if (fullDoc != null)
             {
-                dbDocsByCodigo[fullDoc.Codigo.Trim()] = fullDoc;
+                if (IsPlaceholderCode(fullDoc.Codigo))
+                {
+                    dbDocsPlaceholderByNombre[fullDoc.Nombre.Trim()] = fullDoc;
+                }
+                else
+                {
+                    dbDocsByCodigo[fullDoc.Codigo.Trim()] = fullDoc;
+                }
             }
         }
 
@@ -251,18 +286,42 @@ public class ControlDocumentalService(
             return areasByName.TryGetValue(areaName.Trim(), out var id) ? id : null;
         }
 
-        var importedCodigos = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         int createdCount = 0;
         int updatedCount = 0;
 
         foreach (var docDto in documentos)
         {
             var codigoTrimmed = docDto.Codigo.Trim();
-            importedCodigos.Add(codigoTrimmed);
+            var nombreTrimmed = docDto.Nombre.Trim();
 
             int? targetAreaId = GetAreaId(docDto.Area);
 
-            if (dbDocsByCodigo.TryGetValue(codigoTrimmed, out var existingDoc))
+            DocumentoControl? existingDoc = null;
+            bool matched = false;
+
+            if (IsPlaceholderCode(codigoTrimmed))
+            {
+                if (dbDocsPlaceholderByNombre.TryGetValue(nombreTrimmed, out existingDoc))
+                {
+                    matched = true;
+                    dbDocsPlaceholderByNombre.Remove(nombreTrimmed);
+                }
+            }
+            else
+            {
+                if (dbDocsByCodigo.TryGetValue(codigoTrimmed, out existingDoc))
+                {
+                    matched = true;
+                    dbDocsByCodigo.Remove(codigoTrimmed);
+                }
+                else if (dbDocsPlaceholderByNombre.TryGetValue(nombreTrimmed, out existingDoc))
+                {
+                    matched = true;
+                    dbDocsPlaceholderByNombre.Remove(nombreTrimmed);
+                }
+            }
+
+            if (matched && existingDoc != null)
             {
                 // Comparar si existen cambios reales
                 if (TieneCambios(existingDoc, docDto, targetAreaId))
@@ -339,22 +398,18 @@ public class ControlDocumentalService(
 
         // 3. Desactivar documentos que estaban activos pero no vinieron en la planilla
         int deactivatedCount = 0;
-        foreach (var kv in dbDocsByCodigo)
+        var unmatchedDocs = dbDocsByCodigo.Values.Concat(dbDocsPlaceholderByNombre.Values).ToList();
+        foreach (var docToDeactivate in unmatchedDocs)
         {
-            if (!importedCodigos.Contains(kv.Key))
-            {
-                var docToDeactivate = kv.Value;
-                docToDeactivate.Activo = false;
-                
-                await repository.UpdateDocumentoAsync(docToDeactivate);
-                deactivatedCount++;
+            docToDeactivate.Activo = false;
+            
+            await repository.UpdateDocumentoAsync(docToDeactivate);
+            deactivatedCount++;
 
-                var log = await BuildAuditLogAsync(docToDeactivate.Id, docToDeactivate.Nombre, "Eliminado", "Eliminado por no estar presente en la importación Excel", usuarioEmail, docToDeactivate, null);
-                await auditRepository.CreateAsync(log);
-            }
+            var log = await BuildAuditLogAsync(docToDeactivate.Id, docToDeactivate.Nombre, "Eliminado", "Eliminado por no estar presente en la importación Excel", usuarioEmail, docToDeactivate, null);
+            await auditRepository.CreateAsync(log);
         }
 
-        Console.WriteLine($"[PERSISTENCE DIAGNOSTIC] Sincronización completada. Creados: {createdCount}, Actualizados: {updatedCount}, Desactivados: {deactivatedCount}.");
     }
 
     private static bool TieneCambios(DocumentoControl dbDoc, TemplateDocumentoDto excelDto, int? areaId)
@@ -364,7 +419,13 @@ public class ControlDocumentalService(
         if (!string.Equals(dbDoc.Version?.Trim(), excelDto.Version?.Trim(), StringComparison.OrdinalIgnoreCase)) return true;
         
         var excelFecha = excelDto.FechaDocumento ?? DateTime.Today;
-        if (dbDoc.FechaDocumento.Date != excelFecha.Date) return true;
+        var dbFechaLocal = dbDoc.FechaDocumento.Kind == DateTimeKind.Utc 
+            ? dbDoc.FechaDocumento.ToLocalTime().Date 
+            : dbDoc.FechaDocumento.Date;
+        var excelFechaLocal = excelFecha.Kind == DateTimeKind.Utc
+            ? excelFecha.ToLocalTime().Date
+            : excelFecha.Date;
+        if (dbFechaLocal != excelFechaLocal) return true;
 
         if (!string.Equals(dbDoc.OneDriveUrl?.Trim(), excelDto.OneDriveUrl?.Trim(), StringComparison.OrdinalIgnoreCase)) return true;
         if (!string.Equals(dbDoc.OneDriveItemId?.Trim(), excelDto.OneDriveItemId?.Trim(), StringComparison.OrdinalIgnoreCase)) return true;
@@ -441,24 +502,29 @@ public class ControlDocumentalService(
             .Replace("\"", string.Empty);
     }
 
+    private static string NormalizarClave(string key)
+    {
+        if (string.IsNullOrWhiteSpace(key)) return string.Empty;
+        return key.Trim().ToLowerInvariant()
+            .Replace("á", "a").Replace("é", "e").Replace("í", "i").Replace("ó", "o").Replace("ú", "u")
+            .Replace("ü", "u").Replace("ñ", "n").Replace("ç", "c").Replace(" ", string.Empty);
+    }
+
     private static string? GetValoresPersonalizados(Dictionary<string, string?>? campos, params string[] clavesCandidatas)
     {
         if (campos is null || !campos.Any()) return null;
-        foreach (var clave in clavesCandidatas)
+
+        var normalizedCandidates = clavesCandidatas.Select(NormalizarClave).ToHashSet();
+
+        foreach (var kvp in campos)
         {
-            if (campos.TryGetValue(clave, out var val))
+            var keyNorm = NormalizarClave(kvp.Key);
+            if (normalizedCandidates.Contains(keyNorm))
             {
-                return val;
+                return kvp.Value;
             }
         }
-        foreach (var candidate in clavesCandidatas)
-        {
-            var match = campos.Keys.FirstOrDefault(k => k.Contains(candidate, StringComparison.OrdinalIgnoreCase));
-            if (match != null)
-            {
-                return campos[match];
-            }
-        }
+
         return null;
     }
 
@@ -1017,6 +1083,8 @@ public class ControlDocumentalService(
         var documento = await repository.GetDocumentoByIdAsync(solicitud.DocumentoControlId)
             ?? throw new KeyNotFoundException("Documento no encontrado.");
 
+        var originalDocClone = CloneForDiff(documento);
+
         // 1. Update previous vigente to Historical
         documento.Estado = "Histórica";
         documento.Activo = false;
@@ -1098,7 +1166,8 @@ public class ControlDocumentalService(
 
         await repository.UpdateSolicitudCambioAsync(solicitud);
 
-        var log = await BuildAuditLogAsync(finalVigente.Id, finalVigente.Nombre, "SolicitudCambioAprobada", solicitud.ComentarioSolicitud, usuarioEmail, finalVigente, null);
+        var cambios = BuildDiff(originalDocClone, finalVigente);
+        var log = await BuildAuditLogAsync(finalVigente.Id, finalVigente.Nombre, "SolicitudCambioAprobada", solicitud.ComentarioSolicitud, usuarioEmail, finalVigente, cambios);
         await auditRepository.CreateAsync(log);
     }
 
@@ -1191,8 +1260,14 @@ public class ControlDocumentalService(
         BorradorDocumentoId = solicitud.BorradorDocumentoId
     };
 
-    public async Task<List<DocumentoControlDto>> GetHistorialAsync(int documentoId)
+    public async Task<List<DocumentoControlDto>> GetHistorialAsync(int documentoId, string usuarioEmail)
     {
+        var mainDoc = await repository.GetDocumentoByIdAsync(documentoId);
+        if (mainDoc is null) return new List<DocumentoControlDto>();
+
+        if (!await TienePermisoAccesoAsync(mainDoc.ListadoMaestroId, usuarioEmail, "ver"))
+            throw new UnauthorizedAccessException("No tiene permisos para ver el historial de este documento.");
+
         var docs = await repository.GetDocumentosIgnoreFiltersAsync(documentoId);
         return docs.Select(MapToDto).ToList();
     }
@@ -1533,8 +1608,12 @@ public class ControlDocumentalService(
 
     // ────── Métodos de Permisos ──────
 
-    public async Task<List<ListadoMaestroPermisoDto>> GetListadoPermisosAsync(int listadoId)
+    public async Task<List<ListadoMaestroPermisoDto>> GetListadoPermisosAsync(int listadoId, string usuarioEmail)
     {
+        var colaborador = await TryResolverColaboradorAsync(usuarioEmail);
+        if (colaborador is null || (colaborador.Rol != RolUsuario.Admin && colaborador.Rol != RolUsuario.Jefe))
+            throw new UnauthorizedAccessException("No tiene permisos para consultar los accesos de este listado.");
+
         var permisos = await repository.GetPermisosPorListadoAsync(listadoId);
         return permisos.Select(MapToPermisoDto).ToList();
     }

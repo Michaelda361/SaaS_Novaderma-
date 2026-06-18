@@ -27,10 +27,10 @@ public class CreateColaboradorDto
     public string Genero { get; set; } = "NoInformado";
     public Dictionary<string, string?>? CamposAdicionales { get; set; }
 
-    [Required(ErrorMessage = "El área es requerida")]
+    [Range(1, int.MaxValue, ErrorMessage = "El área es requerida")]
     public int AreaId { get; set; }
 
-    [Required(ErrorMessage = "El cargo es requerido")]
+    [Range(1, int.MaxValue, ErrorMessage = "El cargo es requerido")]
     public int CargoId { get; set; }
 
     public int? SupervisorId { get; set; }

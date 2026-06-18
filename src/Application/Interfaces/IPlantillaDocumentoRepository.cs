@@ -21,4 +21,5 @@ public interface IPlantillaDocumentoRepository
     Task<int> CountPendientesAsync();
     Task<bool> ExisteSolicitudPendienteAsync(int plantillaId, int colaboradorId);
     Task MarcarSolicitudesComoVistaAsync(int colaboradorId);
+    Task ExecuteInTransactionAsync(Func<Task> action);
 }

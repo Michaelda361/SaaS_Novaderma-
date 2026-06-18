@@ -207,4 +207,19 @@ public class PlantillaDocumentoRepository(AppDbContext context) : IPlantillaDocu
             .Where(s => s.ColaboradorId == colaboradorId && !s.NotificadoColaborador)
             .ExecuteUpdateAsync(s => s.SetProperty(x => x.NotificadoColaborador, true));
     }
+
+    public async Task ExecuteInTransactionAsync(Func<Task> action)
+    {
+        using var transaction = await context.Database.BeginTransactionAsync();
+        try
+        {
+            await action();
+            await transaction.CommitAsync();
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
+    }
 }
