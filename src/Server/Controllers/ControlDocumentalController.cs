@@ -60,9 +60,23 @@ public class ControlDocumentalController(
             var documentosSheet = workbook.AddWorksheet(sheetName);
             
             var camposOrdenados = listado.Campos.OrderBy(c => c.Orden).ToList();
+            
+            // Estructura visual para encabezados
+            documentosSheet.Row(1).Height = 28;
             for (int colIndex = 0; colIndex < camposOrdenados.Count; colIndex++)
             {
-                documentosSheet.Cell(1, colIndex + 1).Value = camposOrdenados[colIndex].Nombre;
+                var cell = documentosSheet.Cell(1, colIndex + 1);
+                cell.Value = camposOrdenados[colIndex].Nombre;
+                cell.Style.Font.Bold = true;
+                cell.Style.Font.FontSize = 11.5; // Resaltado de tamaño
+                cell.Style.Font.FontColor = XLColor.White;
+                cell.Style.Fill.BackgroundColor = XLColor.FromHtml("#4f46e5"); // Color corporativo primario
+                cell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                cell.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+                
+                // Separador inferior grueso para diferenciar los encabezados
+                cell.Style.Border.BottomBorder = XLBorderStyleValues.Medium;
+                cell.Style.Border.BottomBorderColor = XLColor.FromHtml("#312e81");
             }
 
             var documentos = await service.GetDocumentosAsync(id, null, null, null, null, null, email);
@@ -70,11 +84,24 @@ public class ControlDocumentalController(
             var docRow = 2;
             foreach (var doc in documentos)
             {
+                documentosSheet.Row(docRow).Height = 20; // Altura cómoda para lectura de filas de datos
                 for (int colIndex = 0; colIndex < camposOrdenados.Count; colIndex++)
                 {
                     var campo = camposOrdenados[colIndex];
                     var value = GetValorDynamic(doc, campo.CampoClave);
-                    documentosSheet.Cell(docRow, colIndex + 1).Value = value;
+                    var cell = documentosSheet.Cell(docRow, colIndex + 1);
+                    cell.Value = value;
+                    cell.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+                    
+                    // Zebra striping en filas pares para mejorar legibilidad
+                    if (docRow % 2 == 0)
+                    {
+                        cell.Style.Fill.BackgroundColor = XLColor.FromHtml("#f9fafb");
+                    }
+                    
+                    // Línea divisoria sutil entre filas
+                    cell.Style.Border.BottomBorder = XLBorderStyleValues.Thin;
+                    cell.Style.Border.BottomBorderColor = XLColor.FromHtml("#e5e7eb");
                 }
                 docRow++;
             }
