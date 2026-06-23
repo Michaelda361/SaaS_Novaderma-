@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using Microsoft.Extensions.Logging;
 
 namespace TalentManagement.Infrastructure.Services;
@@ -65,6 +65,41 @@ public class LibreOfficeConverterService(ILogger<LibreOfficeConverterService> lo
         catch (Exception ex) { logger.LogError(ex, "Error convirtiendo {Ext}", extension); return null; }
         finally { try { Directory.Delete(tempDir, recursive: true); } catch { } }
     }
+
+    public byte[]? ConvertirPptxAPng(byte[] pptxBytes)
+    {
+        var soffice = EncontrarSoffice();
+        if (soffice is null) { logger.LogWarning("LibreOffice no encontrado para conversión de PNG"); return null; }
+        var tempDir = Path.Combine(Path.GetTempPath(), $"novahub_png_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            var inputPath = Path.Combine(tempDir, "documento.pptx");
+            File.WriteAllBytes(inputPath, pptxBytes);
+            var psi = new ProcessStartInfo
+            {
+                FileName = soffice,
+                Arguments = $"--headless --norestore --convert-to png \"{inputPath}\" --outdir \"{tempDir}\"",
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true
+            };
+            using var process = Process.Start(psi) ?? throw new InvalidOperationException("No se pudo iniciar LibreOffice.");
+            var completado = process.WaitForExit(30_000);
+            if (!completado) { process.Kill(entireProcessTree: true); logger.LogError("LibreOffice timeout"); return null; }
+            var pngFile = Directory.GetFiles(tempDir, "*.png").FirstOrDefault();
+            if (pngFile is null || !File.Exists(pngFile)) 
+            { 
+                logger.LogError("PNG no generado para la plantilla PPTX"); 
+                return null; 
+            }
+            return File.ReadAllBytes(pngFile);
+        }
+        catch (Exception ex) { logger.LogError(ex, "Error convirtiendo PPTX a PNG"); return null; }
+        finally { try { Directory.Delete(tempDir, recursive: true); } catch { } }
+    }
+
     public bool EstaDisponible() => EncontrarSoffice() is not null;
     private static string? EncontrarSoffice() { var paths = OperatingSystem.IsWindows() ? WindowsPaths : LinuxPaths; return paths.FirstOrDefault(File.Exists); }
-}
+}

@@ -6,7 +6,8 @@ namespace TalentManagement.Application.Services;
 
 public class CapacitacionService(
     ICapacitacionRepository repository,
-    IInscripcionRepository inscripcionRepository)
+    IInscripcionRepository inscripcionRepository,
+    ICertificadoPdfService certificadoPdfService)
 {
     public async Task<List<CapacitacionDto>> GetAllAsync()
     {
@@ -119,17 +120,63 @@ public class CapacitacionService(
             {
                 cap.ArchivoDocxCertificado = origenCap.ArchivoDocxCertificado;
                 cap.TipoArchivoCertificado = origenCap.TipoArchivoCertificado;
+                cap.ArchivoFirmaCertificado = origenCap.ArchivoFirmaCertificado;
+                cap.FirmaX = origenCap.FirmaX;
+                cap.FirmaY = origenCap.FirmaY;
+                cap.FirmaAncho = origenCap.FirmaAncho;
+                cap.FirmaAlto = origenCap.FirmaAlto;
+                cap.ArchivoPreviewCertificado = origenCap.ArchivoPreviewCertificado;
             }
         }
-        else if (!string.IsNullOrWhiteSpace(dto.ArchivoDocxBase64))
+        else
         {
-            cap.ArchivoDocxCertificado = Convert.FromBase64String(dto.ArchivoDocxBase64);
-            cap.TipoArchivoCertificado = dto.TipoArchivoCertificado;
-        }
-        else if (dto.EliminarDocx)
-        {
-            cap.ArchivoDocxCertificado = null;
-            cap.TipoArchivoCertificado = null;
+            bool plantillaCambiada = false;
+            if (!string.IsNullOrWhiteSpace(dto.ArchivoDocxBase64))
+            {
+                cap.ArchivoDocxCertificado = Convert.FromBase64String(dto.ArchivoDocxBase64);
+                cap.TipoArchivoCertificado = dto.TipoArchivoCertificado;
+                plantillaCambiada = true;
+            }
+            else if (dto.EliminarDocx)
+            {
+                cap.ArchivoDocxCertificado = null;
+                cap.TipoArchivoCertificado = null;
+                cap.ArchivoPreviewCertificado = null;
+                plantillaCambiada = true;
+            }
+
+            // Generar vista previa si cambió la plantilla
+            if (plantillaCambiada && cap.ArchivoDocxCertificado is { Length: > 0 } && cap.TipoArchivoCertificado == "application/vnd.openxmlformats-officedocument.presentationml.presentation")
+            {
+                try
+                {
+                    cap.ArchivoPreviewCertificado = certificadoPdfService.GenerarPreviewCertificado(cap.ArchivoDocxCertificado);
+                }
+                catch 
+                { 
+                    cap.ArchivoPreviewCertificado = null; 
+                }
+            }
+
+            // Gestionar firma digital
+            if (!string.IsNullOrWhiteSpace(dto.FirmaImagenBase64))
+            {
+                var base64 = dto.FirmaImagenBase64;
+                if (base64.Contains(","))
+                {
+                    base64 = base64.Substring(base64.IndexOf(",") + 1);
+                }
+                cap.ArchivoFirmaCertificado = Convert.FromBase64String(base64);
+            }
+            else if (dto.EliminarFirma)
+            {
+                cap.ArchivoFirmaCertificado = null;
+            }
+
+            cap.FirmaX = dto.FirmaX;
+            cap.FirmaY = dto.FirmaY;
+            cap.FirmaAncho = dto.FirmaAncho;
+            cap.FirmaAlto = dto.FirmaAlto;
         }
 
         var updated = await repository.UpdateAsync(cap);
@@ -234,6 +281,12 @@ public class CapacitacionService(
         FechaFinalizacion = c.FechaFinalizacion,
         TienePlantillaDocx = c.ArchivoDocxCertificado is not null && c.ArchivoDocxCertificado.Length > 0,
         TipoArchivoCertificado = c.ArchivoDocxCertificado is { Length: > 0 } ? c.TipoArchivoCertificado : null,
-        Publicada = c.Publicada
+        Publicada = c.Publicada,
+        FirmaImagenBase64 = c.ArchivoFirmaCertificado != null ? Convert.ToBase64String(c.ArchivoFirmaCertificado) : null,
+        FirmaX = c.FirmaX,
+        FirmaY = c.FirmaY,
+        FirmaAncho = c.FirmaAncho,
+        FirmaAlto = c.FirmaAlto,
+        PreviewCertificadoBase64 = c.ArchivoPreviewCertificado != null ? Convert.ToBase64String(c.ArchivoPreviewCertificado) : null
     };
 }

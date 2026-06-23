@@ -27,18 +27,24 @@ public class CuestionarioRepository(AppDbContext context) : ICuestionarioReposit
 
     public async Task<Cuestionario> UpdateAsync(Cuestionario cuestionario)
     {
-        // Soft-delete preguntas y opciones anteriores, luego agregar las nuevas
+        // 1. Obtener las preguntas antiguas directamente de la base de datos para desactivarlas (soft-delete)
+        var oldPreguntas = await context.Preguntas
+            .Include(p => p.Opciones)
+            .Where(p => p.CuestionarioId == cuestionario.Id && p.Activo)
+            .ToListAsync();
+
+        foreach (var p in oldPreguntas)
+        {
+            foreach (var o in p.Opciones) o.Activo = false;
+            p.Activo = false;
+        }
+
+        // 2. Actualizar las propiedades del cuestionario
         var existing = await context.Cuestionarios
-            .Include(c => c.Preguntas).ThenInclude(p => p.Opciones)
             .FirstOrDefaultAsync(c => c.Id == cuestionario.Id);
 
         if (existing is not null)
         {
-            foreach (var p in existing.Preguntas)
-            {
-                foreach (var o in p.Opciones) o.Activo = false;
-                p.Activo = false;
-            }
             existing.Titulo = cuestionario.Titulo;
             existing.Descripcion = cuestionario.Descripcion;
             existing.PuntajeAprobacion = cuestionario.PuntajeAprobacion;
@@ -46,9 +52,12 @@ public class CuestionarioRepository(AppDbContext context) : ICuestionarioReposit
             existing.MinCorrectas = cuestionario.MinCorrectas;
             existing.IntentosPermitidos = cuestionario.IntentosPermitidos;
 
+            // 3. Asegurar que las nuevas preguntas se agreguen activas
             foreach (var p in cuestionario.Preguntas)
             {
+                p.Activo = true;
                 p.CuestionarioId = cuestionario.Id;
+                foreach (var o in p.Opciones) o.Activo = true;
                 context.Preguntas.Add(p);
             }
         }

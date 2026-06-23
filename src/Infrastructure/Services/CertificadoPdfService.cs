@@ -1,4 +1,4 @@
-﻿using TalentManagement.Application.Interfaces;
+using TalentManagement.Application.Interfaces;
 
 namespace TalentManagement.Infrastructure.Services;
 
@@ -12,10 +12,11 @@ public class CertificadoPdfService(PdfGeneratorService pdfGenerator) : ICertific
     private const string MimePdf = "application/pdf";
 
     public byte[] GenerarPdf(byte[] archivoBytes, Dictionary<string, string> variables,
-        string mimeType = MimeDocx)
+        string mimeType = MimeDocx,
+        byte[]? firmaBytes = null, double? firmaX = null, double? firmaY = null, double? firmaAncho = null, double? firmaAlto = null)
     {
         if (mimeType == MimePptx)
-            return pdfGenerator.GenerarPdfDesdePptx(archivoBytes, variables);
+            return pdfGenerator.GenerarPdfDesdePptx(archivoBytes, variables, firmaBytes, firmaX, firmaY, firmaAncho, firmaAlto);
 
         if (mimeType == MimePdf)
             return pdfGenerator.GenerarPdfDesdePdf(archivoBytes, variables);
@@ -29,8 +30,15 @@ public class CertificadoPdfService(PdfGeneratorService pdfGenerator) : ICertific
     /// <summary>
     /// Devuelve el PPTX con las variables aplicadas (sin convertir).
     /// </summary>
-    public byte[] GenerarPptxAplicado(byte[] archivoBytes, Dictionary<string, string> variables)
+    public byte[] GenerarPptxAplicado(byte[] archivoBytes, Dictionary<string, string> variables,
+        byte[]? firmaBytes = null, double? firmaX = null, double? firmaY = null, double? firmaAncho = null, double? firmaAlto = null)
     {
-        return pdfGenerator.GenerarPptxAplicado(archivoBytes, variables);
+        return pdfGenerator.GenerarPptxAplicado(archivoBytes, variables, firmaBytes, firmaX, firmaY, firmaAncho, firmaAlto);
+    }
+
+    public byte[]? GenerarPreviewCertificado(byte[] archivoBytes)
+    {
+        return pdfGenerator.GenerarPreviewCertificado(archivoBytes);
     }
 }
+

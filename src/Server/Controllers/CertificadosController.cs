@@ -164,13 +164,28 @@ public class CertificadosController(
 
             if (mimeType == "application/vnd.openxmlformats-officedocument.presentationml.presentation")
             {
-                var pptx = pdfService.GenerarPptxAplicado(cap.ArchivoDocxCertificado, vars);
+                var pptx = pdfService.GenerarPptxAplicado(
+                    cap.ArchivoDocxCertificado,
+                    vars,
+                    cap.ArchivoFirmaCertificado,
+                    cap.FirmaX,
+                    cap.FirmaY,
+                    cap.FirmaAncho,
+                    cap.FirmaAlto);
                 return File(pptx, "application/vnd.openxmlformats-officedocument.presentationml.presentation", $"certificado_{id}.pptx");
             }
 
             if (mimeType == "application/pdf")
             {
-                var pdf = pdfService.GenerarPdf(cap.ArchivoDocxCertificado, vars, mimeType);
+                var pdf = pdfService.GenerarPdf(
+                    cap.ArchivoDocxCertificado,
+                    vars,
+                    mimeType,
+                    cap.ArchivoFirmaCertificado,
+                    cap.FirmaX,
+                    cap.FirmaY,
+                    cap.FirmaAncho,
+                    cap.FirmaAlto);
                 return File(pdf, "application/pdf", $"certificado_{id}.pdf");
             }
 
@@ -244,7 +259,15 @@ public class CertificadosController(
                     ?? "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
                 // Usa la plantilla cargada para preservar el diseño del certificado.
-                pdf = certificadoPdfService.GenerarPdf(cap.ArchivoDocxCertificado, variables, mimeType);
+                pdf = certificadoPdfService.GenerarPdf(
+                    cap.ArchivoDocxCertificado,
+                    variables,
+                    mimeType,
+                    cap.ArchivoFirmaCertificado,
+                    cap.FirmaX,
+                    cap.FirmaY,
+                    cap.FirmaAncho,
+                    cap.FirmaAlto);
             }
             else
             {

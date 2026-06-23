@@ -739,9 +739,16 @@ public class PdfGeneratorService(LibreOfficeConverterService libreOffice)
     /// <summary>
     /// Aplica variables a un .pptx y convierte a PDF usando LibreOffice.
     /// </summary>
-    public byte[] GenerarPdfDesdePptx(byte[] pptxBytes, Dictionary<string, string> variables)
+    public byte[] GenerarPdfDesdePptx(
+        byte[] pptxBytes, 
+        Dictionary<string, string> variables,
+        byte[]? firmaBytes = null, 
+        double? firmaX = null, 
+        double? firmaY = null, 
+        double? firmaAncho = null, 
+        double? firmaAlto = null)
     {
-        var pptxConVariables = AplicarVariablesEnPptx(pptxBytes, variables);
+        var pptxConVariables = AplicarVariablesEnPptx(pptxBytes, variables, firmaBytes, firmaX, firmaY, firmaAncho, firmaAlto);
 
         if (_libreOffice.EstaDisponible())
         {
@@ -756,14 +763,33 @@ public class PdfGeneratorService(LibreOfficeConverterService libreOffice)
 
     /// <summary>
     /// Aplica las variables a un PPTX y devuelve el PPTX resultante (sin convertir a PDF).
-    /// Útil para entregar al usuario y dejar que PowerPoint exporte a PDF.
     /// </summary>
-    public byte[] GenerarPptxAplicado(byte[] pptxBytes, Dictionary<string, string> variables)
+    public byte[] GenerarPptxAplicado(
+        byte[] pptxBytes, 
+        Dictionary<string, string> variables,
+        byte[]? firmaBytes = null, 
+        double? firmaX = null, 
+        double? firmaY = null, 
+        double? firmaAncho = null, 
+        double? firmaAlto = null)
     {
-        return AplicarVariablesEnPptx(pptxBytes, variables);
+        return AplicarVariablesEnPptx(pptxBytes, variables, firmaBytes, firmaX, firmaY, firmaAncho, firmaAlto);
     }
 
-    private static byte[] AplicarVariablesEnPptx(byte[] pptxBytes, Dictionary<string, string> variables)
+    public byte[]? GenerarPreviewCertificado(byte[] pptxBytes)
+    {
+        return _libreOffice.ConvertirPptxAPng(pptxBytes);
+    }
+
+
+    private static byte[] AplicarVariablesEnPptx(
+        byte[] pptxBytes, 
+        Dictionary<string, string> variables,
+        byte[]? firmaBytes = null, 
+        double? firmaX = null, 
+        double? firmaY = null, 
+        double? firmaAncho = null, 
+        double? firmaAlto = null)
     {
         using var ms = new MemoryStream();
         ms.Write(pptxBytes, 0, pptxBytes.Length);
@@ -795,9 +821,95 @@ public class PdfGeneratorService(LibreOfficeConverterService libreOffice)
 
                 slide.Save();
             }
+
+            // Insertar la firma digital si se proporciona
+            var firstSlidePart = presentationPart.SlideParts.FirstOrDefault();
+            if (firstSlidePart is not null && firmaBytes is not null && firmaBytes.Length > 0 && firmaX.HasValue && firmaY.HasValue && firmaAncho.HasValue && firmaAlto.HasValue)
+            {
+                long slideWidthEmu = 9144000;
+                long slideHeightEmu = 6858000;
+                if (presentationPart.Presentation?.SlideSize is not null)
+                {
+                    slideWidthEmu = presentationPart.Presentation.SlideSize.Cx?.Value ?? slideWidthEmu;
+                    slideHeightEmu = presentationPart.Presentation.SlideSize.Cy?.Value ?? slideHeightEmu;
+                }
+
+                InsertarFirmaEnSlide(firstSlidePart, firmaBytes, firmaX.Value, firmaY.Value, firmaAncho.Value, firmaAlto.Value, slideWidthEmu, slideHeightEmu);
+                firstSlidePart.Slide.Save();
+            }
         }
 
         return ms.ToArray();
+    }
+
+    private static void InsertarFirmaEnSlide(
+        DocumentFormat.OpenXml.Packaging.SlidePart slidePart,
+        byte[] firmaBytes,
+        double xPct,
+        double yPct,
+        double anchoPct,
+        double altoPct,
+        long slideWidthEmu,
+        long slideHeightEmu)
+    {
+        var imagePart = slidePart.AddImagePart(DocumentFormat.OpenXml.Packaging.ImagePartType.Png);
+        using (var stream = new MemoryStream(firmaBytes))
+        {
+            imagePart.FeedData(stream);
+        }
+
+        var relationshipId = slidePart.GetIdOfPart(imagePart);
+
+        long x = (long)(slideWidthEmu * (xPct / 100.0));
+        long y = (long)(slideHeightEmu * (yPct / 100.0));
+        long cx = (long)(slideWidthEmu * (anchoPct / 100.0));
+        long cy = (long)(slideHeightEmu * (altoPct / 100.0));
+
+        var slide = slidePart.Slide;
+        var shapeTree = slide.CommonSlideData?.ShapeTree;
+        if (shapeTree == null) return;
+
+        uint maxId = 1;
+        var cNvPrs = shapeTree.Descendants<DocumentFormat.OpenXml.Presentation.NonVisualDrawingProperties>().ToList();
+        if (cNvPrs.Any())
+        {
+            maxId = cNvPrs.Max(p => p.Id?.Value ?? 1) + 1;
+        }
+
+        var picture = new DocumentFormat.OpenXml.Presentation.Picture(
+            new DocumentFormat.OpenXml.Presentation.NonVisualPictureProperties(
+                new DocumentFormat.OpenXml.Presentation.NonVisualDrawingProperties()
+                {
+                    Id = maxId,
+                    Name = $"Signature {maxId}"
+                },
+                new DocumentFormat.OpenXml.Presentation.NonVisualPictureDrawingProperties(
+                    new DocumentFormat.OpenXml.Drawing.PictureLocks() { NoChangeAspect = true }
+                ),
+                new DocumentFormat.OpenXml.Presentation.ApplicationNonVisualDrawingProperties()
+            ),
+            new DocumentFormat.OpenXml.Presentation.BlipFill(
+                new DocumentFormat.OpenXml.Drawing.Blip()
+                {
+                    Embed = relationshipId,
+                    CompressionState = DocumentFormat.OpenXml.Drawing.BlipCompressionValues.Print
+                },
+                new DocumentFormat.OpenXml.Drawing.Stretch(
+                    new DocumentFormat.OpenXml.Drawing.FillRectangle()
+                )
+            ),
+            new DocumentFormat.OpenXml.Presentation.ShapeProperties(
+                new DocumentFormat.OpenXml.Drawing.Transform2D(
+                    new DocumentFormat.OpenXml.Drawing.Offset() { X = x, Y = y },
+                    new DocumentFormat.OpenXml.Drawing.Extents() { Cx = cx, Cy = cy }
+                ),
+                new DocumentFormat.OpenXml.Drawing.PresetGeometry(
+                    new DocumentFormat.OpenXml.Drawing.AdjustValueList()
+                ) { Preset = DocumentFormat.OpenXml.Drawing.ShapeTypeValues.Rectangle }
+            )
+        );
+
+        shapeTree.AppendChild(picture);
     }
 
     private static List<(int Start, int Length, string Replacement)> ObtenerReemplazos(

@@ -29,4 +29,23 @@ public class ConfigurarCertificadoDto
 
     /// <summary>ID de otra capacitación desde la cual copiar la plantilla y nombre del certificado.</summary>
     public int? CopiarPlantillaDesdeId { get; set; }
+
+    /// <summary>Archivo PNG de la firma en formato Base64.</summary>
+    public string? FirmaImagenBase64 { get; set; }
+
+    /// <summary>Coordenada X de la firma en porcentaje (0-100).</summary>
+    public double? FirmaX { get; set; }
+
+    /// <summary>Coordenada Y de la firma en porcentaje (0-100).</summary>
+    public double? FirmaY { get; set; }
+
+    /// <summary>Ancho de la firma en porcentaje (0-100).</summary>
+    public double? FirmaAncho { get; set; }
+
+    /// <summary>Alto de la firma en porcentaje (0-100).</summary>
+    public double? FirmaAlto { get; set; }
+
+    /// <summary>Indica si se desea eliminar la firma digital actual.</summary>
+    public bool EliminarFirma { get; set; } = false;
 }
+

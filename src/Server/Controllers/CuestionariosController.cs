@@ -24,7 +24,7 @@ public class CuestionariosController(
         if (await currentUser.EsAdminAsync())
         {
             var r = await service.GetByCapacitacionAsync(capacitacionId);
-            return r is null ? NotFound() : Ok(r);
+            return r is null ? NoContent() : Ok(r);
         }
 
         var miId = await currentUser.GetColaboradorIdAsync();
@@ -32,7 +32,7 @@ public class CuestionariosController(
         if (!await inscripcionService.ExisteInscripcionAsync(capacitacionId, miId.Value)) return Forbid();
 
         var result = await service.GetByCapacitacionAsync(capacitacionId);
-        return result is null ? NotFound() : Ok(result);
+        return result is null ? NoContent() : Ok(result);
     }
 
     [HttpPost]

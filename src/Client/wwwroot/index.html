@@ -210,6 +210,143 @@
                 return false;
             }
         };
+
+        window.initSignatureEditor = function(containerId, signatureId, handleId, dotNetHelper) {
+            const container = document.getElementById(containerId);
+            const signature = document.getElementById(signatureId);
+            const handle = document.getElementById(handleId);
+            if (!container || !signature) return;
+
+            // Evitar doble inicialización si ya está configurado
+            if (signature.dataset.signatureInitialized === 'true') {
+                signature.dotNetHelper = dotNetHelper;
+                return;
+            }
+            signature.dataset.signatureInitialized = 'true';
+            signature.dotNetHelper = dotNetHelper;
+
+            let isDragging = false;
+            let isResizing = false;
+            let startX, startY;
+            let startLeft, startTop;
+            let startWidth, startHeight;
+            let finalX = parseFloat(signature.style.left) || 0;
+            let finalY = parseFloat(signature.style.top) || 0;
+            let finalW = parseFloat(signature.style.width) || 20;
+            let finalH = parseFloat(signature.style.height) || 15;
+
+            signature.addEventListener('dragstart', (e) => e.preventDefault());
+
+            const onMouseDownDrag = (e) => {
+                if (e.target === handle) return;
+                isDragging = true;
+                startX = e.clientX;
+                startY = e.clientY;
+                startLeft = parseFloat(signature.style.left) || 0;
+                startTop = parseFloat(signature.style.top) || 0;
+                document.addEventListener('mousemove', onMouseMoveDrag);
+                document.addEventListener('mouseup', onMouseUpDrag);
+            };
+
+            const onMouseMoveDrag = (e) => {
+                if (!isDragging) return;
+                const deltaX = e.clientX - startX;
+                const deltaY = e.clientY - startY;
+
+                const containerRect = container.getBoundingClientRect();
+                const pctDeltaX = (deltaX / containerRect.width) * 100;
+                const pctDeltaY = (deltaY / containerRect.height) * 100;
+
+                let newX = startLeft + pctDeltaX;
+                let newY = startTop + pctDeltaY;
+
+                const currentWidth = parseFloat(signature.style.width) || 20;
+                const currentHeight = parseFloat(signature.style.height) || 15;
+                newX = Math.max(0, Math.min(100 - currentWidth, newX));
+                newY = Math.max(0, Math.min(100 - currentHeight, newY));
+
+                signature.style.left = newX + '%';
+                signature.style.top = newY + '%';
+                finalX = newX;
+                finalY = newY;
+            };
+
+            const onMouseUpDrag = () => {
+                isDragging = false;
+                document.removeEventListener('mousemove', onMouseMoveDrag);
+                document.removeEventListener('mouseup', onMouseUpDrag);
+                
+                // Notificar a C# las coordenadas finales al terminar el arrastre
+                if (signature.dotNetHelper) {
+                    signature.dotNetHelper.invokeMethodAsync('SetCoords', Math.round(finalX, 2), Math.round(finalY, 2));
+                }
+            };
+
+            const onMouseDownResize = (e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                isResizing = true;
+                startX = e.clientX;
+                startY = e.clientY;
+                const signatureRect = signature.getBoundingClientRect();
+                const containerRect = container.getBoundingClientRect();
+                startWidth = (signatureRect.width / containerRect.width) * 100;
+                startHeight = (signatureRect.height / containerRect.height) * 100;
+                document.addEventListener('mousemove', onMouseMoveResize);
+                document.addEventListener('mouseup', onMouseUpResize);
+            };
+
+            const onMouseMoveResize = (e) => {
+                if (!isResizing) return;
+                const deltaX = e.clientX - startX;
+                const deltaY = e.clientY - startY;
+
+                const containerRect = container.getBoundingClientRect();
+                const pctDeltaX = (deltaX / containerRect.width) * 100;
+                const pctDeltaY = (deltaY / containerRect.height) * 100;
+
+                let newW = startWidth + pctDeltaX;
+                let newH = startHeight + pctDeltaY;
+
+                newW = Math.max(3, Math.min(60, newW));
+                newH = Math.max(3, Math.min(60, newH));
+
+                const currentLeft = parseFloat(signature.style.left) || 0;
+                const currentTop = parseFloat(signature.style.top) || 0;
+                if (currentLeft + newW > 100) newW = 100 - currentLeft;
+                if (currentTop + newH > 100) newH = 100 - currentTop;
+
+                signature.style.width = newW + '%';
+                signature.style.height = newH + '%';
+                finalW = newW;
+                finalH = newH;
+            };
+
+            const onMouseUpResize = () => {
+                isResizing = false;
+                document.removeEventListener('mousemove', onMouseMoveResize);
+                document.removeEventListener('mouseup', onMouseUpResize);
+                
+                // Notificar a C# las dimensiones finales al terminar la redimensión
+                if (signature.dotNetHelper) {
+                    signature.dotNetHelper.invokeMethodAsync('SetSize', Math.round(finalW, 2), Math.round(finalH, 2));
+                }
+            };
+
+            signature.addEventListener('mousedown', onMouseDownDrag);
+            if (handle) {
+                handle.addEventListener('mousedown', onMouseDownResize);
+            }
+        };
+        
+        // Helper para obtener el rectángulo de dimensiones del contenedor
+        window.getContainerBounds = function(id) {
+            const el = document.getElementById(id);
+            if (!el) return null;
+            const r = el.getBoundingClientRect();
+            return { width: r.width, height: r.height };
+        };
+
     </script>
 </body>
 

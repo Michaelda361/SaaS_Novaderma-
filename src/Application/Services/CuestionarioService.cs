@@ -266,7 +266,16 @@ public class CuestionarioService(
                                     var mimeType = capacitacion.TipoArchivoCertificado
                                         ?? "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
-                                    pdfBytes = certificadoPdfService.GenerarPdf(capacitacion.ArchivoDocxCertificado, variables, mimeType);
+                                    pdfBytes = certificadoPdfService.GenerarPdf(
+                                        capacitacion.ArchivoDocxCertificado,
+                                        variables,
+                                        mimeType,
+                                        capacitacion.ArchivoFirmaCertificado,
+                                        capacitacion.FirmaX,
+                                        capacitacion.FirmaY,
+                                        capacitacion.FirmaAncho,
+                                        capacitacion.FirmaAlto);
+
                                 }
                                 else
                                 {

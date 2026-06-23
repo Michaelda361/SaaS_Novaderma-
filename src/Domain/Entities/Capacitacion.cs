@@ -1,4 +1,4 @@
-﻿using System.Text.Json.Serialization;
+using System.Text.Json.Serialization;
 using TalentManagement.Domain.Common;
 
 namespace TalentManagement.Domain.Entities;
@@ -39,6 +39,26 @@ public class Capacitacion : BaseEntity
 
     /// <summary>Tipo MIME del archivo de plantilla: DOCX o PPTX. Null = DOCX (legacy).</summary>
     public string? TipoArchivoCertificado { get; set; }
+
+    /// <summary>Archivo PNG de la firma digital para los certificados.</summary>
+    public byte[]? ArchivoFirmaCertificado { get; set; }
+
+    /// <summary>Imagen de vista previa del certificado (primer slide de la plantilla convertido a PNG).</summary>
+    public byte[]? ArchivoPreviewCertificado { get; set; }
+
+
+    /// <summary>Coordenada X (izquierda) de la firma en porcentaje respecto al ancho (0-100).</summary>
+    public double? FirmaX { get; set; }
+
+    /// <summary>Coordenada Y (superior) de la firma en porcentaje respecto al alto (0-100).</summary>
+    public double? FirmaY { get; set; }
+
+    /// <summary>Ancho relativo de la firma en porcentaje respecto al ancho (0-100).</summary>
+    public double? FirmaAncho { get; set; }
+
+    /// <summary>Alto relativo de la firma en porcentaje respecto al alto (0-100).</summary>
+    public double? FirmaAlto { get; set; }
+
 
 
     /// <summary>

@@ -1,4 +1,4 @@
-﻿namespace TalentManagement.Application.Interfaces;
+namespace TalentManagement.Application.Interfaces;
 
 /// <summary>
 /// Genera el PDF de un certificado a partir de una plantilla DOCX o PPTX con variables resueltas.
@@ -14,10 +14,18 @@ public interface ICertificadoPdfService
     /// <param name="variables">Variables a reemplazar en el documento.</param>
     /// <param name="mimeType">MIME del archivo. Default DOCX para compatibilidad.</param>
     byte[] GenerarPdf(byte[] archivoBytes, Dictionary<string, string> variables,
-        string mimeType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+        string mimeType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        byte[]? firmaBytes = null, double? firmaX = null, double? firmaY = null, double? firmaAncho = null, double? firmaAlto = null);
 
     /// <summary>
     /// Aplica las variables a un archivo PPTX y devuelve el PPTX resultante (no convertido).
     /// </summary>
-    byte[] GenerarPptxAplicado(byte[] archivoBytes, Dictionary<string, string> variables);
+    byte[] GenerarPptxAplicado(byte[] archivoBytes, Dictionary<string, string> variables,
+        byte[]? firmaBytes = null, double? firmaX = null, double? firmaY = null, double? firmaAncho = null, double? firmaAlto = null);
+
+    /// <summary>
+    /// Genera la vista previa en formato de imagen PNG de la primera diapositiva del certificado.
+    /// </summary>
+    byte[]? GenerarPreviewCertificado(byte[] archivoBytes);
 }
+

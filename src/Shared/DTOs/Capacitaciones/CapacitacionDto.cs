@@ -1,4 +1,4 @@
-﻿namespace TalentManagement.Shared.DTOs.Capacitaciones;
+namespace TalentManagement.Shared.DTOs.Capacitaciones;
 
 public class CapacitacionDto
 {
@@ -30,5 +30,25 @@ public class CapacitacionDto
     /// <summary>True si está publicada y visible para colaboradores. False = Borrador.</summary>
     public bool Publicada { get; set; }
 
+    /// <summary>Archivo PNG de la firma en formato Base64.</summary>
+    public string? FirmaImagenBase64 { get; set; }
+
+    /// <summary>Imagen de vista previa del certificado en formato Base64.</summary>
+    public string? PreviewCertificadoBase64 { get; set; }
+
+
+    /// <summary>Coordenada X de la firma en porcentaje (0-100).</summary>
+    public double? FirmaX { get; set; }
+
+    /// <summary>Coordenada Y de la firma en porcentaje (0-100).</summary>
+    public double? FirmaY { get; set; }
+
+    /// <summary>Ancho de la firma en porcentaje (0-100).</summary>
+    public double? FirmaAncho { get; set; }
+
+    /// <summary>Alto de la firma en porcentaje (0-100).</summary>
+    public double? FirmaAlto { get; set; }
+
     public string TipoAsignacion => AreaId.HasValue ? "Área" : ColaboradorId.HasValue ? "Colaborador" : "General";
 }
+

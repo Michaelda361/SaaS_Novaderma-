@@ -1,6 +1,8 @@
 @page "/capacitaciones/{Id:int}"
 @attribute [PageTitle("Detalle de capacitación")]
 @attribute [Authorize]
+@implements IDisposable
+
 @inject InscripcionApiService InscripcionService
 @inject CapacitacionApiService CapacitacionService
 @inject ColaboradorApiService ColaboradorService
@@ -532,15 +534,15 @@
 
                     <div>
                         <label style="font-size:.85rem;font-weight:500;">Presentación PowerPoint (.pptx)</label>
-                        @if (capacitacion.TienePlantillaDocx && string.IsNullOrWhiteSpace(certForm.ArchivoDocxBase64) && !certForm.EliminarDocx)
+                        @if (capacitacion?.TienePlantillaDocx == true && string.IsNullOrWhiteSpace(certForm.ArchivoDocxBase64) && !certForm.EliminarDocx)
                         {
                             <div style="margin-top:.35rem;display:flex;align-items:center;gap:.75rem;">
                                 <span class="badge badge-success">✅ Plantilla cargada</span>
                                 <button type="button" class="btn btn-ghost btn-sm"
-                                        @onclick="() => { certForm.EliminarDocx = true; certForm.CopiarPlantillaDesdeId = null; copiandoDesdeNombre = null; nombreArchivoSeleccionado = null; }">Quitar</button>
+                                        @onclick="() => { certForm.EliminarDocx = true; certForm.CopiarPlantillaDesdeId = null; copiandoDesdeNombre = null; nombreArchivoSeleccionado = null; previewCertificadoBase64Temp = null; }">Quitar</button>
                             </div>
                         }
-                        @if (!capacitacion.TienePlantillaDocx || certForm.EliminarDocx)
+                        @if (capacitacion?.TienePlantillaDocx != true || certForm.EliminarDocx)
                         {
                             <div style="margin-top:.5rem; display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
                                 <label class="btn btn-outline-primary" style="display:inline-flex;align-items:center;gap:.5rem;cursor:pointer;margin:0;font-size:0.85rem;font-weight:500;padding:.4rem .8rem;border: 1px dashed var(--primary);border-radius: var(--radius);transition: all 0.2s ease;">
@@ -589,7 +591,92 @@
                             </div>
                         }
                     </div>
+
+                    @if ((capacitacion?.TienePlantillaDocx == true && !certForm.EliminarDocx) || !string.IsNullOrWhiteSpace(certForm.ArchivoDocxBase64) || certForm.CopiarPlantillaDesdeId.HasValue)
+                    {
+                        <div style="border-top: 1px dashed var(--border); padding-top: 1.25rem; margin-top: 0.5rem; display: flex; flex-direction: column; gap: 1rem;">
+                            <div>
+                                <label style="font-size:.85rem;font-weight:600;display:block;margin-bottom:0.25rem;">Firma Digital en Certificado (Opcional - Formato PNG)</label>
+                                <span class="text-xs text-muted" style="display:block;margin-bottom:0.5rem;">
+                                    Sube una imagen de firma con fondo transparente (.png) para que aparezca en el certificado.
+                                </span>
+
+                                <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+                                    @if (!string.IsNullOrWhiteSpace(certForm.FirmaImagenBase64) && !certForm.EliminarFirma)
+                                    {
+                                        <span class="badge badge-success">✅ Firma cargada</span>
+                                        <button type="button" class="btn btn-outline-danger btn-sm"
+                                                @onclick="() => { certForm.EliminarFirma = true; certForm.FirmaImagenBase64 = null; }">
+                                            Quitar Firma
+                                        </button>
+                                    }
+                                    else
+                                    {
+                                        <label class="btn btn-outline-secondary" style="display:inline-flex;align-items:center;gap:.5rem;cursor:pointer;margin:0;font-size:0.85rem;font-weight:500;padding:.4rem .8rem;border: 1px dashed var(--border);border-radius: var(--radius);transition: all 0.2s ease;">
+                                            <span>✍️</span> Seleccionar firma .png
+                                            <InputFile OnChange="OnFirmaSeleccionada" accept=".png" style="display:none;" />
+                                        </label>
+                                    }
+                                </div>
+                            </div>
+
+                            <div style="display: flex; flex-direction: column; gap: 0.75rem; background: var(--surface); padding: 1rem; border-radius: 8px; border: 1px solid var(--border);">
+                                <div style="display:flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
+                                    @if (!string.IsNullOrWhiteSpace(certForm.FirmaImagenBase64) && !certForm.EliminarFirma)
+                                    {
+                                        <span style="font-size: 0.85rem; font-weight: 500;">Arrastra la firma para moverla. Usa el círculo azul inferior derecho para ajustar su tamaño.</span>
+                                        <button type="button" class="btn btn-ghost btn-sm" @onclick="RestablecerFirma" style="font-size:0.75rem;">Restablecer</button>
+                                    }
+                                    else
+                                    {
+                                        <span style="font-size: 0.85rem; font-weight: 500; color: var(--text-muted);">Vista previa del certificado (16:9)</span>
+                                    }
+                                </div>
+                                
+                                <!-- Canvas de Vista Previa 16:9 con fondo del Certificado -->
+                                <div id="firma-canvas" style="width: 100%; aspect-ratio: 16 / 9; background-color: #f1f5f9; @(string.IsNullOrWhiteSpace(previewCertificadoBase64Temp) ? "border: 2px dashed #ccd5e0;" : "background-image: url('data:image/png;base64," + previewCertificadoBase64Temp + "'); background-size: contain; background-repeat: no-repeat; background-position: center; border: 1px solid var(--border);") border-radius: 6px; position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; user-select: none; box-shadow: inset 0 2px 4px rgba(0,0,0,0.06);">
+                                    
+                                    @if (string.IsNullOrWhiteSpace(previewCertificadoBase64Temp))
+                                    {
+                                        @if (!string.IsNullOrWhiteSpace(certForm.ArchivoDocxBase64))
+                                        {
+                                            <span style="color: #4f46e5; font-size: 0.8rem; font-weight: 500; pointer-events: none; text-align: center; line-height: 1.4; padding: 1rem;">
+                                                📁 NUEVA PLANTILLA SUBIDA<br />
+                                                <span style="font-size: 0.7rem; color: #6366f1;">Haz clic en "Guardar" para procesar la plantilla y generar la vista previa.</span>
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span style="color: #94a3b8; font-size: 0.8rem; font-weight: 500; pointer-events: none; text-align: center; line-height: 1.4;">
+                                                VISTA PREVIA DEL CERTIFICADO (16:9)<br />
+                                                <span style="font-size: 0.7rem; color: #cbd5e1;">(Sube o guarda la plantilla para ver el fondo)</span>
+                                            </span>
+                                        }
+                                    }
+
+                                    <!-- Contenedor de Firma Arrastrable y Redimensionable -->
+                                    @if (!string.IsNullOrWhiteSpace(certForm.FirmaImagenBase64) && !certForm.EliminarFirma)
+                                    {
+                                        <div id="firma-imagen" style="position: absolute; left: @(certForm.FirmaX)%; top: @(certForm.FirmaY)%; width: @(certForm.FirmaAncho)%; height: @(certForm.FirmaAlto)%; border: 1px dashed var(--primary); background: rgba(13, 110, 253, 0.04); display: flex; align-items: center; justify-content: center; cursor: move; box-sizing: border-box; z-index: 5;">
+                                            <img src="data:image/png;base64,@(certForm.FirmaImagenBase64.Contains(",") ? certForm.FirmaImagenBase64.Substring(certForm.FirmaImagenBase64.IndexOf(",") + 1) : certForm.FirmaImagenBase64)" 
+                                                 style="max-width: 100%; max-height: 100%; object-fit: contain; pointer-events: none;" />
+                                            
+                                            <!-- Handle de Redimensionamiento -->
+                                            <div id="firma-handle" style="position: absolute; right: -6px; bottom: -6px; width: 12px; height: 12px; background: var(--primary); cursor: se-resize; border-radius: 50%; border: 2px solid white; box-shadow: 0 1px 3px rgba(0,0,0,0.3); z-index: 10;"></div>
+                                        </div>
+                                    }
+                                </div>
+                                @if (!string.IsNullOrWhiteSpace(certForm.FirmaImagenBase64) && !certForm.EliminarFirma)
+                                {
+                                    <div class="text-xs text-muted" style="text-align: right;">
+                                        Posición: X: @certForm.FirmaX%, Y: @certForm.FirmaY% · Tamaño: @certForm.FirmaAncho% x @certForm.FirmaAlto%
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    }
                 </div>
+
 
                 <!-- Columna Derecha: Variables Disponibles -->
                 <div style="position: sticky; top: 0; display: flex; flex-direction: column; gap: 1rem;">
@@ -1302,6 +1389,7 @@
     private string? nombreArchivoSeleccionado = null;
     private string? copiandoDesdeNombre = null;
     private List<ColaboradorCampoDto> camposFicha = [];
+    private string? previewCertificadoBase64Temp = null;
 
     private static readonly Dictionary<string, string> VariablesListadoFriendly = new()
     {
@@ -1346,11 +1434,18 @@
         certForm = new ConfigurarCertificadoDto
         {
             EmiteCertificado = capacitacion?.EmiteCertificado ?? false,
-            PlantillaNombreCertificado = capacitacion?.PlantillaNombreCertificado
+            PlantillaNombreCertificado = capacitacion?.PlantillaNombreCertificado,
+            FirmaImagenBase64 = capacitacion?.FirmaImagenBase64,
+            FirmaX = capacitacion?.FirmaX ?? 70,
+            FirmaY = capacitacion?.FirmaY ?? 70,
+            FirmaAncho = capacitacion?.FirmaAncho ?? 20,
+            FirmaAlto = capacitacion?.FirmaAlto ?? 15,
+            EliminarFirma = false
         };
         tipoCertificado = "pptx";
         nombreArchivoSeleccionado = null;
         copiandoDesdeNombre = null;
+        previewCertificadoBase64Temp = capacitacion?.PreviewCertificadoBase64;
         editandoCertificado = true;
         await CargarCapacitacionesConPlantilla();
     }
@@ -1393,6 +1488,7 @@
         nombreArchivoSeleccionado = file.Name;
         certForm.CopiarPlantillaDesdeId = null;
         copiandoDesdeNombre = null;
+        previewCertificadoBase64Temp = null;
 
         using var ms = new System.IO.MemoryStream();
         await file.OpenReadStream(5 * 1024 * 1024).CopyToAsync(ms);
@@ -1419,12 +1515,35 @@
                 certForm.TipoArchivoCertificado = null;
                 certForm.EliminarDocx = false;
                 nombreArchivoSeleccionado = null;
+                
+                // Copiar la vista previa inmediatamente para que se visualice
+                previewCertificadoBase64Temp = selectedCap.PreviewCertificadoBase64;
+                
+                // Copiar también la firma y sus coordenadas si existen
+                if (!string.IsNullOrWhiteSpace(selectedCap.FirmaImagenBase64))
+                {
+                    certForm.FirmaImagenBase64 = selectedCap.FirmaImagenBase64;
+                    certForm.FirmaX = selectedCap.FirmaX ?? 70;
+                    certForm.FirmaY = selectedCap.FirmaY ?? 70;
+                    certForm.FirmaAncho = selectedCap.FirmaAncho ?? 20;
+                    certForm.FirmaAlto = selectedCap.FirmaAlto ?? 15;
+                    certForm.EliminarFirma = false;
+                }
             }
         }
         else
         {
             certForm.CopiarPlantillaDesdeId = null;
             copiandoDesdeNombre = null;
+            
+            // Restaurar la vista previa y firma originales al deseleccionar
+            previewCertificadoBase64Temp = capacitacion?.PreviewCertificadoBase64;
+            certForm.FirmaImagenBase64 = capacitacion?.FirmaImagenBase64;
+            certForm.FirmaX = capacitacion?.FirmaX ?? 70;
+            certForm.FirmaY = capacitacion?.FirmaY ?? 70;
+            certForm.FirmaAncho = capacitacion?.FirmaAncho ?? 20;
+            certForm.FirmaAlto = capacitacion?.FirmaAlto ?? 15;
+            certForm.EliminarFirma = false;
         }
     }
 
@@ -1432,7 +1551,7 @@
     {
         guardandoCertificado = true;
         
-        bool tienePlantilla = (capacitacion.TienePlantillaDocx && !certForm.EliminarDocx) 
+        bool tienePlantilla = (capacitacion?.TienePlantillaDocx == true && !certForm.EliminarDocx) 
             || !string.IsNullOrWhiteSpace(certForm.ArchivoDocxBase64)
             || certForm.CopiarPlantillaDesdeId.HasValue;
             
@@ -1444,9 +1563,87 @@
         if (result is not null)
         {
             capacitacion = result;
+            previewCertificadoBase64Temp = result.PreviewCertificadoBase64;
             editandoCertificado = false;
             await toast.Show("Configuración de certificado guardada.");
         }
         else await toast.Show("Error al guardar la configuración.", "error");
     }
+
+    private async Task OnFirmaSeleccionada(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        var expectedExt = ".png";
+
+        if (!file.Name.EndsWith(expectedExt, StringComparison.OrdinalIgnoreCase))
+        {
+            await toast.Show($"Solo se aceptan archivos {expectedExt}", "warning");
+            return;
+        }
+        if (file.Size > 2 * 1024 * 1024)
+        {
+            await toast.Show("La firma no puede superar 2 MB.", "warning");
+            return;
+        }
+
+        using var ms = new System.IO.MemoryStream();
+        await file.OpenReadStream(2 * 1024 * 1024).CopyToAsync(ms);
+        certForm.FirmaImagenBase64 = Convert.ToBase64String(ms.ToArray());
+        certForm.EliminarFirma = false;
+        
+        // Asignar valores por defecto si no existen
+        certForm.FirmaX ??= 70;
+        certForm.FirmaY ??= 70;
+        certForm.FirmaAncho ??= 20;
+        certForm.FirmaAlto ??= 15;
+    }
+
+    private void RestablecerFirma()
+    {
+        certForm.FirmaX = 70;
+        certForm.FirmaY = 70;
+        certForm.FirmaAncho = 20;
+        certForm.FirmaAlto = 15;
+    }
+
+    private DotNetObjectReference<CapacitacionDetalle>? objectRef;
+
+    [JSInvokable]
+    public void SetCoords(double x, double y)
+    {
+        certForm.FirmaX = Math.Round(x, 2);
+        certForm.FirmaY = Math.Round(y, 2);
+        StateHasChanged();
+    }
+
+    [JSInvokable]
+    public void SetSize(double w, double h)
+    {
+        certForm.FirmaAncho = Math.Round(w, 2);
+        certForm.FirmaAlto = Math.Round(h, 2);
+        StateHasChanged();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            objectRef = DotNetObjectReference.Create(this);
+        }
+
+        if (editandoCertificado && !string.IsNullOrWhiteSpace(certForm.FirmaImagenBase64) && !certForm.EliminarFirma)
+        {
+            try
+            {
+                await JS.InvokeVoidAsync("initSignatureEditor", "firma-canvas", "firma-imagen", "firma-handle", objectRef);
+            }
+            catch { }
+        }
+    }
+
+    public void Dispose()
+    {
+        objectRef?.Dispose();
+    }
 }
+
