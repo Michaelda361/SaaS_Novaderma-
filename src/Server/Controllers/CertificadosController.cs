@@ -1,7 +1,9 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using TalentManagement.Application.Interfaces;
 using TalentManagement.Application.Services;
+using TalentManagement.Domain.Entities;
+using TalentManagement.Domain.Enums;
 using TalentManagement.Shared.DTOs.Certificados;
 
 namespace TalentManagement.Server.Controllers;
@@ -106,7 +108,9 @@ public class CertificadosController(
     public async Task<IActionResult> DescargarPptxAplicado(int id,
         [FromServices] TalentManagement.Application.Interfaces.ICertificadoPdfService pdfService,
         [FromServices] TalentManagement.Application.Interfaces.ICapacitacionRepository capRepo,
-        [FromServices] TalentManagement.Application.Interfaces.IColaboradorRepository colRepo)
+        [FromServices] TalentManagement.Application.Interfaces.IColaboradorRepository colRepo,
+        [FromServices] TalentManagement.Application.Interfaces.IInscripcionRepository inscRepo,
+        [FromServices] TalentManagement.Application.Interfaces.ICuestionarioRepository questRepo)
     {
         try
         {
@@ -126,15 +130,34 @@ public class CertificadosController(
                 return BadRequest(new { message = "La capacitacion no tiene plantilla DOCX/PPTX configurada." });
 
             var col = await colRepo.GetByIdAsync(cert.ColaboradorId);
-            var vars = new Dictionary<string, string>
+            string puntajeStr = string.Empty;
+            try
             {
-                ["{{nombre_completo}}"] = col is not null ? $"{col.Nombre} {col.Apellido}" : "",
-                ["{{cargo}}"]           = col?.Cargo?.Nombre ?? "",
-                ["{{area}}"]            = col?.Area?.Nombre ?? "",
-                ["{{capacitacion}}"]    = cap.Nombre,
-                ["{{fecha_emision}}"]   = cert.FechaEmision.ToString("dd/MM/yyyy"),
-                ["{{puntaje}}"]         = ""
-            };
+                var inscs = await inscRepo.GetByCapacitacionAsync(cert.CapacitacionId.Value);
+                var insc = inscs.FirstOrDefault(i => i.ColaboradorId == cert.ColaboradorId);
+                if (insc != null)
+                {
+                    var cuestionario = await questRepo.GetByCapacitacionAsync(cert.CapacitacionId.Value);
+                    if (cuestionario != null)
+                    {
+                        var respuestas = await questRepo.GetRespuestasAsync(cuestionario.Id, insc.Id);
+                        if (respuestas.Any())
+                        {
+                            var mejorRespuesta = respuestas.FirstOrDefault(r => r.Aprobado) 
+                                ?? respuestas.OrderByDescending(r => r.FechaRespuesta).First();
+                            puntajeStr = $"{mejorRespuesta.Puntaje:0.#}%";
+                        }
+                    }
+                }
+            }
+            catch { }
+
+            Dictionary<string, string?>? camposAdicionales = null;
+            if (col is not null)
+            {
+                camposAdicionales = await colRepo.GetValoresPorColaboradorAsync(col.Id);
+            }
+            var vars = ConstruirVariablesCertificado(col, cap, cert.FechaEmision, puntajeStr, camposAdicionales);
 
             var mimeType = cap.TipoArchivoCertificado
                 ?? "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
@@ -163,7 +186,9 @@ public class CertificadosController(
     public async Task<IActionResult> RegenerarPdf(
         int id,
         [FromServices] ICapacitacionRepository capRepo,
-        [FromServices] IColaboradorRepository colRepo)
+        [FromServices] IColaboradorRepository colRepo,
+        [FromServices] IInscripcionRepository inscRepo,
+        [FromServices] ICuestionarioRepository questRepo)
     {
         try
         {
@@ -183,19 +208,34 @@ public class CertificadosController(
                 return NotFound(new { message = "La capacitación no existe." });
 
             var col = await colRepo.GetByIdAsync(cert.ColaboradorId);
-            var participantName = col is not null ? $"{col.Nombre} {col.Apellido}" : "N/A";
-            var trainingName = cap.NombreCertificado ?? cap.PlantillaNombreCertificado ?? cap.Nombre;
-
-            var colaborador = await colRepo.GetByIdAsync(cert.ColaboradorId);
-            var variables = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            string puntajeStr = string.Empty;
+            try
             {
-                ["{{nombre_completo}}"] = participantName,
-                ["{{cargo}}"] = colaborador?.Cargo?.Nombre ?? string.Empty,
-                ["{{area}}"] = colaborador?.Area?.Nombre ?? string.Empty,
-                ["{{capacitacion}}"] = trainingName,
-                ["{{fecha_emision}}"] = cert.FechaEmision.ToString("dd/MM/yyyy"),
-                ["{{puntaje}}"] = string.Empty
-            };
+                var inscs = await inscRepo.GetByCapacitacionAsync(cert.CapacitacionId.Value);
+                var insc = inscs.FirstOrDefault(i => i.ColaboradorId == cert.ColaboradorId);
+                if (insc != null)
+                {
+                    var cuestionario = await questRepo.GetByCapacitacionAsync(cert.CapacitacionId.Value);
+                    if (cuestionario != null)
+                    {
+                        var respuestas = await questRepo.GetRespuestasAsync(cuestionario.Id, insc.Id);
+                        if (respuestas.Any())
+                        {
+                            var mejorRespuesta = respuestas.FirstOrDefault(r => r.Aprobado) 
+                                ?? respuestas.OrderByDescending(r => r.FechaRespuesta).First();
+                            puntajeStr = $"{mejorRespuesta.Puntaje:0.#}%";
+                        }
+                    }
+                }
+            }
+            catch { }
+
+            Dictionary<string, string?>? camposAdicionales = null;
+            if (col is not null)
+            {
+                camposAdicionales = await colRepo.GetValoresPorColaboradorAsync(col.Id);
+            }
+            var variables = ConstruirVariablesCertificado(col, cap, cert.FechaEmision, puntajeStr, camposAdicionales);
 
             byte[] pdf;
             if (cap.ArchivoDocxCertificado is { Length: > 0 })
@@ -208,10 +248,27 @@ public class CertificadosController(
             }
             else
             {
+                string nombreCert = cap.Nombre;
+                if (!string.IsNullOrWhiteSpace(cap.PlantillaNombreCertificado) && col is not null)
+                {
+                    var tempName = cap.PlantillaNombreCertificado;
+                    foreach (var (k, v) in variables)
+                    {
+                        tempName = tempName.Replace(k, v, StringComparison.OrdinalIgnoreCase);
+                    }
+                    nombreCert = tempName;
+                }
+                else
+                {
+                    nombreCert = !string.IsNullOrWhiteSpace(cap.NombreCertificado)
+                        ? cap.NombreCertificado
+                        : cap.Nombre;
+                }
+
                 var data = new CertificatePdfDataDto
                 {
-                    ParticipantName = participantName,
-                    TrainingName = trainingName,
+                    ParticipantName = col is not null ? $"{col.Nombre} {col.Apellido}" : "N/A",
+                    TrainingName = nombreCert,
                     IssuedDate = cert.FechaEmision,
                     DurationHours = cap.DuracionHoras,
                     CertificateCode = cert.CertificateCode ?? $"C-{id}-{DateTime.UtcNow:yyyyMMddHHmmss}"
@@ -228,5 +285,51 @@ public class CertificadosController(
         {
             return StatusCode(500, new { message = "Error al regenerar el PDF.", detail = ex.Message });
         }
+    }
+
+    private static Dictionary<string, string> ConstruirVariablesCertificado(
+        Colaborador? col, Capacitacion cap, DateTime fechaEmision, string puntajeStr, Dictionary<string, string?>? camposAdicionales = null)
+    {
+        var cultura = new System.Globalization.CultureInfo("es-CO");
+        var hoy = DateTime.Today;
+        var variables = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["{{nombre_completo}}"]  = col != null ? $"{col.Nombre} {col.Apellido}" : string.Empty,
+            ["{{nombre}}"]           = col?.Nombre ?? string.Empty,
+            ["{{apellido}}"]         = col?.Apellido ?? string.Empty,
+            ["{{email}}"]            = col?.Email ?? string.Empty,
+            ["{{telefono}}"]         = col?.Telefono ?? string.Empty,
+            ["{{cedula}}"]           = col?.Cedula ?? string.Empty,
+            ["{{cargo}}"]            = col?.Cargo?.Nombre ?? string.Empty,
+            ["{{area}}"]             = col?.Area?.Nombre ?? string.Empty,
+            ["{{fecha_ingreso}}"]    = col != null ? col.FechaIngreso.ToString("d 'de' MMMM 'de' yyyy", cultura) : string.Empty,
+            ["{{tipo_contrato}}"]    = col?.TipoContrato ?? string.Empty,
+            ["{{sueldo_basico}}"]    = col?.SueldoBasico.HasValue == true ? col.SueldoBasico.Value.ToString("C0", cultura) : string.Empty,
+            ["{{ciudad}}"]           = col?.Ciudad ?? string.Empty,
+            ["{{fecha_emision}}"]    = fechaEmision.ToString("dd/MM/yyyy"),
+            ["{{fecha_expedicion}}"] = fechaEmision.ToString("d 'de' MMMM 'de' yyyy", cultura),
+            ["{{fecha_actual}}"]     = hoy.ToString("dd/MM/yyyy"),
+            ["{{genero}}"]           = col != null ? (col.Genero switch
+            {
+                GeneroColaborador.Masculino => "el señor",
+                GeneroColaborador.Femenino  => "la señora",
+                _                           => "el(la) señor(a)",
+            }) : "el(la) señor(a)",
+            ["{{capacitacion}}"]     = cap.NombreCertificado ?? cap.PlantillaNombreCertificado ?? cap.Nombre,
+            ["{{puntaje}}"]          = puntajeStr
+        };
+
+        if (camposAdicionales is { Count: > 0 })
+        {
+            foreach (var (key, value) in camposAdicionales)
+            {
+                if (!string.IsNullOrWhiteSpace(key))
+                {
+                    variables[$"{{{{{key}}}}}"] = value ?? string.Empty;
+                }
+            }
+        }
+
+        return variables;
     }
 }

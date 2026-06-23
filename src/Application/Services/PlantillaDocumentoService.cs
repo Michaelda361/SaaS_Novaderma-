@@ -236,7 +236,8 @@ public class PlantillaDocumentoService(
             throw new UnauthorizedAccessException("No tienes acceso a esta plantilla");
 
         var extrasFiltrados = FiltrarExtrasParaPlantilla(plantilla, extras, validarEditables: true);
-        var variables = ConstruirVariablesDocumento(colaborador, plantilla, extrasFiltrados);
+        var camposAdicionales = await colaboradorRepository.GetValoresPorColaboradorAsync(colaborador.Id);
+        var variables = ConstruirVariablesDocumento(colaborador, plantilla, extrasFiltrados, camposAdicionales);
         var docxBytes = await ObtenerDocxBytesAsync(plantilla);
 
         return (docxBytes, plantilla, variables);
@@ -271,6 +272,18 @@ public class PlantillaDocumentoService(
             ["rol"]              = colaborador.Rol.ToString(),
         };
 
+        var camposAdicionales = await colaboradorRepository.GetValoresPorColaboradorAsync(colaborador.Id);
+        if (camposAdicionales is { Count: > 0 })
+        {
+            foreach (var (key, value) in camposAdicionales)
+            {
+                if (!string.IsNullOrWhiteSpace(key))
+                {
+                    valoresPerfil[key] = value ?? string.Empty;
+                }
+            }
+        }
+
         return (html, plantilla, valoresPerfil);
     }
 
@@ -303,15 +316,17 @@ public class PlantillaDocumentoService(
                 throw new UnauthorizedAccessException("No tiene permisos para generar documentos para este colaborador.");
         }
 
+        var camposAdicionales = await colaboradorRepository.GetValoresPorColaboradorAsync(colaborador.Id);
+
         string contenidoResuelto;
         if (plantilla.TipoPlantilla == TipoPlantilla.Docx)
         {
             var docxBytes = await ObtenerDocxBytesAsync(plantilla);
-            contenidoResuelto = ReemplazarVariablesEnDocx(docxBytes, colaborador, plantilla, null);
+            contenidoResuelto = ReemplazarVariablesEnDocx(docxBytes, colaborador, plantilla, null, camposAdicionales);
         }
         else
         {
-            contenidoResuelto = ReemplazarVariables(plantilla.ContenidoHtml ?? string.Empty, colaborador, plantilla, null);
+            contenidoResuelto = ReemplazarVariables(plantilla.ContenidoHtml ?? string.Empty, colaborador, plantilla, null, camposAdicionales);
         }
 
         return (contenidoResuelto, plantilla, colaborador);
@@ -331,16 +346,17 @@ public class PlantillaDocumentoService(
             throw new UnauthorizedAccessException("No tienes acceso a esta plantilla");
 
         var extrasFiltrados = FiltrarExtrasParaPlantilla(plantilla, extras, validarEditables);
+        var camposAdicionales = await colaboradorRepository.GetValoresPorColaboradorAsync(colaborador.Id);
 
         string contenidoResuelto;
         if (plantilla.TipoPlantilla == TipoPlantilla.Docx)
         {
             var docxBytes = await ObtenerDocxBytesAsync(plantilla);
-            contenidoResuelto = ReemplazarVariablesEnDocx(docxBytes, colaborador, plantilla, extrasFiltrados);
+            contenidoResuelto = ReemplazarVariablesEnDocx(docxBytes, colaborador, plantilla, extrasFiltrados, camposAdicionales);
         }
         else
         {
-            contenidoResuelto = ReemplazarVariables(plantilla.ContenidoHtml ?? string.Empty, colaborador, plantilla, extrasFiltrados);
+            contenidoResuelto = ReemplazarVariables(plantilla.ContenidoHtml ?? string.Empty, colaborador, plantilla, extrasFiltrados, camposAdicionales);
         }
 
         return (contenidoResuelto, plantilla, colaborador);
@@ -621,7 +637,7 @@ public class PlantillaDocumentoService(
             ?? throw new UnauthorizedAccessException("Usuario no registrado como colaborador");
 
         var cultura = new CultureInfo("es-CO");
-        return new Dictionary<string, string>
+        var result = new Dictionary<string, string>
         {
             ["nombre_completo"]  = $"{colaborador.Nombre} {colaborador.Apellido}",
             ["nombre"]           = colaborador.Nombre,
@@ -640,6 +656,20 @@ public class PlantillaDocumentoService(
             ["genero"]           = TextoGeneroParaDocumento(colaborador.Genero),
             ["rol"]              = colaborador.Rol.ToString(),
         };
+
+        var camposAdicionales = await colaboradorRepository.GetValoresPorColaboradorAsync(colaborador.Id);
+        if (camposAdicionales is { Count: > 0 })
+        {
+            foreach (var (key, value) in camposAdicionales)
+            {
+                if (!string.IsNullOrWhiteSpace(key))
+                {
+                    result[key] = value ?? string.Empty;
+                }
+            }
+        }
+
+        return result;
     }
 
     private static SolicitudDocumentoDto MapSolicitud(SolicitudDocumento s) => new()
@@ -694,7 +724,7 @@ public class PlantillaDocumentoService(
     }
 
     public static Dictionary<string, string> ConstruirVariablesDocumento(
-        Colaborador c, PlantillaDocumento p, Dictionary<string, string>? extrasFiltrados)
+        Colaborador c, PlantillaDocumento p, Dictionary<string, string>? extrasFiltrados, Dictionary<string, string?>? camposAdicionales = null)
     {
         var cultura = new CultureInfo("es-CO");
         var hoy = DateTime.Today;
@@ -721,6 +751,17 @@ public class PlantillaDocumentoService(
             ["{{rol}}"]              = c.Rol.ToString(),
         };
 
+        if (camposAdicionales is { Count: > 0 })
+        {
+            foreach (var (key, value) in camposAdicionales)
+            {
+                if (!string.IsNullOrWhiteSpace(key))
+                {
+                    variables[$"{{{{{key}}}}}"] = value ?? string.Empty;
+                }
+            }
+        }
+
         if (extrasFiltrados is { Count: > 0 })
         {
             foreach (var (key, value) in extrasFiltrados)
@@ -731,9 +772,9 @@ public class PlantillaDocumentoService(
     }
 
     private static string ReemplazarVariables(
-        string html, Colaborador c, PlantillaDocumento p, Dictionary<string, string>? extrasFiltrados = null)
+        string html, Colaborador c, PlantillaDocumento p, Dictionary<string, string>? extrasFiltrados = null, Dictionary<string, string?>? camposAdicionales = null)
     {
-        var variables = ConstruirVariablesDocumento(c, p, extrasFiltrados);
+        var variables = ConstruirVariablesDocumento(c, p, extrasFiltrados, camposAdicionales);
         var resultado = html;
         foreach (var (key, value) in variables)
             resultado = resultado.Replace(key, value);
@@ -741,9 +782,9 @@ public class PlantillaDocumentoService(
     }
 
     private static string ReemplazarVariablesEnDocx(
-        byte[] docxBytes, Colaborador c, PlantillaDocumento p, Dictionary<string, string>? extrasFiltrados = null)
+        byte[] docxBytes, Colaborador c, PlantillaDocumento p, Dictionary<string, string>? extrasFiltrados = null, Dictionary<string, string?>? camposAdicionales = null)
     {
-        var variables = ConstruirVariablesDocumento(c, p, extrasFiltrados);
+        var variables = ConstruirVariablesDocumento(c, p, extrasFiltrados, camposAdicionales);
         return System.Text.Json.JsonSerializer.Serialize(new DocxReemplazoPayload
         {
             DocxBase64 = Convert.ToBase64String(docxBytes),

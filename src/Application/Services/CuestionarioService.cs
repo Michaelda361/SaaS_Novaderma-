@@ -229,16 +229,22 @@ public class CuestionarioService(
                     {
                         var colEntity = await colaboradorRepository.GetByIdAsync(inscripcion.ColaboradorId);
 
-                        string nombreCert;
+                        Dictionary<string, string?>? camposAdicionales = null;
+                        if (colEntity is not null)
+                        {
+                            camposAdicionales = await colaboradorRepository.GetValoresPorColaboradorAsync(colEntity.Id);
+                        }
+                        var variables = ConstruirVariablesCertificado(colEntity, capacitacion, DateTime.Today, $"{puntaje:0.#}%", camposAdicionales);
+                        string nombreCert = capacitacion.Nombre;
+
                         if (!string.IsNullOrWhiteSpace(capacitacion.PlantillaNombreCertificado) && colEntity is not null)
                         {
-                            nombreCert = capacitacion.PlantillaNombreCertificado
-                                .Replace("{{nombre_completo}}", $"{colEntity.Nombre} {colEntity.Apellido}")
-                                .Replace("{{cargo}}", colEntity.Cargo?.Nombre ?? "")
-                                .Replace("{{area}}", colEntity.Area?.Nombre ?? "")
-                                .Replace("{{capacitacion}}", capacitacion.Nombre)
-                                .Replace("{{fecha_emision}}", DateTime.Today.ToString("dd/MM/yyyy"))
-                                .Replace("{{puntaje}}", $"{puntaje:0.#}%");
+                            var tempName = capacitacion.PlantillaNombreCertificado;
+                            foreach (var (k, v) in variables)
+                            {
+                                tempName = tempName.Replace(k, v, StringComparison.OrdinalIgnoreCase);
+                            }
+                            nombreCert = tempName;
                         }
                         else
                         {
@@ -255,16 +261,6 @@ public class CuestionarioService(
                             byte[]? pdfBytes = null;
                             try
                             {
-                                var variables = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-                                {
-                                    ["{{nombre_completo}}"] = colEntity is not null ? $"{colEntity.Nombre} {colEntity.Apellido}" : string.Empty,
-                                    ["{{cargo}}"] = colEntity?.Cargo?.Nombre ?? string.Empty,
-                                    ["{{area}}"] = colEntity?.Area?.Nombre ?? string.Empty,
-                                    ["{{capacitacion}}"] = capacitacion.Nombre,
-                                    ["{{fecha_emision}}"] = DateTime.Today.ToString("dd/MM/yyyy"),
-                                    ["{{puntaje}}"] = string.Empty
-                                };
-
                                 if (capacitacion.ArchivoDocxCertificado is { Length: > 0 })
                                 {
                                     var mimeType = capacitacion.TipoArchivoCertificado
@@ -277,7 +273,7 @@ public class CuestionarioService(
                                     var pdfData = new CertificatePdfDataDto
                                     {
                                         ParticipantName = colEntity is not null ? $"{colEntity.Nombre} {colEntity.Apellido}" : string.Empty,
-                                        TrainingName = capacitacion.NombreCertificado ?? capacitacion.PlantillaNombreCertificado ?? capacitacion.Nombre,
+                                        TrainingName = nombreCert,
                                         IssuedDate = DateTime.Today,
                                         DurationHours = capacitacion.DuracionHoras,
                                         CertificateCode = $"C-{inscripcion.ColaboradorId}-{capacitacion.Id}-{DateTime.UtcNow:yyyyMMddHHmmss}"
@@ -354,21 +350,9 @@ public class CuestionarioService(
 
         if (!respuestas.Any())
         {
+            // Sin respuestas previas → retornar null para que la UI muestre el botón "Comenzar"
             Console.WriteLine($"[DEBUG CuestionarioService.GetResultadoAsync] No existe respuesta previa para CuestionarioId={cuestionarioId}, InscripcionId={inscripcionId}");
-            return new ResultadoCuestionarioDto
-            {
-                Puntaje = 0,
-                Aprobado = false,
-                PuntajeAprobacion = c.PuntajeAprobacion,
-                AprobacionPorCorrectas = c.AprobacionPorCorrectas,
-                MinCorrectas = c.MinCorrectas,
-                TotalPreguntas = c.Preguntas.Count,
-                Correctas = 0,
-                IntentosMaximos = intentosMaximos,
-                IntentosRealizados = 0,
-                PuedeResponderOtroIntento = true,
-                FechaFinalizacion = null
-            };
+            return null;
         }
 
         var mejorRespuesta = respuestas.FirstOrDefault(r => r.Aprobado) 
@@ -483,4 +467,50 @@ public class CuestionarioService(
             }).ToList()
         }).ToList()
     };
+
+    private static Dictionary<string, string> ConstruirVariablesCertificado(
+        Colaborador? col, Capacitacion cap, DateTime fechaEmision, string puntajeStr, Dictionary<string, string?>? camposAdicionales = null)
+    {
+        var cultura = new System.Globalization.CultureInfo("es-CO");
+        var hoy = DateTime.Today;
+        var variables = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["{{nombre_completo}}"]  = col != null ? $"{col.Nombre} {col.Apellido}" : string.Empty,
+            ["{{nombre}}"]           = col?.Nombre ?? string.Empty,
+            ["{{apellido}}"]         = col?.Apellido ?? string.Empty,
+            ["{{email}}"]            = col?.Email ?? string.Empty,
+            ["{{telefono}}"]         = col?.Telefono ?? string.Empty,
+            ["{{cedula}}"]           = col?.Cedula ?? string.Empty,
+            ["{{cargo}}"]            = col?.Cargo?.Nombre ?? string.Empty,
+            ["{{area}}"]             = col?.Area?.Nombre ?? string.Empty,
+            ["{{fecha_ingreso}}"]    = col != null ? col.FechaIngreso.ToString("d 'de' MMMM 'de' yyyy", cultura) : string.Empty,
+            ["{{tipo_contrato}}"]    = col?.TipoContrato ?? string.Empty,
+            ["{{sueldo_basico}}"]    = col?.SueldoBasico.HasValue == true ? col.SueldoBasico.Value.ToString("C0", cultura) : string.Empty,
+            ["{{ciudad}}"]           = col?.Ciudad ?? string.Empty,
+            ["{{fecha_emision}}"]    = fechaEmision.ToString("dd/MM/yyyy"),
+            ["{{fecha_expedicion}}"] = fechaEmision.ToString("d 'de' MMMM 'de' yyyy", cultura),
+            ["{{fecha_actual}}"]     = hoy.ToString("dd/MM/yyyy"),
+            ["{{genero}}"]           = col != null ? (col.Genero switch
+            {
+                TalentManagement.Domain.Enums.GeneroColaborador.Masculino => "el señor",
+                TalentManagement.Domain.Enums.GeneroColaborador.Femenino  => "la señora",
+                _                                                         => "el(la) señor(a)",
+            }) : "el(la) señor(a)",
+            ["{{capacitacion}}"]     = cap.NombreCertificado ?? cap.PlantillaNombreCertificado ?? cap.Nombre,
+            ["{{puntaje}}"]          = puntajeStr
+        };
+
+        if (camposAdicionales is { Count: > 0 })
+        {
+            foreach (var (key, value) in camposAdicionales)
+            {
+                if (!string.IsNullOrWhiteSpace(key))
+                {
+                    variables[$"{{{{{key}}}}}"] = value ?? string.Empty;
+                }
+            }
+        }
+
+        return variables;
+    }
 }

@@ -33,8 +33,13 @@ public class CuestionarioApiService(HttpClient http)
         return r.IsSuccessStatusCode ? await r.Content.ReadFromJsonAsync<ResultadoCuestionarioDto>() : null;
     }
 
-    public Task<ResultadoCuestionarioDto?> GetResultadoAsync(int cuestionarioId, int inscripcionId) =>
-        http.GetFromJsonAsync<ResultadoCuestionarioDto>($"{Base}/{cuestionarioId}/resultado/{inscripcionId}");
+    public async Task<ResultadoCuestionarioDto?> GetResultadoAsync(int cuestionarioId, int inscripcionId)
+    {
+        var response = await http.GetAsync($"{Base}/{cuestionarioId}/resultado/{inscripcionId}");
+        if (response.StatusCode == System.Net.HttpStatusCode.NotFound) return null;
+        if (!response.IsSuccessStatusCode) return null;
+        return await response.Content.ReadFromJsonAsync<ResultadoCuestionarioDto>();
+    }
 
     /// <summary>
     /// Endpoint batch: devuelve IDs de capacitaciones completadas por el colaborador en una sola llamada.

@@ -264,15 +264,27 @@
             {
                 <button class="btn btn-ghost btn-sm" @onclick="() => searchText = string.Empty">Limpiar</button>
             }
+            <div style="margin-left: auto; display: flex; align-items: center; gap: 0.5rem;">
+                <button class="btn btn-ghost btn-sm" @onclick="ToggleCompactMode" title="Alternar vista compacta/cómoda" style="display: inline-flex; align-items: center; gap: 0.25rem;">
+                    @if (compactMode)
+                    {
+                        <span>📱 Vista Cómoda</span>
+                    }
+                    else
+                    {
+                        <span>🔍 Vista Compacta</span>
+                    }
+                </button>
+            </div>
         </div>
 
         <div class="table-wrapper">
-            <table>
+            <table class="@(compactMode ? "table-compact" : "")">
                 <thead>
                     <tr>
                         @foreach (var campo in listadoCampos.OrderBy(c => c.Orden))
                         {
-                            <th>@campo.Nombre</th>
+                            <th class="@GetResponsiveColumnClass(campo.CampoClave)">@campo.Nombre</th>
                         }
                         <th>Acciones</th>
                     </tr>
@@ -305,7 +317,7 @@
                             <tr>
                                 @foreach (var campo in listadoCampos.OrderBy(c => c.Orden))
                                 {
-                                    <td>
+                                    <td class="@GetResponsiveColumnClass(campo.CampoClave)" title="@GetValorDynamic(item, campo.CampoClave)">
                                         @if (campo.CampoClave == "OneDriveUrl")
                                         {
                                             @if (IsValidUrl(item.OneDriveUrl))
@@ -341,6 +353,56 @@
                 </tbody>
             </table>
         </div>
+
+        <!-- Vista móvil alternable en tarjetas (CSS) -->
+        <div class="document-cards-mobile">
+            @foreach (var item in pagedItems)
+            {
+                <div class="mobile-doc-card">
+                    <div class="mobile-doc-header">
+                        <div style="flex: 1; min-width: 0;">
+                            <span class="mobile-doc-code">@item.Codigo</span>
+                            <h4 class="mobile-doc-title">@item.Nombre</h4>
+                        </div>
+                        <span class="badge @GetEstadoClass(item.Estado)">@item.Estado</span>
+                    </div>
+                    <div class="mobile-doc-details">
+                        @if (IsValidUrl(item.OneDriveUrl))
+                        {
+                            <div class="mobile-doc-detail-row">
+                                <span class="label">Archivo:</span>
+                                <a href="@item.OneDriveUrl" target="_blank" rel="noopener noreferrer" class="mobile-doc-link">
+                                    🔗 @(string.IsNullOrWhiteSpace(item.ArchivoNombre) ? "Ver archivo" : item.ArchivoNombre)
+                                </a>
+                            </div>
+                        }
+                        <div class="mobile-doc-detail-row">
+                            <span class="label">Versión:</span>
+                            <span>@item.Version</span>
+                        </div>
+                        @if (!string.IsNullOrWhiteSpace(item.AreaNombre))
+                        {
+                            <div class="mobile-doc-detail-row">
+                                <span class="label">Área:</span>
+                                <span>@item.AreaNombre</span>
+                            </div>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(item.ProcesoResponsable))
+                        {
+                            <div class="mobile-doc-detail-row">
+                                <span class="label">Responsable:</span>
+                                <span>@item.ProcesoResponsable</span>
+                            </div>
+                        }
+                    </div>
+                    <div class="mobile-doc-actions">
+                        <button class="btn btn-ghost btn-sm" @onclick="() => EditarDocumento(item.Id)">✏️ @(AuthInfo.EsSoloColaborador ? "Actualizar" : "Editar")</button>
+                        <button class="btn btn-ghost btn-sm" @onclick="() => VerAuditoria(item.Id)">🕘 Auditoría</button>
+                    </div>
+                </div>
+            }
+        </div>
+
 
         <!-- Paginación Premium -->
         <div class="pagination-container">
@@ -1436,6 +1498,7 @@
     private string filterEstado = string.Empty;
     private int currentPage = 1;
     private const int PageSize = 10;
+    private bool compactMode = false;
 
     private string _searchText = string.Empty;
     private string searchText
@@ -1730,6 +1793,17 @@
             colaboradores = await ColaboradorApi.GetAllAsync() ?? [];
             listados = await ControlDocumentalApi.GetListadosMaestrosAsync() ?? [];
 
+            // Cargar preferencia de modo compacto desde localStorage
+            try
+            {
+                var storedCompact = await JS.InvokeAsync<string>("localStorage.getItem", "novahub_compact_mode");
+                if (bool.TryParse(storedCompact, out var isCompact))
+                {
+                    compactMode = isCompact;
+                }
+            }
+            catch { }
+
             // Cargar listado seleccionado desde localStorage si está disponible
             var storedVal = await JS.InvokeAsync<string>("localStorage.getItem", "novahub_selected_listado_id");
             if (int.TryParse(storedVal, out var storedId) && listados.Any(l => l.Id == storedId))
@@ -1792,6 +1866,16 @@
             documentos = [];
         }
         await Filtrar();
+    }
+
+    private async Task ToggleCompactMode()
+    {
+        compactMode = !compactMode;
+        try
+        {
+            await JS.InvokeVoidAsync("localStorage.setItem", "novahub_compact_mode", compactMode.ToString().ToLowerInvariant());
+        }
+        catch { }
     }
 
     private async Task Filtrar()
@@ -3526,6 +3610,43 @@
                 return item.ComentarioCambio ?? GetValorCamposPersonalizados(item.CamposPersonalizados, "comentariocambio", "cambio") ?? "—";
             default:
                 return GetValorCamposPersonalizados(item.CamposPersonalizados, campoClave) ?? "—";
+        }
+    }
+
+    private string GetResponsiveColumnClass(string campoClave)
+    {
+        var keyNorm = campoClave.Trim().ToLowerInvariant()
+            .Replace("á", "a")
+            .Replace("é", "e")
+            .Replace("í", "i")
+            .Replace("ó", "o")
+            .Replace("ú", "u")
+            .Replace("ü", "u")
+            .Replace("ñ", "n")
+            .Replace("ç", "c")
+            .Replace(" ", string.Empty);
+
+        switch (keyNorm)
+        {
+            case "nombre":
+            case "estado":
+            case "onedriveurl":
+            case "url":
+            case "version":
+                return ""; // Siempre visible
+            case "codigo":
+            case "area":
+            case "areaid":
+            case "areanombre":
+            case "procesoresponsable":
+            case "proceso":
+            case "responsable":
+            case "fechadocumento":
+            case "fecha":
+            case "fechadedocumento":
+                return "d-none d-sm-table-cell"; // Ocultar en móvil, ver en tablet/desktop
+            default:
+                return "d-none d-lg-table-cell"; // Ocultar en móvil y tablet, ver solo en desktop
         }
     }
 

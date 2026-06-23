@@ -180,8 +180,8 @@ public class CuestionariosController(
         var resultado = await service.GetResultadoAsync(cuestionarioId, inscripcionId);
         if (resultado is null)
         {
-            Console.WriteLine($"[DEBUG GetResultado] No se encontró resultado para CuestionarioId={cuestionarioId}, InscripcionId={inscripcionId}");
-            return Ok((ResultadoCuestionarioDto?)null);
+            Console.WriteLine($"[DEBUG GetResultado] Sin respuestas previas para CuestionarioId={cuestionarioId}, InscripcionId={inscripcionId}");
+            return NotFound();
         }
         Console.WriteLine($"[DEBUG GetResultado] Resultado encontrado: Puntaje={resultado.Puntaje:0.##}, Aprobado={resultado.Aprobado}, Correctas={resultado.Correctas}/{resultado.TotalPreguntas}");
         return Ok(resultado);

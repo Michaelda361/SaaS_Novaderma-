@@ -112,7 +112,16 @@ public class CapacitacionService(
         cap.PlantillaNombreCertificado = string.IsNullOrWhiteSpace(dto.PlantillaNombreCertificado) ? null : dto.PlantillaNombreCertificado;
 
         // Gestionar el DOCX/PPTX
-        if (!string.IsNullOrWhiteSpace(dto.ArchivoDocxBase64))
+        if (dto.CopiarPlantillaDesdeId.HasValue)
+        {
+            var origenCap = await repository.GetByIdAsync(dto.CopiarPlantillaDesdeId.Value);
+            if (origenCap is not null)
+            {
+                cap.ArchivoDocxCertificado = origenCap.ArchivoDocxCertificado;
+                cap.TipoArchivoCertificado = origenCap.TipoArchivoCertificado;
+            }
+        }
+        else if (!string.IsNullOrWhiteSpace(dto.ArchivoDocxBase64))
         {
             cap.ArchivoDocxCertificado = Convert.FromBase64String(dto.ArchivoDocxBase64);
             cap.TipoArchivoCertificado = dto.TipoArchivoCertificado;

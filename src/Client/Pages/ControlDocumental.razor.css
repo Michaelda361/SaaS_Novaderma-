@@ -142,6 +142,27 @@
     border-left: 4px solid var(--text-muted);
 }
 
+/* Vista compacta de la tabla */
+table.table-compact thead th {
+    padding: 0.35rem 0.5rem;
+    font-size: 0.65rem;
+}
+
+table.table-compact tbody td {
+    padding: 0.35rem 0.5rem;
+    font-size: 0.8rem;
+    max-width: 150px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+table.table-compact tbody td:last-child {
+    max-width: none;
+    white-space: nowrap;
+    overflow: visible;
+}
+
 /* Paginador Moderno */
 .pagination-container {
     display: flex;
@@ -292,3 +313,127 @@
     padding-bottom: 0.5rem;
     font-weight: 600;
 }
+
+/* Vista de tabla vs tarjetas móviles */
+.document-cards-mobile {
+    display: none;
+    flex-direction: column;
+    gap: 1rem;
+    padding: 0.5rem 0;
+}
+
+@media (max-width: 768px) {
+    .table-wrapper {
+        display: none !important;
+    }
+    .document-cards-mobile {
+        display: flex;
+    }
+}
+
+/* Tarjeta de Documento Móvil */
+.mobile-doc-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 1rem;
+    box-shadow: var(--shadow-sm);
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    transition: transform var(--transition), box-shadow var(--transition);
+}
+
+.mobile-doc-card:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow);
+}
+
+.mobile-doc-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 0.75rem;
+    border-bottom: 1px dashed var(--border);
+    padding-bottom: 0.5rem;
+}
+
+.mobile-doc-code {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    letter-spacing: 0.05em;
+    display: block;
+}
+
+.mobile-doc-title {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text);
+    margin: 0.1rem 0 0 0;
+}
+
+.mobile-doc-details {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    font-size: 0.8rem;
+}
+
+.mobile-doc-detail-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
+.mobile-doc-detail-row .label {
+    font-weight: 500;
+    color: var(--text-muted);
+}
+
+.mobile-doc-link {
+    color: var(--primary);
+    text-decoration: underline;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 180px;
+}
+
+.mobile-doc-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.25rem;
+}
+
+.mobile-doc-actions button {
+    flex: 1;
+    text-align: center;
+    justify-content: center;
+}
+
+/* Columna de Acciones Sticky para Desktop */
+@media (min-width: 769px) {
+    table thead th:last-child {
+        position: sticky;
+        right: 0;
+        background: var(--bg);
+        z-index: 10;
+        box-shadow: -2px 0 5px rgba(0,0,0,0.02);
+    }
+    table.table-compact thead th:last-child {
+        background: var(--bg);
+    }
+    table tbody td:last-child {
+        position: sticky;
+        right: 0;
+        background: var(--surface);
+        z-index: 10;
+        box-shadow: -4px 0 8px rgba(0,0,0,0.03);
+    }
+    table tbody tr:hover td:last-child {
+        background: var(--surface-hover);
+    }
+}
+

@@ -95,14 +95,14 @@
 table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 0.875rem;
+    font-size: 0.825rem;
 }
 
 thead th {
     background: var(--bg);
-    padding: 0.625rem 1rem;
+    padding: 0.4rem 0.75rem;
     text-align: left;
-    font-size: 0.7rem;
+    font-size: 0.65rem;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.07em;
@@ -112,9 +112,22 @@ thead th {
 }
 
 tbody td {
-    padding: 0.8125rem 1rem;
+    padding: 0.5rem 0.75rem;
     border-bottom: 1px solid var(--border);
     vertical-align: middle;
+}
+
+/* Clases de Visibilidad Responsiva */
+.d-none { display: none !important; }
+@media (min-width: 576px) {
+    .d-sm-table-cell { display: table-cell !important; }
+    .d-sm-block { display: block !important; }
+    .d-sm-flex { display: flex !important; }
+}
+@media (min-width: 992px) {
+    .d-lg-table-cell { display: table-cell !important; }
+    .d-lg-block { display: block !important; }
+    .d-lg-flex { display: flex !important; }
 }
 
 tbody tr:last-child td { border-bottom: none; }

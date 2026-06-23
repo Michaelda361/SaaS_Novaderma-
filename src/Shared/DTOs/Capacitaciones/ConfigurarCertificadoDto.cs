@@ -26,4 +26,7 @@ public class ConfigurarCertificadoDto
 
     /// <summary>True si se quiere eliminar el DOCX/PPTX existente sin subir uno nuevo.</summary>
     public bool EliminarDocx { get; set; } = false;
+
+    /// <summary>ID de otra capacitación desde la cual copiar la plantilla y nombre del certificado.</summary>
+    public int? CopiarPlantillaDesdeId { get; set; }
 }

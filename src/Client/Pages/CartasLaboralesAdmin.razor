@@ -4,6 +4,7 @@
 @inject PlantillaDocumentoApiService ApiService
 @inject AreaApiService AreaApi
 @inject ColaboradorApiService ColaboradorApi
+@inject ColaboradorCampoApiService CampoApiService
 @inject AuthInfoService AuthInfo
 @inject NotificacionesService Notificaciones
 @inject IJSRuntime JS
@@ -392,6 +393,20 @@ else
                             @if (usada) { <span class="variable-usada-badge">✓ en uso</span> }
                         </div>
                     }
+                    @if (camposFicha != null)
+                    {
+                        @foreach (var campo in camposFicha)
+                        {
+                            var key = "{{" + campo.CampoClave + "}}";
+                            var usada = plantillaVariables.TipoPlantilla == "html" &&
+                                        (plantillaVariables.ContenidoHtml?.Contains(key) ?? false);
+                            <div class="variable-item @(usada ? "variable-item--usada" : "")">
+                                <code class="variable-tag">@key</code>
+                                <span class="text-muted text-sm">@campo.Nombre (Ficha)</span>
+                                @if (usada) { <span class="variable-usada-badge">✓ en uso</span> }
+                            </div>
+                        }
+                    }
                 </div>
 
                 @if (plantillaVariables.VariablesEditables.Any())
@@ -644,6 +659,22 @@ else
                                         </div>
                                     }
                                 </div>
+
+                                @if (camposFicha != null && camposFicha.Any())
+                                {
+                                    <div style="font-weight: 600; font-size: 0.78rem; text-transform: uppercase; color: var(--text-subtle); margin-bottom: 0.4rem; margin-top: 0.5rem;">Campos de la Ficha (Automáticos)</div>
+                                    <div style="display: flex; flex-direction: column; gap: 0.35rem; max-height: 160px; overflow-y: auto; padding-right: 0.2rem; margin-bottom: 1rem; border-bottom: 1px solid var(--border); padding-bottom: 0.75rem;">
+                                        @foreach (var campo in camposFicha)
+                                        {
+                                            var key = "{{" + campo.CampoClave + "}}";
+                                            <div style="display: flex; align-items: center; justify-content: space-between; background: var(--surface); border: 1px solid var(--border); padding: 0.25rem 0.4rem; border-radius: 4px;">
+                                                <code style="font-size: 0.75rem; color: var(--primary); font-weight: bold; cursor: pointer;" @onclick="() => CopiarAlPortapapeles(key)" title="Haga clic para copiar">@key</code>
+                                                <span class="text-xs text-muted" style="margin-left:auto; margin-right: 0.5rem;" title="@campo.Nombre">@campo.Nombre</span>
+                                                <button type="button" class="btn btn-ghost btn-sm" @onclick="() => CopiarAlPortapapeles(key)" style="font-size: 0.7rem; padding: 0.1rem 0.25rem;" title="Copiar">📋</button>
+                                            </div>
+                                        }
+                                    </div>
+                                }
 
                                 <div style="font-weight: 600; font-size: 0.78rem; text-transform: uppercase; color: #3b82f6; margin-bottom: 0.4rem;">👥 Variables del Colaborador</div>
                                 <div style="display: flex; flex-direction: column; gap: 0.35rem; max-height: 140px; overflow-y: auto; margin-bottom: 1rem; border-bottom: 1px solid var(--border); padding-bottom: 0.75rem;">
@@ -1029,6 +1060,7 @@ else
     private List<AreaDto> areas = [];
     private List<SolicitudDocumentoDto> solicitudes = [];
     private List<SolicitudDocumentoDto> pendientes = [];
+    private List<ColaboradorCampoDto> camposFicha = [];
     private bool cargando = true;
     private bool cargandoHistorial = false;
     private bool cargandoPendientes = false;
@@ -1100,10 +1132,12 @@ else
                 var t1 = ApiService.GetAllAsync();
                 var t2 = AreaApi.GetAllAsync();
                 var t3 = ApiService.CountPendientesAsync();
-                await Task.WhenAll(t1, t2, t3);
+                var t4 = CampoApiService.GetAllAsync();
+                await Task.WhenAll(t1, t2, t3, t4);
                 plantillas = t1.Result ?? [];
                 areas = t2.Result ?? [];
                 countPendientes = t3.Result;
+                camposFicha = t4.Result ?? [];
                 if (countPendientes > 0)
                 {
                     tabActiva = "pendientes";

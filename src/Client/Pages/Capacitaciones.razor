@@ -305,7 +305,7 @@
                         </div>
                         <div class="form-group">
                             <label>Duración (horas)</label>
-                            <InputNumber @bind-Value="form.DuracionHoras" />
+                            <InputNumber @bind-Value="form.DuracionHoras" min="1" />
                             <ValidationMessage For="() => form.DuracionHoras" class="validation-message" />
                         </div>
                         <div class="form-group">
@@ -313,40 +313,6 @@
                             <InputDate @bind-Value="form.FechaFin" />
                             <ValidationMessage For="() => form.FechaFin" class="validation-message" />
                         </div>
-                        <div class="form-group full">
-                            <label>Asignar a</label>
-                            <select @bind="tipoAsignacion" class="form-select">
-                                <option value="general">General (todos)</option>
-                                <option value="area">Área específica</option>
-                                <option value="colaborador">Colaborador específico</option>
-                            </select>
-                        </div>
-                        @if (tipoAsignacion == "area")
-                        {
-                            <div class="form-group full">
-                                <label>Área</label>
-                                <select @bind="form.AreaId" class="form-select">
-                                    <option value="">-- Seleccionar área --</option>
-                                    @foreach (var a in areas)
-                                    {
-                                        <option value="@a.Id">@a.Nombre</option>
-                                    }
-                                </select>
-                            </div>
-                        }
-                        else if (tipoAsignacion == "colaborador")
-                        {
-                            <div class="form-group full">
-                                <label>Colaborador</label>
-                                <select @bind="form.ColaboradorId" class="form-select">
-                                    <option value="">-- Seleccionar colaborador --</option>
-                                    @foreach (var col in colaboradores)
-                                    {
-                                        <option value="@col.Id">@col.Nombre @col.Apellido — @ColaboradorGeneroUi.Etiqueta(col.Genero) · @col.AreaNombre</option>
-                                    }
-                                </select>
-                            </div>
-                        }
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -560,8 +526,9 @@
 
     private async Task Guardar()
     {
-        if (tipoAsignacion != "area") form.AreaId = null;
-        if (tipoAsignacion != "colaborador") form.ColaboradorId = null;
+        form.AreaId = null;
+        form.ColaboradorId = null;
+        tipoAsignacion = "general";
 
         if (form.DuracionHoras <= 0)
         {

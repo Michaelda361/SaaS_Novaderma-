@@ -8,6 +8,8 @@
 @inject CuestionarioApiService CuestionarioService
 @inject AuthInfoService AuthInfo
 @inject NavigationManager Nav
+@inject IJSRuntime JS
+@inject ColaboradorCampoApiService CampoApiService
 <Toast @ref="toast" />
 @if (accessDenied)
 {
@@ -30,14 +32,6 @@
     {
         <span class="badge badge-info">@capacitacion.DuracionHoras h</span>
         <span class="text-sm text-muted">@capacitacion.FechaInicio.ToString("dd/MM/yyyy") — @capacitacion.FechaFin.ToString("dd/MM/yyyy")</span>
-        @if (capacitacion.AreaId.HasValue)
-        {
-            <span class="badge badge-info">🏢 @capacitacion.AreaNombre</span>
-        }
-        else if (capacitacion.ColaboradorId.HasValue)
-        {
-            <span class="badge badge-warning">👤 @capacitacion.ColaboradorNombre</span>
-        }
         @if (PuedeGestionar)
         {
             @if (capacitacion.Publicada)
@@ -523,103 +517,115 @@
     else
     {
         <div style="padding:1rem;display:flex;flex-direction:column;gap:.875rem;">
-            <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-weight:500;">
-                <input type="checkbox" @bind="certForm.EmiteCertificado" />
-                Emitir certificado automaticamente al aprobar el cuestionario
-            </label>
-            @if (certForm.EmiteCertificado)
-            {
-                <div>
-                    <label style="font-size:.85rem;font-weight:500;">Tipo de plantilla</label>
-                    <div class="tipo-selector" style="margin-top:.35rem;">
-                        <label class="tipo-option @(tipoCertificado == "docx" ? "tipo-option--active" : "")">
-                            <input type="radio" name="tipoCert" value="docx"
-                                   checked="@(tipoCertificado == "docx")"
-                                   @onchange='() => tipoCertificado = "docx"' />
-                            <span class="tipo-icon"></span>
-                            <div><div class="tipo-label">Archivo Word</div><div class="tipo-desc">Sube un .docx con variables</div></div>
+            <div style="display: grid; grid-template-columns: 1.6fr 1fr; gap: 1.5rem; align-items: start;">
+                <!-- Columna Principal: Formulario -->
+                <div style="display: flex; flex-direction: column; gap: 1.25rem;">
+                    <div>
+                        <label style="font-size:.85rem;font-weight:500;">
+                            Nombre del certificado
+                            <span class="text-muted" style="font-weight:400;"> — usa variables para personalizar</span>
                         </label>
-                        <label class="tipo-option @(tipoCertificado == "pptx" ? "tipo-option--active" : "")">
-                            <input type="radio" name="tipoCert" value="pptx"
-                                   checked="@(tipoCertificado == "pptx")"
-                                   @onchange='() => tipoCertificado = "pptx"' />
-                            <span class="tipo-icon"></span>
-                            <div><div class="tipo-label">Presentacion PowerPoint</div><div class="tipo-desc">Sube un .pptx con variables</div></div>
-                        </label>
-                        <label class="tipo-option @(tipoCertificado == "pdf" ? "tipo-option--active" : "")">
-                            <input type="radio" name="tipoCert" value="pdf"
-                                   checked="@(tipoCertificado == "pdf")"
-                                   @onchange='() => tipoCertificado = "pdf"' />
-                            <span class="tipo-icon"></span>
-                            <div><div class="tipo-label">Plantilla PDF</div><div class="tipo-desc">Sube un .pdf con variables o campos de formulario</div></div>
-                        </label>
+                        <input class="form-control" style="margin-top:.35rem;"
+                               @bind="certForm.PlantillaNombreCertificado"
+                               placeholder="Ej: Certificado de {{capacitacion}} — {{nombre_completo}}" />
                     </div>
-                </div>
-
-                <div>
-                    <label style="font-size:.85rem;font-weight:500;">
-                        Nombre del certificado
-                        <span class="text-muted" style="font-weight:400;"> — usa variables para personalizar</span>
-                    </label>
-                    <input class="form-control" style="margin-top:.35rem;"
-                           @bind="certForm.PlantillaNombreCertificado"
-                           placeholder="Ej: Certificado de {{capacitacion}} — {{nombre_completo}}" />
-                    <div style="margin-top:.4rem;display:flex;flex-wrap:wrap;gap:.3rem;">
-                        @foreach (var vari in variablesCertificado)
-                        {
-                            var v = vari;
-                            <button type="button" class="btn btn-ghost btn-sm"
-                                    style="font-size:.75rem;padding:.2rem .5rem;font-family:monospace;"
-                                    @onclick="() => InsertarVariable(v)">@v</button>
-                        }
-                    </div>
-                </div>
 
                     <div>
-                        <label style="font-size:.85rem;font-weight:500;">@(tipoCertificado == "pptx" ? "Presentacion PowerPoint (.pptx)" : tipoCertificado == "pdf" ? "Plantilla PDF (.pdf)" : "Archivo Word (.docx)")</label>
-                        @if (capacitacion.TienePlantillaDocx && string.IsNullOrWhiteSpace(certForm.ArchivoDocxBase64))
+                        <label style="font-size:.85rem;font-weight:500;">Presentación PowerPoint (.pptx)</label>
+                        @if (capacitacion.TienePlantillaDocx && string.IsNullOrWhiteSpace(certForm.ArchivoDocxBase64) && !certForm.EliminarDocx)
                         {
                             <div style="margin-top:.35rem;display:flex;align-items:center;gap:.75rem;">
                                 <span class="badge badge-success">✅ Plantilla cargada</span>
                                 <button type="button" class="btn btn-ghost btn-sm"
-                                        @onclick="() => certForm.EliminarDocx = true">Quitar</button>
+                                        @onclick="() => { certForm.EliminarDocx = true; certForm.CopiarPlantillaDesdeId = null; copiandoDesdeNombre = null; nombreArchivoSeleccionado = null; }">Quitar</button>
                             </div>
                         }
                         @if (!capacitacion.TienePlantillaDocx || certForm.EliminarDocx)
                         {
-                            <InputFile OnChange="OnArchivoCertificadoSeleccionado" accept="@(tipoCertificado == "pptx" ? ".pptx" : tipoCertificado == "pdf" ? ".pdf" : ".docx")" style="margin-top:.35rem;" />
+                            <div style="margin-top:.5rem; display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+                                <label class="btn btn-outline-primary" style="display:inline-flex;align-items:center;gap:.5rem;cursor:pointer;margin:0;font-size:0.85rem;font-weight:500;padding:.4rem .8rem;border: 1px dashed var(--primary);border-radius: var(--radius);transition: all 0.2s ease;">
+                                    <span>📤</span> Seleccionar plantilla .pptx
+                                    <InputFile OnChange="OnArchivoCertificadoSeleccionado" accept=".pptx" style="display:none;" />
+                                </label>
+                                @if (!string.IsNullOrWhiteSpace(nombreArchivoSeleccionado))
+                                {
+                                    <span class="text-sm text-muted" style="font-style: italic;">@nombreArchivoSeleccionado</span>
+                                }
+                            </div>
                             @if (!string.IsNullOrWhiteSpace(certForm.ArchivoDocxBase64))
                             {
-                                <div class="alert alert-success" style="margin-top:.35rem;padding:.4rem .75rem;font-size:.8rem;">
-                                    ✅ Archivo cargado — se guardara al hacer clic en Guardar
+                                <div class="alert alert-success" style="margin-top:.5rem;padding:.4rem .75rem;font-size:.8rem;margin-bottom:0;">
+                                    ✅ Archivo cargado — se guardará al hacer clic en Guardar
                                 </div>
                             }
-                            <p class="text-xs text-muted" style="margin-top:.3rem;">
-                                Sube un @(tipoCertificado == "pptx" ? ".pptx" : tipoCertificado == "pdf" ? ".pdf" : ".docx") con variables {{nombre_completo}}, {{cargo}}, {{capacitacion}}, etc.
+                            
+                            @if (capacitacionesConPlantilla.Any())
+                            {
+                                <div style="margin-top: 1.25rem; padding-top: 1.25rem; border-top: 1px dashed var(--border);">
+                                    <label style="font-size:.85rem;font-weight:500;display:block;margin-bottom:.35rem;">
+                                        O usar plantilla de un certificado ya creado:
+                                    </label>
+                                    <select class="form-select" @onchange="OnCopiarDesdeSeleccionado" style="max-width: 100%;">
+                                        <option value="">-- Seleccionar capacitación existente --</option>
+                                        @foreach (var capExistente in capacitacionesConPlantilla)
+                                        {
+                                            <option value="@capExistente.Id" selected="@(certForm.CopiarPlantillaDesdeId == capExistente.Id)">@capExistente.Nombre</option>
+                                        }
+                                    </select>
+                                    @if (copiandoDesdeNombre != null)
+                                    {
+                                        <div class="alert alert-info" style="margin-top:.5rem;padding:.4rem .75rem;font-size:.8rem;margin-bottom:0;">
+                                            📋 Se copiará la plantilla y el nombre desde: <strong>@copiandoDesdeNombre</strong>
+                                        </div>
+                                    }
+                                </div>
+                            }
+
+                            <p class="text-xs text-muted" style="margin-top:.6rem; margin-bottom: 0;">
+                                Sube un archivo .pptx con variables {{nombre_completo}}, {{cargo}}, {{capacitacion}}, etc.
                             </p>
-                            @if (tipoCertificado == "pptx")
-                            {
-                                <div style="margin-top:.5rem;padding:.5rem .75rem;font-size:.8rem;background-color:rgba(13, 202, 240, 0.08);border:1px solid rgba(13, 202, 240, 0.2);border-radius:4px;color:#055160;line-height:1.4;">
-                                    💡 <strong>Recomendación:</strong> La conversión de PPTX a PDF en el servidor requiere LibreOffice instalado. Los usuarios siempre podrán descargar la presentación PPTX completada para guardarla como PDF desde su PowerPoint local con fidelidad total.
-                                </div>
-                            }
-                            else if (tipoCertificado == "pdf")
-                            {
-                                <div style="margin-top:.5rem;padding:.5rem .75rem;font-size:.8rem;background-color:rgba(255, 193, 7, 0.08);border:1px solid rgba(255, 193, 7, 0.2);border-radius:4px;color:#664d03;line-height:1.4;">
-                                    ⚠️ <strong>Importante:</strong> Se recomienda encarecidamente utilizar PDFs con campos de formulario interactivos (AcroForms). Las plantillas PDF estáticas con reemplazo directo de texto plano pueden recortar, solapar o mostrar caracteres extraños si el nombre del participante es largo o contiene caracteres especiales no incluidos en el PDF original.
-                                </div>
-                            }
-                            else if (tipoCertificado == "docx")
-                            {
-                                <div style="margin-top:.5rem;padding:.5rem .75rem;font-size:.8rem;background-color:rgba(13, 202, 240, 0.08);border:1px solid rgba(13, 202, 240, 0.2);border-radius:4px;color:#055160;line-height:1.4;">
-                                    💡 <strong>Nota:</strong> Si la plantilla de Word utiliza fuentes no estándar, asegúrate de que estén instaladas en el servidor, de lo contrario LibreOffice las sustituirá por fuentes estándar del sistema al generar el PDF.
-                                </div>
-                            }
+                            <div style="margin-top:.5rem;padding:.5rem .75rem;font-size:.8rem;background-color:rgba(13, 202, 240, 0.08);border:1px solid rgba(13, 202, 240, 0.2);border-radius:4px;color:#055160;line-height:1.4;">
+                                💡 <strong>Nota:</strong> Los certificados se descargarán automáticamente en formato <strong>PDF</strong>. El servidor procesará la plantilla .pptx reemplazando las variables y generando el PDF para el colaborador.
+                            </div>
                         }
                     </div>
-                }
-            }
-            <div class="flex gap-2">
+                </div>
+
+                <!-- Columna Derecha: Variables Disponibles -->
+                <div style="position: sticky; top: 0; display: flex; flex-direction: column; gap: 1rem;">
+                    <div class="card" style="padding: 1rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg); margin: 0;">
+                        <h4 style="margin-top: 0; margin-bottom: 0.5rem; font-size: 0.9rem; font-weight: 600; color: var(--text);">📋 Variables disponibles</h4>
+                        <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0; margin-bottom: 0.75rem; line-height: 1.3;">
+                            Haz clic en una variable para insertarla o copiarla al portapapeles.
+                        </p>
+
+                        <div style="display: flex; flex-direction: column; gap: 0.35rem; max-height: 320px; overflow-y: auto; padding-right: 0.2rem;">
+                            @foreach (var vari in VariablesListadoFriendly)
+                            {
+                                var v = vari.Key;
+                                <div style="display: flex; align-items: center; justify-content: space-between; background: var(--surface); border: 1px solid var(--border); padding: 0.25rem 0.4rem; border-radius: 4px;">
+                                    <code style="font-size: 0.75rem; color: var(--primary); font-weight: bold; cursor: pointer;" @onclick="() => CopiarAlPortapapeles(v)" title="Haga clic para copiar">@v</code>
+                                    <span class="text-xs text-muted" style="margin-left:auto; margin-right: 0.5rem;" title="@vari.Value">@vari.Value</span>
+                                    <button type="button" class="btn btn-ghost btn-sm" @onclick="() => CopiarAlPortapapeles(v)" style="font-size: 0.7rem; padding: 0.1rem 0.25rem;" title="Copiar">📋</button>
+                                </div>
+                            }
+                            @if (camposFicha != null)
+                            {
+                                @foreach (var campo in camposFicha)
+                                {
+                                    var v = "{{" + campo.CampoClave + "}}";
+                                    <div style="display: flex; align-items: center; justify-content: space-between; background: var(--surface); border: 1px solid var(--border); padding: 0.25rem 0.4rem; border-radius: 4px;">
+                                        <code style="font-size: 0.75rem; color: var(--primary); font-weight: bold; cursor: pointer;" @onclick="() => CopiarAlPortapapeles(v)" title="Haga clic para copiar">@v</code>
+                                        <span class="text-xs text-muted" style="margin-left:auto; margin-right: 0.5rem;" title="@campo.Nombre (Ficha)">@campo.Nombre (Ficha)</span>
+                                        <button type="button" class="btn btn-ghost btn-sm" @onclick="() => CopiarAlPortapapeles(v)" style="font-size: 0.7rem; padding: 0.1rem 0.25rem;" title="Copiar">📋</button>
+                                    </div>
+                                }
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="flex gap-2" style="margin-top:1rem;">
                 <button class="btn btn-primary btn-sm" @onclick="GuardarCertificado" disabled="@guardandoCertificado">
                     @(guardandoCertificado ? "Guardando..." : "Guardar")
                 </button>
@@ -909,6 +915,12 @@
         }
 
         if (accessDenied) return;
+
+        try
+        {
+            camposFicha = await CampoApiService.GetAllAsync() ?? [];
+        }
+        catch { }
 
         if (PuedeGestionar)
         {
@@ -1284,32 +1296,63 @@
     private bool editandoCertificado = false;
     private bool guardandoCertificado = false;
     private ConfigurarCertificadoDto certForm = new();
-    private string tipoCertificado = "docx";
+    private string tipoCertificado = "pptx";
     private string certHtmlContent = string.Empty;
-    private static readonly string[] variablesCertificado =
-        ["{{nombre_completo}}", "{{cargo}}", "{{area}}", "{{capacitacion}}", "{{fecha_emision}}", "{{puntaje}}"];
+    private List<CapacitacionDto> capacitacionesConPlantilla = new();
+    private string? nombreArchivoSeleccionado = null;
+    private string? copiandoDesdeNombre = null;
+    private List<ColaboradorCampoDto> camposFicha = [];
 
-    private void AbrirEditarCertificado()
+    private static readonly Dictionary<string, string> VariablesListadoFriendly = new()
+    {
+        ["{{nombre_completo}}"]  = "Nombre completo",
+        ["{{nombre}}"]           = "Nombre",
+        ["{{apellido}}"]         = "Apellido",
+        ["{{cedula}}"]           = "Cédula",
+        ["{{cargo}}"]            = "Cargo actual",
+        ["{{area}}"]             = "Área / departamento",
+        ["{{fecha_ingreso}}"]    = "Fecha de ingreso",
+        ["{{tipo_contrato}}"]    = "Tipo de contrato",
+        ["{{sueldo_basico}}"]    = "Sueldo básico",
+        ["{{ciudad}}"]           = "Ciudad",
+        ["{{fecha_emision}}"]    = "Fecha de emisión (dd/MM/yyyy)",
+        ["{{fecha_expedicion}}"] = "Fecha de emisión (larga)",
+        ["{{fecha_actual}}"]     = "Fecha de hoy",
+        ["{{genero}}"]           = "Tratamiento de género",
+        ["{{capacitacion}}"]     = "Nombre de la capacitación",
+        ["{{puntaje}}"]          = "Calificación obtenida"
+    };
+
+    private async Task CargarCapacitacionesConPlantilla()
+    {
+        try
+        {
+            var todas = await CapacitacionService.GetAllAsync();
+            if (todas is not null)
+            {
+                capacitacionesConPlantilla = todas
+                    .Where(c => c.TienePlantillaDocx && c.Id != Id)
+                    .ToList();
+            }
+        }
+        catch
+        {
+            // silent catch
+        }
+    }
+
+    private async Task AbrirEditarCertificado()
     {
         certForm = new ConfigurarCertificadoDto
         {
             EmiteCertificado = capacitacion?.EmiteCertificado ?? false,
             PlantillaNombreCertificado = capacitacion?.PlantillaNombreCertificado
         };
-        if (capacitacion?.TienePlantillaDocx == true)
-        {
-            tipoCertificado = capacitacion.TipoArchivoCertificado ==
-                "application/vnd.openxmlformats-officedocument.presentationml.presentation"
-                ? "pptx"
-                : capacitacion.TipoArchivoCertificado == "application/pdf"
-                    ? "pdf"
-                    : "docx";
-        }
-        else
-        {
-            tipoCertificado = "docx";
-        }
+        tipoCertificado = "pptx";
+        nombreArchivoSeleccionado = null;
+        copiandoDesdeNombre = null;
         editandoCertificado = true;
+        await CargarCapacitacionesConPlantilla();
     }
 
     private void InsertarVariable(string variable)
@@ -1317,42 +1360,93 @@
         certForm.PlantillaNombreCertificado = (certForm.PlantillaNombreCertificado ?? "") + variable;
     }
 
+    private async Task CopiarAlPortapapeles(string texto)
+    {
+        try
+        {
+            var ok = await JS.InvokeAsync<bool>("copiarTexto", texto);
+            if (ok)
+            {
+                await toast.Show($"Copiado: {texto}");
+            }
+            else
+            {
+                await toast.Show("No se pudo copiar el texto.", "warning");
+            }
+        }
+        catch
+        {
+            await toast.Show("Error al copiar al portapapeles.", "warning");
+        }
+    }
+
     private async Task OnArchivoCertificadoSeleccionado(InputFileChangeEventArgs e)
     {
         var file = e.File;
-        bool isPptx = tipoCertificado == "pptx";
-        bool isPdf = tipoCertificado == "pdf";
-        var expectedExt = isPptx ? ".pptx" : isPdf ? ".pdf" : ".docx";
+        var expectedExt = ".pptx";
 
         if (!file.Name.EndsWith(expectedExt, StringComparison.OrdinalIgnoreCase))
         { await toast.Show($"Solo se aceptan archivos {expectedExt}", "warning"); return; }
         if (file.Size > 5 * 1024 * 1024)
         { await toast.Show("El archivo no puede superar 5 MB.", "warning"); return; }
         
+        nombreArchivoSeleccionado = file.Name;
+        certForm.CopiarPlantillaDesdeId = null;
+        copiandoDesdeNombre = null;
+
         using var ms = new System.IO.MemoryStream();
         await file.OpenReadStream(5 * 1024 * 1024).CopyToAsync(ms);
         certForm.ArchivoDocxBase64 = Convert.ToBase64String(ms.ToArray());
-        certForm.TipoArchivoCertificado = isPptx
-            ? "application/vnd.openxmlformats-officedocument.presentationml.presentation"
-            : isPdf
-                ? "application/pdf"
-                : "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+        certForm.TipoArchivoCertificado = "application/vnd.openxmlformats-officedocument.presentationml.presentation";
         certForm.EliminarDocx = false;
+    }
+
+    private void OnCopiarDesdeSeleccionado(ChangeEventArgs e)
+    {
+        var val = e.Value?.ToString();
+        if (int.TryParse(val, out var selectedId))
+        {
+            var selectedCap = capacitacionesConPlantilla.FirstOrDefault(c => c.Id == selectedId);
+            if (selectedCap is not null)
+            {
+                certForm.CopiarPlantillaDesdeId = selectedCap.Id;
+                if (string.IsNullOrWhiteSpace(certForm.PlantillaNombreCertificado))
+                {
+                    certForm.PlantillaNombreCertificado = selectedCap.PlantillaNombreCertificado;
+                }
+                copiandoDesdeNombre = selectedCap.Nombre;
+                certForm.ArchivoDocxBase64 = null;
+                certForm.TipoArchivoCertificado = null;
+                certForm.EliminarDocx = false;
+                nombreArchivoSeleccionado = null;
+            }
+        }
+        else
+        {
+            certForm.CopiarPlantillaDesdeId = null;
+            copiandoDesdeNombre = null;
+        }
     }
 
     private async Task GuardarCertificado()
     {
         guardandoCertificado = true;
-        // Si es HTML, guardar el contenido en el DTO como base64 de un "docx" no aplica
-        // El HTML se guarda en NombreCertificado por ahora — en futuro se puede extender
+        
+        bool tienePlantilla = (capacitacion.TienePlantillaDocx && !certForm.EliminarDocx) 
+            || !string.IsNullOrWhiteSpace(certForm.ArchivoDocxBase64)
+            || certForm.CopiarPlantillaDesdeId.HasValue;
+            
+        bool tieneNombre = !string.IsNullOrWhiteSpace(certForm.PlantillaNombreCertificado);
+        certForm.EmiteCertificado = tienePlantilla || tieneNombre;
+
         var result = await CapacitacionService.ConfigurarCertificadoAsync(Id, certForm);
         guardandoCertificado = false;
         if (result is not null)
         {
             capacitacion = result;
             editandoCertificado = false;
-            await toast.Show("Configuracion de certificado guardada.");
+            await toast.Show("Configuración de certificado guardada.");
         }
-        else await toast.Show("Error al guardar la configuracion.", "error");
+        else await toast.Show("Error al guardar la configuración.", "error");
     }
 }
