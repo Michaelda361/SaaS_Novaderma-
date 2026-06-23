@@ -21,7 +21,8 @@ public class MockSharePointService : ISharePointService
         _uploadsPath = Path.Combine(contentRoot, "wwwroot", "uploads");
         Directory.CreateDirectory(_uploadsPath);
 
-        _baseUrl = "http://localhost:5194/uploads";
+        var baseAddress = config["BaseUrl"]?.TrimEnd('/') ?? "http://localhost:5194";
+        _baseUrl = $"{baseAddress}/uploads";
     }
 
     public async Task<(string itemId, string url)> SubirArchivoOficialAsync(

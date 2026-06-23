@@ -18,6 +18,7 @@
     --border-hover:   #d1d5db;
     --bg:             #f3f4f6;
     --surface:        #ffffff;
+    --surface-rgb:    255, 255, 255;
     --surface-hover:  #f9fafb;
     --sidebar-bg:     #1e1b4b;
     --sidebar-text:   #c7d2fe;
@@ -29,7 +30,7 @@
     --shadow:         0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
     --shadow-md:      0 4px 12px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04);
     --shadow-lg:      0 20px 40px rgba(0,0,0,0.14), 0 4px 8px rgba(0,0,0,0.06);
-    --transition:     0.15s ease;
+    --transition:     0.3s cubic-bezier(0.4, 0, 0.2, 1);
     --font:           'Inter', system-ui, -apple-system, sans-serif;
     /* Secundarios / alias (instructivos, chips de variable, tarjetas de área) */
     --surface-alt:    #f9fafb;

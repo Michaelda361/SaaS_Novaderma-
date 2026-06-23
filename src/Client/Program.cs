@@ -20,7 +20,8 @@ builder.Services.AddMsalAuthentication(options =>
     options.ProviderOptions.AdditionalScopesToConsent.Add(
         "https://graph.microsoft.com/Files.ReadWrite");
     options.ProviderOptions.LoginMode = "redirect";
-    options.ProviderOptions.Authentication.PostLogoutRedirectUri = null;
+    options.ProviderOptions.Authentication.RedirectUri = $"{builder.HostEnvironment.BaseAddress}authentication/login-callback";
+    options.ProviderOptions.Authentication.PostLogoutRedirectUri = $"{builder.HostEnvironment.BaseAddress}landing";
 });
 
 // Configuración global de JSON
@@ -31,12 +32,16 @@ builder.Services.AddSingleton(new System.Text.Json.JsonSerializerOptions
 
 // HttpClient con Bearer token
 builder.Services.AddScoped<ApiAuthorizationMessageHandler>();
-builder.Services.AddScoped<DevAwareAuthorizationMessageHandler>();
 builder.Services.AddScoped(sp =>
 {
-    var handler = sp.GetRequiredService<DevAwareAuthorizationMessageHandler>();
+    var handler = sp.GetRequiredService<ApiAuthorizationMessageHandler>();
     handler.InnerHandler = new HttpClientHandler();
-    var http = new HttpClient(handler) { BaseAddress = new Uri("http://localhost:5194/") };
+    var apiBaseUrl = builder.Configuration["ApiBaseUrl"];
+    if (string.IsNullOrEmpty(apiBaseUrl))
+    {
+        apiBaseUrl = builder.HostEnvironment.BaseAddress;
+    }
+    var http = new HttpClient(handler) { BaseAddress = new Uri(apiBaseUrl) };
     http.DefaultRequestHeaders.Add("Accept", "application/json");
     return http;
 });

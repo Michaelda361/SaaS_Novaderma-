@@ -23,6 +23,7 @@ public class NotificacionesService : IAsyncDisposable
 {
     private HubConnection? _hub;
     private readonly NavigationManager _nav;
+    private readonly Microsoft.Extensions.Configuration.IConfiguration _config;
     private int? _colaboradorId;
     private bool _esAdmin;
     private bool _enGrupoAdmin = false;
@@ -42,9 +43,10 @@ public class NotificacionesService : IAsyncDisposable
 
     public bool Conectado => _hub?.State == HubConnectionState.Connected;
 
-    public NotificacionesService(NavigationManager nav)
+    public NotificacionesService(NavigationManager nav, Microsoft.Extensions.Configuration.IConfiguration config)
     {
         _nav = nav;
+        _config = config;
     }
 
     /// <summary>
@@ -65,10 +67,13 @@ public class NotificacionesService : IAsyncDisposable
         _esAdmin = esAdmin;
         _enGrupoAdmin = false;
 
-        var baseUrl = _nav.BaseUri
-            .Replace("5185", "5194")
-            .Replace("localhost:5000", "localhost:5194")
-            .TrimEnd('/') + "/hubs/notificaciones";
+        var apiBaseUrl = _config["ApiBaseUrl"];
+        if (string.IsNullOrEmpty(apiBaseUrl))
+        {
+            apiBaseUrl = _nav.BaseUri;
+        }
+
+        var baseUrl = apiBaseUrl.TrimEnd('/') + "/hubs/notificaciones";
 
         Console.WriteLine($"[Hub] Conectando a: {baseUrl}");
 

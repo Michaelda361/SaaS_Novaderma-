@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.WebAssembly.Authentication;
+using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
+using Microsoft.Extensions.Configuration;
 
 namespace TalentManagement.Client.Services;
 
@@ -11,11 +13,14 @@ public class ApiAuthorizationMessageHandler : AuthorizationMessageHandler
 {
     public ApiAuthorizationMessageHandler(
         IAccessTokenProvider provider,
-        NavigationManager navigation)
+        NavigationManager navigation,
+        IConfiguration config,
+        IWebAssemblyHostEnvironment env)
         : base(provider, navigation)
     {
+        var apiBaseUrl = config["ApiBaseUrl"] ?? env.BaseAddress;
         ConfigureHandler(
-            authorizedUrls: ["http://localhost:5194/"],
+            authorizedUrls: [apiBaseUrl],
             scopes: ["api://60ea78c7-4add-4d9e-ba23-ac5d2c1ee4ac/access_as_user"]);
     }
 
@@ -26,10 +31,8 @@ public class ApiAuthorizationMessageHandler : AuthorizationMessageHandler
         {
             return await base.SendAsync(request, cancellationToken);
         }
-        catch (AccessTokenNotAvailableException ex)
+        catch (AccessTokenNotAvailableException)
         {
-            ex.Redirect();
-            // Nunca llega aquí — Redirect() navega fuera
             return new HttpResponseMessage(System.Net.HttpStatusCode.Unauthorized);
         }
     }

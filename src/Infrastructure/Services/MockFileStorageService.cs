@@ -24,7 +24,8 @@ public class MockFileStorageService : IFileStorageService
         var contentRoot = config["ContentRootPath"] ?? AppContext.BaseDirectory;
         _basePath = Path.Combine(contentRoot, "wwwroot", "uploads", "blobs");
         Directory.CreateDirectory(_basePath);
-        _baseUrl = "http://localhost:5194/uploads/blobs";
+        var baseAddress = config["BaseUrl"]?.TrimEnd('/') ?? "http://localhost:5194";
+        _baseUrl = $"{baseAddress}/uploads/blobs";
     }
 
     public async Task<string> UploadAsync(

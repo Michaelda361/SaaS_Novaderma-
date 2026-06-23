@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging;
 using System.Security.Claims;
 using TalentManagement.Application.Interfaces;
 
@@ -6,53 +6,23 @@ namespace TalentManagement.Server.Services;
 
 public class CurrentUserService(
     IHttpContextAccessor httpContextAccessor,
-    IWebHostEnvironment env,
     IColaboradorRepository colaboradorRepo,
-    ILogger<CurrentUserService> logger,
-    DevUserStore? devStore = null)
+    ILogger<CurrentUserService> logger)
 {
     public string GetEmail()
     {
         var ctx = httpContextAccessor.HttpContext;
-
-        // Si hay Bearer token real, usarlo siempre — tiene prioridad sobre DevUserStore
-        if (ctx?.Request.Headers.TryGetValue("Authorization", out var authHeader) == true
-            && authHeader.ToString().StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
-        {
-            var user = ctx.User;
-            return user?.FindFirstValue("preferred_username")
-                ?? user?.FindFirstValue(ClaimTypes.Email)
-                ?? throw new UnauthorizedAccessException("No se pudo obtener el email del usuario");
-        }
-
-        // Dev: header X-Dev-User o DevUserStore
-        if (env.IsDevelopment() || devStore is not null)
-        {
-            if (ctx?.Request.Headers.TryGetValue("X-Dev-User", out var headerEmail) == true
-                && !string.IsNullOrWhiteSpace(headerEmail.ToString()))
-                return headerEmail.ToString().Trim();
-
-            if (devStore?.ActiveEmail is { Length: > 0 } storeEmail
-                && !string.IsNullOrWhiteSpace(storeEmail))
-                return storeEmail;
-        }
-
-        var userFallback = ctx?.User;
-        return userFallback?.FindFirstValue("preferred_username")
-            ?? userFallback?.FindFirstValue(ClaimTypes.Email)
+        var user = ctx?.User;
+        return user?.FindFirstValue("preferred_username")
+            ?? user?.FindFirstValue(ClaimTypes.Email)
             ?? throw new UnauthorizedAccessException("No se pudo obtener el email del usuario");
     }
 
-    /// <summary>True si el usuario se autenticó con Bearer JWT de Azure (no dev user).</summary>
+    /// <summary>True si el usuario se autenticó con Bearer JWT de Azure.</summary>
     public bool EsMicrosoftUser()
     {
         var ctx = httpContextAccessor.HttpContext;
-        if (ctx is null) return false;
-        if (ctx.Request.Headers.ContainsKey("X-Dev-User")) return false;
-        if (ctx.Request.Headers.TryGetValue("Authorization", out var auth)
-            && auth.ToString().StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
-            return true;
-        return false;
+        return ctx?.User.Identity?.IsAuthenticated == true;
     }
 
     /// <summary>

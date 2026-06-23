@@ -3,11 +3,20 @@
    ============================================= */
 
 .card {
-    background: var(--surface);
+    background: rgba(var(--surface-rgb), 0.75);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow);
     overflow: hidden;
+    transition: transform var(--transition), box-shadow var(--transition), border-color var(--transition);
+}
+
+.card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+    border-color: var(--border-hover);
 }
 
 .card-header {
@@ -17,7 +26,7 @@
     align-items: center;
     justify-content: space-between;
     gap: 1rem;
-    background: var(--surface);
+    background: transparent;
 }
 
 .card-title {
@@ -1061,6 +1070,7 @@ textarea { resize: vertical; min-height: 80px; }
     --border-hover:   #334155;
     --bg:             #0f172a;
     --surface:        #1e293b;
+    --surface-rgb:    30, 41, 59;
     --surface-hover:  #263348;
     --sidebar-bg:     #0f172a;
     --sidebar-text:   #94a3b8;

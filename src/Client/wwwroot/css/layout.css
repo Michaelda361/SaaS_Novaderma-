@@ -1,4 +1,4 @@
-﻿/* =============================================
+/* =============================================
    LAYOUT
    ============================================= */
 
@@ -153,7 +153,9 @@
    ============================================= */
 
 .topbar {
-    background: var(--surface);
+    background: rgba(var(--surface-rgb), 0.8);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
     border-bottom: 1px solid var(--border);
     padding: 0 1.5rem;
     height: 3.5rem;

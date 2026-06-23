@@ -14,44 +14,17 @@ Console.WriteLine($"[NovaHub] Environment: {builder.Environment.EnvironmentName}
 // Inyectar ContentRootPath en config para que MockSharePointService lo pueda leer
 builder.Configuration["ContentRootPath"] = builder.Environment.ContentRootPath;
 
-// Detectar modo dev: por environment O por presencia de DevSettings en config
-var esModoDev = builder.Environment.IsDevelopment()
-    || !string.IsNullOrWhiteSpace(builder.Configuration["DevSettings:DefaultDevUser"]);
-
-Console.WriteLine($"[NovaHub] Environment: {builder.Environment.EnvironmentName} | DevMode: {esModoDev}");
-
-if (esModoDev)
-{
-    // Dev: acepta JWT de Entra ID Y el esquema DevUser (header X-Dev-User)
-    builder.Services.AddMicrosoftIdentityWebApiAuthentication(builder.Configuration);
-
-    builder.Services.AddAuthentication()
-        .AddScheme<AuthenticationSchemeOptions, DevAuthHandler>("DevUser", _ => { });
-    builder.Services.AddAuthorization(options =>
-        options.DefaultPolicy = new Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder()
-            .AddAuthenticationSchemes("Bearer", "DevUser")
-            .RequireAuthenticatedUser()
-            .Build());
-
-    builder.Services.AddSingleton<TalentManagement.Server.Services.DevUserStore>();
-}
-else
-{
-    // Producción: solo JWT, multi-tenant
-    builder.Services.AddMicrosoftIdentityWebApiAuthentication(builder.Configuration);
-}
-
-if (esModoDev)
-{
-    // En desarrollo: relaja la validación de JWT para facilitar pruebas con distintos tenants
-    builder.Services.PostConfigure<Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerOptions>(
-        Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerDefaults.AuthenticationScheme,
-        options =>
-        {
-            options.TokenValidationParameters.ValidateIssuer = false;
-            options.TokenValidationParameters.ValidateAudience = false;
-        });
-}
+// Producción / Despliegue: solo JWT, multi-tenant
+builder.Services.AddMicrosoftIdentityWebApiAuthentication(builder.Configuration);
+builder.Services.PostConfigure<Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerOptions>(
+    Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerDefaults.AuthenticationScheme,
+    options =>
+    {
+        var clientId = builder.Configuration["AzureAd:ClientId"];
+        var audience = builder.Configuration["AzureAd:Audience"] ?? $"api://{clientId}";
+        options.TokenValidationParameters.ValidAudiences = new[] { clientId, audience };
+    });
+builder.Services.AddAuthorization();
 
 builder.Services.AddOpenApi();
 builder.Services.AddRazorPages();
@@ -80,29 +53,32 @@ builder.Services.AddScoped<TalentManagement.Server.Services.CurrentUserService>(
 
 builder.Services.AddCors(options =>
     options.AddDefaultPolicy(policy =>
-        policy.WithOrigins("http://localhost:5185", "https://localhost:5185",
-                           "http://localhost:5000", "https://localhost:5001")
+    {
+        var originsStr = builder.Configuration["CorsOrigins"];
+        var origins = !string.IsNullOrEmpty(originsStr)
+            ? originsStr.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            : new[] { "http://localhost:5185", "https://localhost:5185", "http://localhost:5000", "https://localhost:5001" };
+        policy.WithOrigins(origins)
               .AllowAnyMethod()
               .AllowAnyHeader()
-              .AllowCredentials()));
+              .AllowCredentials();
+    }));
 
 var app = builder.Build();
 
-if (esModoDev)
+if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
     app.MapScalarApiReference();
 }
 
-if (esModoDev)
+using (var scope = app.Services.CreateScope())
 {
-    using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider
         .GetRequiredService<TalentManagement.Infrastructure.Persistence.AppDbContext>();
     db.Database.Migrate();
     await TalentManagement.Infrastructure.Persistence.DbSeeder.SeedAsync(db);
     await TalentManagement.Infrastructure.Persistence.DbSeeder.CorregirHistoricosHuerfanosAsync(db);
-    await TalentManagement.Infrastructure.Persistence.DbSeeder.RunIntegrationTestsAsync(scope.ServiceProvider);
 }
 
 app.UseMiddleware<TalentManagement.Server.ExceptionHandlingMiddleware>();
@@ -111,58 +87,9 @@ app.UseCors();
 app.UseResponseCompression();
 app.UseStaticFiles();
 
-if (esModoDev)
-    app.MapRazorPages();
+app.MapRazorPages();
 
-if (esModoDev)
-{
-    app.MapGet("/api/v1/dev/usuario-activo", (TalentManagement.Server.Services.DevUserStore store) =>
-        Results.Ok(new { email = store.ActiveEmail, activo = store.ActiveEmail != null }))
-        .AllowAnonymous();
-
-    // Diagnóstico del hub: muestra qué colaboradores están conectados
-    app.MapGet("/api/v1/dev/hub-conexiones", () =>
-        Results.Ok(TalentManagement.Server.Hubs.NotificacionesHub.GetConexionesActivas()))
-        .AllowAnonymous();
-
-    // Test: envía una notificación de prueba directamente a un colaborador
-    app.MapPost("/api/v1/dev/hub-test/{colaboradorId:int}", async (
-        int colaboradorId,
-        IHubContext<TalentManagement.Server.Hubs.NotificacionesHub> hub) =>
-    {
-        var connId = TalentManagement.Server.Hubs.NotificacionesHub.GetConnectionId(colaboradorId);
-        if (connId is null)
-            return Results.NotFound(new { error = $"ColaboradorId={colaboradorId} no está conectado" });
-
-        var testNotif = new TalentManagement.Shared.DTOs.Inscripciones.InscripcionDto
-        {
-            Id = 9999,
-            ColaboradorId = colaboradorId,
-            ColaboradorNombre = "Test",
-            ColaboradorEmail = "test@test.com",
-            CapacitacionId = 9999,
-            CapacitacionNombre = "🧪 Notificación de prueba",
-            FechaInscripcion = DateTime.Now,
-        };
-
-        await hub.Clients.Client(connId).SendAsync("InscripcionCreada", testNotif);
-        return Results.Ok(new { enviado = true, connectionId = connId, colaboradorId });
-    }).AllowAnonymous();
-
-    app.MapPost("/api/v1/dev/usuario-activo", (
-        TalentManagement.Server.Services.DevUserStore store,
-        DevUsuarioRequest req) =>
-    {
-        if (string.IsNullOrWhiteSpace(req.Email))
-            store.ClearUser();
-        else
-            store.SetUser(req.Email);
-        return Results.Ok(new { email = store.ActiveEmail, activo = store.ActiveEmail != null });
-    }).AllowAnonymous();
-}
-
-
-if (!esModoDev)
+if (!app.Environment.IsDevelopment())
     app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
@@ -170,11 +97,7 @@ app.MapControllers();
 app.MapHub<NotificacionesHub>("/hubs/notificaciones");
 
 // Endpoint para que el cliente sepa si el usuario actual es Microsoft (Bearer) o dev
-app.MapGet("/api/v1/auth/es-microsoft", (HttpContext ctx) =>
-{
-    var esMicrosoft = !ctx.User.Identities.Any(i => i.AuthenticationType == "DevUser");
-    return Results.Ok(new { esMicrosoft });
-}).RequireAuthorization();
+app.MapGet("/api/v1/auth/es-microsoft", () => Results.Ok(new { esMicrosoft = true })).RequireAuthorization();
 
 // Perfil del usuario actual: rol dentro de la app
 app.MapGet("/api/v1/auth/perfil", async (
@@ -218,6 +141,6 @@ app.MapGet("/api/v1/auth/perfil", async (
     }
 }).RequireAuthorization();
 
-app.Run();
+app.MapFallbackToFile("index.html");
 
-record DevUsuarioRequest(string? Email);
+app.Run();
