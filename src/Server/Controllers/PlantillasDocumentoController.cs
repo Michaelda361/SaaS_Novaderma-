@@ -17,7 +17,8 @@ public class PlantillasDocumentoController(
     PdfGeneratorService pdfGenerator,
     DocxToHtmlConverterService docxConverter,
     IHubContext<NotificacionesHub> hub,
-    CurrentUserService currentUser) : ControllerBase
+    CurrentUserService currentUser,
+    ILogger<PlantillasDocumentoController> logger) : ControllerBase
 {
     // ── Admin: CRUD (solo usuario Microsoft) ─────────────────────────────────
 
@@ -177,7 +178,14 @@ public class PlantillasDocumentoController(
             var pdfBytes = pdfGenerator.GenerarPdfDesdeHtml(dto.Html, entidad);
 
             var solicitud = await service.EnviarSolicitudAsync(id, email, pdfBytes);
-            await hub.Clients.Group("admins").SendAsync("NuevaSolicitud", solicitud);
+            try
+            {
+                await hub.Clients.Group("admins").SendAsync("NuevaSolicitud", solicitud);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Error al enviar notificación de nueva solicitud al grupo admins.");
+            }
 
             var nombre = $"{plantilla.Nombre.Replace(" ", "_")}_{DateTime.Today:yyyyMMdd}.pdf";
             return File(pdfBytes, "application/pdf", nombre);
@@ -249,7 +257,14 @@ public class PlantillasDocumentoController(
             var pdfBytes = pdfGenerator.GenerarPdfDesdeDocx(payloadFinal);
 
             var solicitud = await service.EnviarSolicitudAsync(id, email, pdfBytes);
-            await hub.Clients.Group("admins").SendAsync("NuevaSolicitud", solicitud);
+            try
+            {
+                await hub.Clients.Group("admins").SendAsync("NuevaSolicitud", solicitud);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Error al enviar notificación de nueva solicitud al grupo admins.");
+            }
 
             var nombre = $"{plantilla.Nombre.Replace(" ", "_")}_{DateTime.Today:yyyyMMdd}.pdf";
             return File(pdfBytes, "application/pdf", nombre);
@@ -384,7 +399,14 @@ public class PlantillasDocumentoController(
             }
 
             var solicitud = await service.EnviarSolicitudAsync(id, email, pdfBytes, variablesFinales);
-            await hub.Clients.Group("admins").SendAsync("NuevaSolicitud", solicitud);
+            try
+            {
+                await hub.Clients.Group("admins").SendAsync("NuevaSolicitud", solicitud);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Error al enviar notificación de nueva solicitud al grupo admins.");
+            }
             return Ok(solicitud);
         }
         catch (KeyNotFoundException ex) { return NotFound(ex.Message); }
@@ -477,7 +499,16 @@ public class PlantillasDocumentoController(
 
             var connIdAprobar = NotificacionesHub.GetConnectionId(resultado.ColaboradorId);
             if (connIdAprobar is not null)
-                await hub.Clients.Client(connIdAprobar).SendAsync("SolicitudResuelta", resultado);
+            {
+                try
+                {
+                    await hub.Clients.Client(connIdAprobar).SendAsync("SolicitudResuelta", resultado);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogWarning(ex, "Error al enviar notificación de solicitud resuelta al colaborador {ColId}.", resultado.ColaboradorId);
+                }
+            }
 
             return Ok(resultado);
         }
@@ -495,7 +526,16 @@ public class PlantillasDocumentoController(
             if (resultado is null) return NotFound();
             var connIdRechazar = NotificacionesHub.GetConnectionId(resultado.ColaboradorId);
             if (connIdRechazar is not null)
-                await hub.Clients.Client(connIdRechazar).SendAsync("SolicitudResuelta", resultado);
+            {
+                try
+                {
+                    await hub.Clients.Client(connIdRechazar).SendAsync("SolicitudResuelta", resultado);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogWarning(ex, "Error al enviar notificación de solicitud resuelta al colaborador {ColId}.", resultado.ColaboradorId);
+                }
+            }
             return Ok(resultado);
         }
         catch (Exception ex) { return StatusCode(500, ex.Message); }

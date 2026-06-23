@@ -69,7 +69,16 @@ public class InscripcionesController(
             result.ColaboradorId, connId ?? "(no conectado)");
 
         if (connId is not null)
-            await hub.Clients.Client(connId).SendAsync("InscripcionCreada", result);
+        {
+            try
+            {
+                await hub.Clients.Client(connId).SendAsync("InscripcionCreada", result);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Error al enviar notificación de inscripción creada al colaborador {ColId}.", result.ColaboradorId);
+            }
+        }
 
         return CreatedAtAction(nameof(GetById), new { id = result.Id }, result);
     }

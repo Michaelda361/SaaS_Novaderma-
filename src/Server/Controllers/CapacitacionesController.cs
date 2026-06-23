@@ -15,7 +15,8 @@ public class CapacitacionesController(
     CapacitacionService service,
     InscripcionService inscripcionService,
     CurrentUserService currentUser,
-    IHubContext<NotificacionesHub> hub) : ControllerBase
+    IHubContext<NotificacionesHub> hub,
+    ILogger<CapacitacionesController> logger) : ControllerBase
 {
 
     [HttpGet]
@@ -167,7 +168,16 @@ public class CapacitacionesController(
         {
             var connId = NotificacionesHub.GetConnectionId(inscripcion.ColaboradorId);
             if (connId is not null)
-                await hub.Clients.Client(connId).SendAsync("CapacitacionPublicada", notif);
+            {
+                try
+                {
+                    await hub.Clients.Client(connId).SendAsync("CapacitacionPublicada", notif);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogWarning(ex, "Error al enviar notificación de capacitación publicada al colaborador {ColId}.", inscripcion.ColaboradorId);
+                }
+            }
         }
 
         return Ok(result);

@@ -15,7 +15,8 @@ public class CuestionariosController(
     CuestionarioService service,
     InscripcionService inscripcionService,
     CurrentUserService currentUser,
-    IHubContext<NotificacionesHub> hub) : ControllerBase
+    IHubContext<NotificacionesHub> hub,
+    ILogger<CuestionariosController> logger) : ControllerBase
 {
     [HttpGet("capacitacion/{capacitacionId:int}")]
     public async Task<IActionResult> GetByCapacitacion(int capacitacionId)
@@ -138,11 +139,18 @@ public class CuestionariosController(
             var colaboradorConnId = NotificacionesHub.GetConnectionId(miColaboradorId.Value);
             _ = Task.Run(async () =>
             {
-                if (notif is not null)
-                    await hub.Clients.Group("admins").SendAsync("CuestionarioRespondido", notif);
+                try
+                {
+                    if (notif is not null)
+                        await hub.Clients.Group("admins").SendAsync("CuestionarioRespondido", notif);
 
-                if (certNotif is not null && colaboradorConnId is not null)
-                    await hub.Clients.Client(colaboradorConnId).SendAsync("CertificadoEmitido", certNotif);
+                    if (certNotif is not null && colaboradorConnId is not null)
+                        await hub.Clients.Client(colaboradorConnId).SendAsync("CertificadoEmitido", certNotif);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogWarning(ex, "Error al enviar notificaciones en segundo plano tras responder cuestionario.");
+                }
             });
 
             return Ok(resultado);

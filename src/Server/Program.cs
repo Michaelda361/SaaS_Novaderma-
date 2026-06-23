@@ -3,16 +3,33 @@ using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Identity.Web;
 using Scalar.AspNetCore;
+using Serilog;
 using TalentManagement.Infrastructure;
 using TalentManagement.Server;
 using TalentManagement.Server.Hubs;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Configurar Serilog
+builder.Host.UseSerilog((context, services, configuration) => configuration
+    .ReadFrom.Configuration(context.Configuration)
+    .ReadFrom.Services(services)
+    .Enrich.FromLogContext());
+
 Console.WriteLine($"[NovaHub] Environment: {builder.Environment.EnvironmentName}");
 
 // Inyectar ContentRootPath en config para que MockSharePointService lo pueda leer
 builder.Configuration["ContentRootPath"] = builder.Environment.ContentRootPath;
+
+// Cargar configuración externa opcional (fuera del directorio de publicación)
+var externalConfigPath = Path.Combine(
+    Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+    "TalentManagement",
+    "appsettings.Production.json");
+if (File.Exists(externalConfigPath))
+{
+    builder.Configuration.AddJsonFile(externalConfigPath, optional: true, reloadOnChange: true);
+}
 
 // Producción / Despliegue: solo JWT, multi-tenant
 builder.Services.AddMicrosoftIdentityWebApiAuthentication(builder.Configuration);
@@ -23,6 +40,12 @@ builder.Services.PostConfigure<Microsoft.AspNetCore.Authentication.JwtBearer.Jwt
         var clientId = builder.Configuration["AzureAd:ClientId"];
         var audience = builder.Configuration["AzureAd:Audience"] ?? $"api://{clientId}";
         options.TokenValidationParameters.ValidAudiences = new[] { clientId, audience };
+        
+        var validateIssuerStr = builder.Configuration["AzureAd:ValidateIssuer"];
+        if (bool.TryParse(validateIssuerStr, out var validateIssuer))
+        {
+            options.TokenValidationParameters.ValidateIssuer = validateIssuer;
+        }
     });
 builder.Services.AddAuthorization();
 
@@ -48,6 +71,8 @@ builder.Services.AddControllers()
             new System.Text.Json.Serialization.JsonStringEnumConverter());
     });
 builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddHealthChecks()
+    .AddDbContextCheck<TalentManagement.Infrastructure.Persistence.AppDbContext>();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<TalentManagement.Server.Services.CurrentUserService>();
 
@@ -95,6 +120,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 app.MapHub<NotificacionesHub>("/hubs/notificaciones");
+app.MapHealthChecks("/health");
 
 // Endpoint para que el cliente sepa si el usuario actual es Microsoft (Bearer) o dev
 app.MapGet("/api/v1/auth/es-microsoft", () => Results.Ok(new { esMicrosoft = true })).RequireAuthorization();

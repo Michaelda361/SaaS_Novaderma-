@@ -612,15 +612,20 @@ public class ControlDocumentalService(
         return MapToDto(created);
     }
 
-    public async Task<DocumentoControlDto?> UpdateDocumentoAsync(
+    public async Task<UpdateDocumentoResult> UpdateDocumentoAsync(
         int id, UpdateDocumentoControlDto dto, string usuarioEmail)
     {
         var existing = await repository.GetDocumentoByIdAsync(id);
-        if (existing is null) return null;
+        if (existing is null)
+        {
+            return new UpdateDocumentoResult { Exito = false, MensajeError = "Documento no encontrado." };
+        }
 
         var editor = await TryResolverColaboradorAsync(usuarioEmail);
         if (editor is null)
-            throw new UnauthorizedAccessException("No tiene permisos para actualizar este documento.");
+        {
+            return new UpdateDocumentoResult { Exito = false, MensajeError = "No tiene permisos para actualizar este documento." };
+        }
 
         // Verificar permisos basados en ListadoMaestroPermiso
         var tienePermisoEditar = editor.Rol == RolUsuario.Admin || 
@@ -628,7 +633,14 @@ public class ControlDocumentalService(
                                 await ValidarPermisoAsync(existing.ListadoMaestroId, editor.Id, "editar");
 
         if (!tienePermisoEditar)
-            throw new UnauthorizedAccessException("No tienes permisos para editar documentos de este listado maestro.");
+        {
+            return new UpdateDocumentoResult
+            {
+                Exito = false,
+                RequiereSolicitud = true,
+                MensajeError = "No tienes permisos para editar directamente, se requiere una solicitud de cambio."
+            };
+        }
 
         if (dto.ListadoMaestroId != existing.ListadoMaestroId &&
             editor.Rol != RolUsuario.Admin && editor.Rol != RolUsuario.Jefe)
@@ -797,7 +809,11 @@ public class ControlDocumentalService(
             await auditRepository.CreateAsync(log);
         }
 
-        return MapToDto(createdDoc);
+        return new UpdateDocumentoResult
+        {
+            Exito = true,
+            Documento = MapToDto(createdDoc)
+        };
     }
 
     public async Task<SolicitudCambioDocumentoControlDto> CreateSolicitudCambioAsync(int documentoId, UpdateDocumentoControlDto propuesta, string usuarioEmail)

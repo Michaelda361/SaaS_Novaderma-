@@ -72,7 +72,6 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .WithMany(c => c.Eventos)
             .HasForeignKey(e => e.CertificadoId)
             .OnDelete(DeleteBehavior.Cascade);
-        modelBuilder.Entity<CertificadoEvento>().HasQueryFilter(e => true);
         modelBuilder.Entity<Capacitacion>().HasQueryFilter(c => c.Activo);
         modelBuilder.Entity<Inscripcion>().HasQueryFilter(i => i.Activo);
         modelBuilder.Entity<RecursoCapacitacion>().HasQueryFilter(r => r.Activo);
@@ -211,14 +210,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .OnDelete(DeleteBehavior.Restrict)
             .IsRequired(false);
 
-        // Evitar advertencias de EF Core por filtros globales en entidades relacionadas
-        modelBuilder.Entity<ListadoMaestroPermiso>().HasQueryFilter(p => true);
-        modelBuilder.Entity<SolicitudCambioDocumentoControl>().HasQueryFilter(s => true);
-        modelBuilder.Entity<VersionDocumento>().HasQueryFilter(v => true);
-        modelBuilder.Entity<FlujoAprobacionDoc>().HasQueryFilter(f => true);
-        modelBuilder.Entity<PropuestaModificacion>().HasQueryFilter(p => true);
-        modelBuilder.Entity<RespuestaCuestionario>().HasQueryFilter(r => true);
-        modelBuilder.Entity<RespuestaPregunta>().HasQueryFilter(r => true);
+
 
         modelBuilder.Entity<SolicitudCambioDocumentoControl>()
             .Property(s => s.EstadoPropuesta).HasConversion<string>();
@@ -357,6 +349,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         modelBuilder.Entity<SolicitudDocumento>().HasIndex(s => s.ColaboradorId);
         modelBuilder.Entity<PropuestaModificacion>().HasIndex(p => p.AreaId);
         modelBuilder.Entity<PlantillaDocumentoArea>().HasIndex(pa => pa.AreaId);
+        modelBuilder.Entity<DocumentoControl>().HasIndex(d => d.Estado);
+        modelBuilder.Entity<DocumentoControl>().HasIndex(d => d.ListadoMaestroId);
+        modelBuilder.Entity<SolicitudCambioDocumentoControl>().HasIndex(s => s.EstadoPropuesta);
 
         // ── Cuestionarios ─────────────────────────────────────────────────────
         modelBuilder.Entity<Cuestionario>().HasQueryFilter(c => c.Activo);

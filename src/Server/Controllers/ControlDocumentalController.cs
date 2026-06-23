@@ -17,7 +17,8 @@ namespace TalentManagement.Server.Controllers;
 public class ControlDocumentalController(
     IControlDocumentalService service,
     IHubContext<TalentManagement.Server.Hubs.NotificacionesHub> hub,
-    CurrentUserService currentUser) : ControllerBase
+    CurrentUserService currentUser,
+    ILogger<ControlDocumentalController> logger) : ControllerBase
 {
     [HttpGet("listados-maestros")]
     public async Task<IActionResult> GetListadosMaestros()
@@ -268,7 +269,8 @@ public class ControlDocumentalController(
         }
         catch (Exception ex)
         {
-            return BadRequest($"No se pudo leer el archivo XLSX: {ex.Message}");
+            logger.LogError(ex, "Error al importar listado maestro.");
+            return BadRequest("Ocurrió un error al procesar el archivo Excel. Verifique el formato e intente nuevamente.");
         }
     }
 
@@ -1228,8 +1230,20 @@ public class ControlDocumentalController(
         try
         {
             var email = currentUser.GetEmail();
-            var updated = await service.UpdateDocumentoAsync(id, dto, email);
-            return updated is null ? NotFound() : NoContent();
+            var result = await service.UpdateDocumentoAsync(id, dto, email);
+            
+            if (result.Exito)
+            {
+                return NoContent();
+            }
+
+            if (result.RequiereSolicitud)
+            {
+                var created = await service.CreateSolicitudCambioAsync(id, dto, email);
+                return CreatedAtAction(nameof(GetSolicitudesPorDocumento), new { documentoId = id }, created);
+            }
+
+            return BadRequest(result.MensajeError ?? "No se pudo actualizar el documento.");
         }
         catch (ArgumentException ex)
         {
@@ -1237,24 +1251,15 @@ public class ControlDocumentalController(
         }
         catch (UnauthorizedAccessException)
         {
-            try
-            {
-                var email = currentUser.GetEmail();
-                var created = await service.CreateSolicitudCambioAsync(id, dto, email);
-                return CreatedAtAction(nameof(GetSolicitudesPorDocumento), new { documentoId = id }, created);
-            }
-            catch (UnauthorizedAccessException)
-            {
-                return Forbid();
-            }
-            catch (InvalidOperationException ex)
-            {
-                return UnprocessableEntity(ex.Message);
-            }
-            catch (KeyNotFoundException ex)
-            {
-                return NotFound(ex.Message);
-            }
+            return Forbid();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return UnprocessableEntity(ex.Message);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(ex.Message);
         }
     }
 
@@ -1276,9 +1281,9 @@ public class ControlDocumentalController(
             {
                 await hub.Clients.Group("admins").SendAsync("NuevaSolicitudCambio", created);
             }
-            catch
+            catch (Exception ex)
             {
-                // Swallow errors - notification is best-effort
+                logger.LogWarning(ex, "Error al enviar la notificación de nueva solicitud de cambio al grupo admins.");
             }
 
             return CreatedAtAction(nameof(GetSolicitudesPorDocumento), new { documentoId }, created);

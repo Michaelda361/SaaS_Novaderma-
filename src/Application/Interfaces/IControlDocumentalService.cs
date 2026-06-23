@@ -17,7 +17,7 @@ public interface IControlDocumentalService
         string usuarioEmail);
     Task<DocumentoControlDetalleDto?> GetDocumentoAsync(int id, string usuarioEmail);
     Task<DocumentoControlDto> CreateDocumentoAsync(CreateDocumentoControlDto dto, string usuarioEmail);
-    Task<DocumentoControlDto?> UpdateDocumentoAsync(int id, UpdateDocumentoControlDto dto, string usuarioEmail);
+    Task<UpdateDocumentoResult> UpdateDocumentoAsync(int id, UpdateDocumentoControlDto dto, string usuarioEmail);
     Task<SolicitudCambioDocumentoControlDto> CreateSolicitudCambioAsync(int documentoId, UpdateDocumentoControlDto propuesta, string usuarioEmail);
     Task<List<SolicitudCambioDocumentoControlDto>> GetSolicitudesCambioPendientesAsync(string usuarioEmail);
     Task<List<SolicitudCambioDocumentoControlDto>> GetSolicitudesCambioPorDocumentoAsync(int documentoId, string usuarioEmail);
