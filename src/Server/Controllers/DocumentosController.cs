@@ -1,6 +1,7 @@
-﻿using System.Security.Claims;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using TalentManagement.Application.Services;
 using TalentManagement.Server.Services;
 using TalentManagement.Shared.DTOs.Documentos;
@@ -36,7 +37,9 @@ public class DocumentosController(DocumentoService service, CurrentUserService c
 
     // ── CRUD Admin ───────────────────────────────────────────────────────────
 
+    [EnableRateLimiting("upload")]
     [HttpPost]
+    [RequestSizeLimit(10485760)] // 10MB
     public async Task<IActionResult> Create([FromForm] CreateDocumentoDto dto,
         IFormFile? archivo)
     {
@@ -46,6 +49,9 @@ public class DocumentosController(DocumentoService service, CurrentUserService c
             string? nombre = null;
             if (archivo is not null && archivo.Length > 0)
             {
+                if (!ValidarArchivo(archivo, out var error))
+                    return BadRequest(error);
+
                 stream = archivo.OpenReadStream();
                 nombre = archivo.FileName;
             }
@@ -75,12 +81,17 @@ public class DocumentosController(DocumentoService service, CurrentUserService c
         return deleted ? NoContent() : NotFound();
     }
 
+    [EnableRateLimiting("upload")]
     [HttpPost("{id:int}/version")]
+    [RequestSizeLimit(10485760)] // 10MB
     public async Task<IActionResult> SubirVersion(int id, IFormFile archivo,
         [FromQuery] bool incrementoMayor = false)
     {
         if (archivo is null || archivo.Length == 0)
             return BadRequest("El archivo es obligatorio");
+
+        if (!ValidarArchivo(archivo, out var error))
+            return BadRequest(error);
 
         using var stream = archivo.OpenReadStream();
         var result = await service.SubirNuevaVersionAsync(id, stream, archivo.FileName, incrementoMayor);
@@ -125,7 +136,9 @@ public class DocumentosController(DocumentoService service, CurrentUserService c
 
     // ── Propuestas ───────────────────────────────────────────────────────────
 
+    [EnableRateLimiting("upload")]
     [HttpPost("{id:int}/propuestas")]
+    [RequestSizeLimit(10485760)] // 10MB
     public async Task<IActionResult> CrearPropuesta(int id,
         [FromForm] CreatePropuestaDto dto, IFormFile? archivo)
     {
@@ -136,6 +149,9 @@ public class DocumentosController(DocumentoService service, CurrentUserService c
             string? nombre = null;
             if (archivo is not null && archivo.Length > 0)
             {
+                if (!ValidarArchivo(archivo, out var error))
+                    return BadRequest(error);
+
                 stream = archivo.OpenReadStream();
                 nombre = archivo.FileName;
             }
@@ -204,4 +220,32 @@ public class DocumentosController(DocumentoService service, CurrentUserService c
 
     private async Task<Domain.Entities.Colaborador> GetColaboradorActualAsync() =>
         await service.ResolverColaboradorAsync(GetEmail());
+
+    private bool ValidarArchivo(IFormFile archivo, out string error)
+    {
+        var allowedExtensions = new[] { ".pdf", ".docx", ".xlsx", ".pptx" };
+        var allowedTypes = new[] 
+        { 
+            "application/pdf", 
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document", 
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        };
+
+        var ext = Path.GetExtension(archivo.FileName).ToLowerInvariant();
+        if (!allowedExtensions.Contains(ext) || !allowedTypes.Contains(archivo.ContentType))
+        {
+            error = "Tipo de archivo no permitido. Solo se aceptan archivos .pdf, .docx, .xlsx y .pptx.";
+            return false;
+        }
+
+        if (archivo.Length > 10 * 1024 * 1024) // 10MB
+        {
+            error = "El archivo supera el tamaño máximo permitido de 10MB.";
+            return false;
+        }
+
+        error = "";
+        return true;
+    }
 }

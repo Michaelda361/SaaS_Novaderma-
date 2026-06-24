@@ -16,7 +16,12 @@ public static class DependencyInjection
         IConfiguration configuration)
     {
         services.AddDbContext<AppDbContext>(options =>
-            options.UseSqlServer(configuration.GetConnectionString("DefaultConnection")));
+            options.UseSqlServer(
+                configuration.GetConnectionString("DefaultConnection"),
+                sqlOptions => sqlOptions.EnableRetryOnFailure(
+                    maxRetryCount: 3,
+                    maxRetryDelay: TimeSpan.FromSeconds(5),
+                    errorNumbersToAdd: null)));
 
         services.AddMemoryCache();
 
@@ -53,6 +58,8 @@ public static class DependencyInjection
         services.AddScoped<PdfGeneratorService>();
         services.AddScoped<ICertificadoPdfService, CertificadoPdfService>();
         services.AddScoped<DocxToHtmlConverterService>();
+        services.AddScoped<IExcelImportService, ExcelImportService>();
+        services.AddScoped<IExcelExportService, ExcelExportService>();
 
         // SharePoint / FileStorage / AuditExcel — mock en Development o si no están configurados, real en producción
         var env = configuration["ASPNETCORE_ENVIRONMENT"] ?? "Production";

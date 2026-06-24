@@ -2,12 +2,18 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
+using TalentManagement.Application.Interfaces;
+using TalentManagement.Domain.Enums;
 
 namespace TalentManagement.Server.Hubs;
 
-[AllowAnonymous]
-public class NotificacionesHub(ILogger<NotificacionesHub> logger) : Hub
+[Authorize]
+public class NotificacionesHub(
+    IColaboradorRepository colaboradorRepo,
+    ILogger<NotificacionesHub> logger) : Hub
 {
+    private readonly IColaboradorRepository _colaboradorRepo = colaboradorRepo;
+
     // ColaboradorId → ConnectionId (una conexión activa por colaborador)
     private static readonly ConcurrentDictionary<int, string> _conexiones = new();
     // ConnectionId → ColaboradorId (para limpiar al desconectar)
@@ -55,7 +61,21 @@ public class NotificacionesHub(ILogger<NotificacionesHub> logger) : Hub
 
     public async Task JoinAdminGroup()
     {
-        logger.LogInformation("[Hub] JoinAdminGroup — ConnectionId={Id}", Context.ConnectionId);
+        var email = Context.User?.FindFirst("preferred_username")?.Value 
+                    ?? Context.User?.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value;
+
+        if (string.IsNullOrEmpty(email))
+        {
+            throw new HubException("No autorizado. Email no encontrado en el token.");
+        }
+
+        var colaborador = await _colaboradorRepo.GetByEmailAsync(email);
+        if (colaborador is null || (colaborador.Rol != RolUsuario.Admin && colaborador.Rol != RolUsuario.Jefe))
+        {
+            throw new HubException("No autorizado.");
+        }
+
+        logger.LogInformation("[Hub] JoinAdminGroup — ConnectionId={Id} Email={Email}", Context.ConnectionId, email);
         await Groups.AddToGroupAsync(Context.ConnectionId, "admins");
     }
 

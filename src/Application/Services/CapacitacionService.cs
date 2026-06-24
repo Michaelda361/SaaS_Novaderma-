@@ -145,8 +145,9 @@ public class CapacitacionService(
                 plantillaCambiada = true;
             }
 
-            // Generar vista previa si cambió la plantilla
-            if (plantillaCambiada && cap.ArchivoDocxCertificado is { Length: > 0 } && cap.TipoArchivoCertificado == "application/vnd.openxmlformats-officedocument.presentationml.presentation")
+            // Generar vista previa si cambió la plantilla o si es requerida y no existe en la base de datos
+            bool necesitaPreview = plantillaCambiada || (cap.ArchivoPreviewCertificado == null && cap.ArchivoDocxCertificado is { Length: > 0 });
+            if (necesitaPreview && cap.ArchivoDocxCertificado is { Length: > 0 } && cap.TipoArchivoCertificado == "application/vnd.openxmlformats-officedocument.presentationml.presentation")
             {
                 try
                 {

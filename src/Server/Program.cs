@@ -1,12 +1,15 @@
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Identity.Web;
 using Scalar.AspNetCore;
 using Serilog;
+using System.Threading.RateLimiting;
 using TalentManagement.Infrastructure;
 using TalentManagement.Server;
 using TalentManagement.Server.Hubs;
+
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -46,8 +49,38 @@ builder.Services.PostConfigure<Microsoft.AspNetCore.Authentication.JwtBearer.Jwt
         {
             options.TokenValidationParameters.ValidateIssuer = validateIssuer;
         }
+
+        // Permitir autenticación SignalR usando token en Query String
+        options.Events = new Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                var accessToken = context.Request.Query["access_token"];
+                var path = context.HttpContext.Request.Path;
+                if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs/notificaciones"))
+                {
+                    context.Token = accessToken;
+                }
+                return Task.CompletedTask;
+            }
+        };
     });
-builder.Services.AddAuthorization();
+
+if (builder.Environment.IsDevelopment())
+{
+    builder.Services.AddAuthentication()
+        .AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, DevAuthHandler>("DevUser", _ => { });
+    builder.Services.AddAuthorization(options =>
+        options.DefaultPolicy = new Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder()
+            .AddAuthenticationSchemes("Bearer", "DevUser")
+            .RequireAuthenticatedUser()
+            .Build());
+    builder.Services.AddSingleton<TalentManagement.Server.Services.DevUserStore>();
+}
+else
+{
+    builder.Services.AddAuthorization();
+}
 
 builder.Services.AddOpenApi();
 builder.Services.AddRazorPages();
@@ -89,6 +122,28 @@ builder.Services.AddCors(options =>
               .AllowCredentials();
     }));
 
+builder.Services.AddHsts(options =>
+{
+    options.MaxAge = TimeSpan.FromDays(365);
+    options.IncludeSubDomains = true;
+});
+
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy("upload", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.User.FindFirst("preferred_username")?.Value 
+                          ?? httpContext.Connection.RemoteIpAddress?.ToString() 
+                          ?? "global",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 10,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0
+            }));
+});
+
 var app = builder.Build();
 
 if (app.Environment.IsDevelopment())
@@ -101,7 +156,17 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider
         .GetRequiredService<TalentManagement.Infrastructure.Persistence.AppDbContext>();
-    db.Database.Migrate();
+    
+    var config = scope.ServiceProvider.GetRequiredService<IConfiguration>();
+    if (config.GetValue<bool>("DatabaseSettings:UseEnsureCreated"))
+    {
+        db.Database.EnsureCreated();
+    }
+    else
+    {
+        db.Database.Migrate();
+    }
+
     await TalentManagement.Infrastructure.Persistence.DbSeeder.SeedAsync(db);
     await TalentManagement.Infrastructure.Persistence.DbSeeder.CorregirHistoricosHuerfanosAsync(db);
 }
@@ -109,64 +174,28 @@ using (var scope = app.Services.CreateScope())
 app.UseMiddleware<TalentManagement.Server.ExceptionHandlingMiddleware>();
 
 app.UseCors();
+app.UseRateLimiter();
 app.UseResponseCompression();
 app.UseStaticFiles();
 
 app.MapRazorPages();
 
 if (!app.Environment.IsDevelopment())
+{
+    app.UseHsts();
     app.UseHttpsRedirection();
+}
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 app.MapHub<NotificacionesHub>("/hubs/notificaciones");
 app.MapHealthChecks("/health");
 
-// Endpoint para que el cliente sepa si el usuario actual es Microsoft (Bearer) o dev
-app.MapGet("/api/v1/auth/es-microsoft", () => Results.Ok(new { esMicrosoft = true })).RequireAuthorization();
 
-// Perfil del usuario actual: rol dentro de la app
-app.MapGet("/api/v1/auth/perfil", async (
-    HttpContext ctx,
-    TalentManagement.Server.Services.CurrentUserService currentUser,
-    TalentManagement.Application.Interfaces.IColaboradorRepository colaboradorRepo) =>
-{
-    try
-    {
-        var esMicrosoft = currentUser.EsMicrosoftUser();
-        var email = currentUser.GetEmail();
-        var colaborador = await colaboradorRepo.GetByEmailAsync(email);
-        var esJefe = colaborador is not null &&
-                     await colaboradorRepo.EsJefeDeAreaAsync(colaborador.Id);
-        var puedeResolver = await currentUser.PuedeResolverSolicitudesAsync();
-
-        // Nombre: usar el de la BD si existe, si no el del token
-        var nombreMostrar = colaborador is not null
-            ? $"{colaborador.Nombre} {colaborador.Apellido}"
-            : ctx.User.FindFirst("name")?.Value
-              ?? ctx.User.FindFirst("preferred_username")?.Value
-              ?? email;
-
-        return Results.Ok(new
-        {
-            email,
-            nombre = nombreMostrar,
-            esColaborador = colaborador is not null,
-            esJefe,
-            colaboradorId = colaborador?.Id,
-            areaId = colaborador?.AreaId,
-            esDevUser = !esMicrosoft,
-            // Si no tiene colaborador en BD: mínimo privilegio (Colaborador), no Admin
-            rol = colaborador?.Rol.ToString() ?? "Colaborador",
-            puedeResolverSolicitudes = puedeResolver,
-        });
-    }
-    catch
-    {
-        return Results.Ok(new { email = "", nombre = "Usuario", esColaborador = false, esJefe = false, colaboradorId = (int?)null, esDevUser = false, rol = "Colaborador", puedeResolverSolicitudes = false });
-    }
-}).RequireAuthorization();
 
 app.MapFallbackToFile("index.html");
 
 app.Run();
+
+public partial class Program { }
+

@@ -343,16 +343,20 @@ public class ControlDocumentalRepository(AppDbContext context) : IControlDocumen
 
     public async Task ExecuteInTransactionAsync(Func<Task> action)
     {
-        using var transaction = await context.Database.BeginTransactionAsync();
-        try
+        var strategy = context.Database.CreateExecutionStrategy();
+        await strategy.ExecuteAsync(async () =>
         {
-            await action();
-            await transaction.CommitAsync();
-        }
-        catch
-        {
-            await transaction.RollbackAsync();
-            throw;
-        }
+            using var transaction = await context.Database.BeginTransactionAsync();
+            try
+            {
+                await action();
+                await transaction.CommitAsync();
+            }
+            catch
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
+        });
     }
 }

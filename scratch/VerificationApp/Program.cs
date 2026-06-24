@@ -35,7 +35,7 @@ class Program
         {
             try
             {
-                var response = await client.GetAsync($"{baseUrl}/api/v1/dev/usuario-activo");
+                var response = await client.GetAsync($"{baseUrl}/health");
                 if (response.IsSuccessStatusCode)
                 {
                     connected = true;

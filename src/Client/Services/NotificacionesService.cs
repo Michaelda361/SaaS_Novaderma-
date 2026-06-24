@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.WebAssembly.Authentication;
 using Microsoft.AspNetCore.SignalR.Client;
+using Microsoft.Extensions.DependencyInjection;
 using TalentManagement.Shared.DTOs.PlantillasDocumento;
 using TalentManagement.Shared.DTOs.ControlDocumental;
 
@@ -43,10 +45,16 @@ public class NotificacionesService : IAsyncDisposable
 
     public bool Conectado => _hub?.State == HubConnectionState.Connected;
 
-    public NotificacionesService(NavigationManager nav, Microsoft.Extensions.Configuration.IConfiguration config)
+    private readonly IServiceProvider _serviceProvider;
+
+    public NotificacionesService(
+        NavigationManager nav, 
+        Microsoft.Extensions.Configuration.IConfiguration config,
+        IServiceProvider serviceProvider)
     {
         _nav = nav;
         _config = config;
+        _serviceProvider = serviceProvider;
     }
 
     /// <summary>
@@ -78,7 +86,19 @@ public class NotificacionesService : IAsyncDisposable
         Console.WriteLine($"[Hub] Conectando a: {baseUrl}");
 
         _hub = new HubConnectionBuilder()
-            .WithUrl(baseUrl)
+            .WithUrl(baseUrl, options =>
+            {
+                options.AccessTokenProvider = async () =>
+                {
+                    var tokenProvider = _serviceProvider.GetRequiredService<IAccessTokenProvider>();
+                    var tokenResult = await tokenProvider.RequestAccessToken();
+                    if (tokenResult.TryGetToken(out var token))
+                    {
+                        return token.Value;
+                    }
+                    return null;
+                };
+            })
             .WithAutomaticReconnect(new SignalRRetryPolicy())
             .Build();
 

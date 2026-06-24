@@ -28,21 +28,34 @@ public class ExceptionHandlingMiddleware(RequestDelegate next, ILogger<Exception
     private static Task HandleExceptionAsync(HttpContext context, Exception exception)
     {
         var code = HttpStatusCode.InternalServerError;
-        var result = exception.Message;
+        string result;
+
+        // Verificar si la excepción se originó en nuestro código
+        bool esExcepcionPropia = exception.Source?.StartsWith("TalentManagement") == true ||
+                                 exception.TargetSite?.DeclaringType?.Assembly.GetName().Name?.StartsWith("TalentManagement") == true ||
+                                 (exception.StackTrace?.Contains("TalentManagement.") == true);
 
         switch (exception)
         {
             case UnauthorizedAccessException:
                 code = HttpStatusCode.Unauthorized;
-                result = "No autorizado.";
+                result = esExcepcionPropia ? exception.Message : "No autorizado.";
                 break;
+
             case ArgumentException:
             case InvalidOperationException:
                 code = HttpStatusCode.BadRequest;
+                result = esExcepcionPropia ? exception.Message : "Solicitud inválida.";
                 break;
+
             case System.Collections.Generic.KeyNotFoundException:
                 code = HttpStatusCode.NotFound;
-                result = "Recurso no encontrado.";
+                result = esExcepcionPropia ? exception.Message : "Recurso no encontrado.";
+                break;
+
+            default:
+                code = HttpStatusCode.InternalServerError;
+                result = "Ha ocurrido un error interno en el servidor.";
                 break;
         }
 
