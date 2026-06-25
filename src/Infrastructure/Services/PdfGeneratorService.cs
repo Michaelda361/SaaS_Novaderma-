@@ -1,6 +1,7 @@
 using System.Reflection;
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Wordprocessing;
+using PdfSharpCore.Drawing;
 using PdfSharpCore.Pdf;
 using PdfSharpCore.Pdf.AcroForms;
 using PdfSharpCore.Pdf.Content;
@@ -12,6 +13,7 @@ using QuestPDF.Infrastructure;
 using Syncfusion.DocIO.DLS;
 using Syncfusion.DocIORenderer;
 using Syncfusion.Pdf;
+using Syncfusion.Pdf.Graphics;
 using Syncfusion.Pdf.Interactive;
 using Syncfusion.Pdf.Parsing;
 using TalentManagement.Application.Services;
@@ -31,8 +33,8 @@ public class PdfGeneratorService(LibreOfficeConverterService libreOffice)
     }
 
     /// <summary>Genera PDF desde HTML. Solo para plantillas de tipo Html.</summary>
-    public byte[] GenerarPdfDesdeHtml(string htmlResuelto, PlantillaDocumento plantilla) =>
-        GenerarDesdeHtml(htmlResuelto, plantilla);
+    public byte[] GenerarPdfDesdeHtml(string htmlResuelto, PlantillaDocumento plantilla, bool incluirFirmaImagen = true) =>
+        GenerarDesdeHtml(htmlResuelto, plantilla, incluirFirmaImagen);
 
     /// <summary>
     /// Aplica variables al .docx y devuelve los bytes del archivo Word modificado.
@@ -309,7 +311,7 @@ public class PdfGeneratorService(LibreOfficeConverterService libreOffice)
     // ── HTML → PDF ────────────────────────────────────────────────────────────
     // Parser HTML fiel: soporta bold, italic, underline, listas, alineación
 
-    private static byte[] GenerarDesdeHtml(string html, PlantillaDocumento plantilla)
+    private static byte[] GenerarDesdeHtml(string html, PlantillaDocumento plantilla, bool incluirFirmaImagen = true)
     {
         var bloques = ParsearHtml(html);
 
@@ -329,7 +331,7 @@ public class PdfGeneratorService(LibreOfficeConverterService libreOffice)
                     if (!string.IsNullOrWhiteSpace(plantilla.NombreFirmante))
                     {
                         col.Item().PaddingTop(40);
-                        RenderFirma(col, plantilla);
+                        RenderFirma(col, plantilla, incluirFirmaImagen);
                     }
                 });
             });
@@ -703,7 +705,7 @@ public class PdfGeneratorService(LibreOfficeConverterService libreOffice)
     }
 
     // ── Firma compartida ──────────────────────────────────────────────────────
-    private static void RenderFirma(ColumnDescriptor col, PlantillaDocumento plantilla)
+    private static void RenderFirma(ColumnDescriptor col, PlantillaDocumento plantilla, bool incluirFirmaImagen = true)
     {
         if (string.IsNullOrWhiteSpace(plantilla.NombreFirmante)) return;
 
@@ -992,6 +994,82 @@ public class PdfGeneratorService(LibreOfficeConverterService libreOffice)
                     spans[i] = (spans[i].Text, spans[i].Start + delta, spans[i].End + delta);
             }
         }
+    }
+
+    public byte[] EstamparFirmaEnPdf(
+        byte[] pdfBytes, 
+        byte[] firmaBytes, 
+        double xPct, 
+        double yPct, 
+        double anchoPct, 
+        double altoPct)
+    {
+        using var input = new MemoryStream(pdfBytes);
+        using var document = PdfReader.Open(input, PdfDocumentOpenMode.Modify);
+        
+        if (document.Pages.Count > 0)
+        {
+            // Stamp on the first page (index 0)
+            var page = document.Pages[0];
+
+            // PdfSharpCore.XGraphics.FromPdfPage uses XPageDirection.Downwards by default:
+            // origin is top-left, Y increases downward — identical to CSS coordinates.
+            // Therefore, percentage values from the HTML canvas map directly to PDF points
+            // with no axis inversion required.
+            using var gfx = XGraphics.FromPdfPage(page);
+            
+            using var imageStream = new MemoryStream(firmaBytes);
+            using var image = XImage.FromStream(() => imageStream);
+            
+            var pageWidth  = page.Width.Point;
+            var pageHeight = page.Height.Point;
+
+            // xPct / yPct are the top-left corner of the signature box (% of page size)
+            var x      = pageWidth  * (xPct     / 100.0);
+            var y      = pageHeight * (yPct     / 100.0);
+            var width  = pageWidth  * (anchoPct / 100.0);
+            var height = pageHeight * (altoPct  / 100.0);
+            
+            // Preservar la relación de aspecto de la firma tal como se visualiza en el frontend
+            // con "object-fit: contain" dentro del contenedor arrastrable.
+            double imageWidth = image.PixelWidth;
+            double imageHeight = image.PixelHeight;
+            if (imageWidth > 0 && imageHeight > 0)
+            {
+                double imageRatio = imageWidth / imageHeight;
+                double boxRatio = width / height;
+
+                double targetWidth = width;
+                double targetHeight = height;
+                double targetX = x;
+                double targetY = y;
+
+                if (imageRatio > boxRatio)
+                {
+                    // La imagen es más ancha que la caja: ajustar al ancho, centrar verticalmente
+                    targetWidth = width;
+                    targetHeight = width / imageRatio;
+                    targetY = y + (height - targetHeight) / 2.0;
+                }
+                else
+                {
+                    // La imagen es más alta que la caja: ajustar al alto, centrar horizontalmente
+                    targetHeight = height;
+                    targetWidth = height * imageRatio;
+                    targetX = x + (width - targetWidth) / 2.0;
+                }
+
+                gfx.DrawImage(image, targetX, targetY, targetWidth, targetHeight);
+            }
+            else
+            {
+                gfx.DrawImage(image, x, y, width, height);
+            }
+        }
+        
+        using var output = new MemoryStream();
+        document.Save(output);
+        return output.ToArray();
     }
 }
 

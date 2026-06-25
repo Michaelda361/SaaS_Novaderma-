@@ -465,7 +465,8 @@ else
                                 </div>
                             </div>
 
-                            <!-- Tarjeta 2: Documento Word -->
+
+                            <!-- Tarjeta 3: Documento Word -->
                             <div class="card" style="padding: 1rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface);">
                                 <h4 style="margin-top: 0; margin-bottom: 0.75rem; font-size: 0.95rem; font-weight: 600;">📎 Archivo de plantilla</h4>
                                 <div class="instructivo-box" style="margin-bottom: 0.75rem;">
@@ -497,7 +498,7 @@ else
                                 </div>
                             </div>
 
-                            <!-- Tarjeta 3: Disponible para -->
+                            <!-- Tarjeta 4: Disponible para -->
                             <div class="card" style="padding: 1rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface);">
                                 <h4 style="margin-top: 0; margin-bottom: 0.75rem; font-size: 0.95rem; font-weight: 600;">🏢 Áreas permitidas</h4>
                                 <div class="form-group" style="margin-bottom: 0;">
@@ -523,7 +524,7 @@ else
                                 </div>
                             </div>
 
-                            <!-- Tarjeta 4: Campos que completará el colaborador -->
+                            <!-- Tarjeta 5: Campos que completará el colaborador -->
                             <div class="card" style="padding: 1rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); border-left: 4px solid #3b82f6;">
                                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
                                     <h4 style="margin: 0; font-size: 0.95rem; font-weight: 600; color: #1e3a8a;">👥 Datos que completa el colaborador</h4>
@@ -581,7 +582,7 @@ else
                                 </div>
                             </div>
 
-                            <!-- Tarjeta 5: Campos que completará el aprobador -->
+                            <!-- Tarjeta 6: Campos que completará el aprobador -->
                             <div class="card" style="padding: 1rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); border-left: 4px solid #f97316; margin-top: 1rem;">
                                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
                                     <h4 style="margin: 0; font-size: 0.95rem; font-weight: 600; color: #7c2d12;">🛡️ Datos que completa el aprobador</h4>
@@ -836,102 +837,165 @@ else
             </div>
 
             <div class="revision-modal-body">
-                <!-- Vista previa del PDF -->
+                <!-- Vista previa del PDF y Lienzo de Firma -->
                 <div class="revision-pdf-panel">
-                    @if (cargandoPdfPreview)
-                    {
-                        <div class="revision-pdf-empty">
-                            <div class="spinner"></div>
-                            <span class="text-sm">Cargando documento...</span>
+                    <div style="display:flex; gap:0.5rem; margin-bottom: 0.75rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem; justify-content: space-between; align-items: center;">
+                        <div class="btn-group" style="display: flex; gap: 2px; background: var(--bg); padding: 2px; border-radius: 6px; border: 1px solid var(--border);">
+                            <button type="button" class="btn btn-sm @(vistaActiva == "pdf" ? "btn-primary" : "btn-ghost")" @onclick='() => { vistaActiva = "pdf"; }' style="font-size: 0.8rem; padding: 0.25rem 0.75rem; border-radius: 4px;">
+                                📄 Vista PDF
+                            </button>
+                            <button type="button" class="btn btn-sm @(vistaActiva == "firma" ? "btn-primary" : "btn-ghost")" @onclick='async () => { vistaActiva = "firma"; if (string.IsNullOrEmpty(pngPreviewBase64) && !cargandoPdfPreview && solicitudResolviendo != null) await CargarPdfPreviewAsync(solicitudResolviendo); }' style="font-size: 0.8rem; padding: 0.25rem 0.75rem; border-radius: 4px;">
+                                ✍️ Colocar Firma
+                            </button>
                         </div>
-                    }
-                    else if (!string.IsNullOrEmpty(pdfPreviewBase64))
+                        
+                        <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="() => CargarPdfPreviewAsync(solicitudResolviendo)" disabled="@(solicitudResolviendo == null || cargandoPdfPreview)" style="font-size: 0.8rem; display: flex; align-items: center; gap: 0.25rem; padding: 0.25rem 0.75rem;">
+                            🔄 Actualizar Vista Previa
+                        </button>
+                    </div>
+
+                    @if (vistaActiva == "pdf")
                     {
-                        <iframe src="data:application/pdf;base64,@pdfPreviewBase64"
-                                class="revision-pdf-frame"
-                                title="Vista previa del documento"></iframe>
+                        @if (cargandoPdfPreview)
+                        {
+                            <div class="revision-pdf-empty">
+                                <div class="spinner"></div>
+                                <span class="text-sm">Cargando documento...</span>
+                            </div>
+                        }
+                        else if (!string.IsNullOrEmpty(pdfPreviewBase64))
+                        {
+                            <iframe src="data:application/pdf;base64,@pdfPreviewBase64"
+                                    class="revision-pdf-frame"
+                                    title="Vista previa del documento"></iframe>
+                        }
+                        else
+                        {
+                            <div class="revision-pdf-empty">
+                                <span class="revision-pdf-empty-icon">📄</span>
+                                <span class="text-sm">Sin vista previa disponible</span>
+                                <span class="text-xs text-muted">La solicitud no tiene PDF adjunto</span>
+                            </div>
+                        }
                     }
                     else
                     {
-                        <div class="revision-pdf-empty">
-                            <span class="revision-pdf-empty-icon">📄</span>
-                            <span class="text-sm">Sin vista previa disponible</span>
-                            <span class="text-xs text-muted">La solicitud no tiene PDF adjunto</span>
-                        </div>
+                        @if (cargandoPdfPreview)
+                        {
+                            <div class="revision-pdf-empty">
+                                <div class="spinner"></div>
+                                <span class="text-sm">Generando lienzo...</span>
+                            </div>
+                        }
+                        else if (!string.IsNullOrEmpty(pngPreviewBase64))
+                        {
+                            <div style="display: flex; flex-direction: column; gap: 0.5rem; width: 100%; height: calc(100% - 40px); align-items: center; justify-content: center; overflow-y: auto;">
+                                @if (string.IsNullOrWhiteSpace(firmaAprobadorBase64))
+                                {
+                                    <div style="padding: 0.6rem 1rem; background: var(--bg); border: 1px dashed var(--border); border-radius: var(--radius); display: flex; align-items: center; gap: 0.75rem; width: 100%; max-width: 400px; box-sizing: border-box;">
+                                        <span style="font-size:0.85rem; color: var(--text-muted); flex:1;">⬆️ Carga tu firma para posicionarla sobre el documento</span>
+                                        <label class="btn btn-outline-secondary btn-sm" style="cursor:pointer; margin:0; font-size:0.8rem; padding:.35rem .75rem; white-space:nowrap;">
+                                            ✍️ Cargar firma .png
+                                            <InputFile OnChange="OnFirmaAprobadorSeleccionada" accept=".png,.jpg,.jpeg" style="display:none;" />
+                                        </label>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div style="padding: 0.5rem 1rem; background: var(--bg); border: 1px solid var(--success, #22c55e); border-radius: var(--radius); display: flex; align-items: center; gap: 0.75rem; width: 100%; max-width: 400px; box-sizing: border-box;">
+                                        <span class="badge badge-success" style="flex:1;">✅ Firma cargada — arrástrala sobre el documento</span>
+                                        <button type="button" class="btn btn-outline-danger btn-sm" style="font-size:0.78rem; padding:.3rem .65rem;" @onclick="() => { firmaAprobadorBase64 = null; }">
+                                            Quitar
+                                        </button>
+                                    </div>
+                                }
+                                <div id="firma-canvas" style="width: 100%; max-width: 400px; aspect-ratio: 8.5 / 11; position: relative; overflow: hidden; user-select: none; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); border: 1px solid var(--border); border-radius: 6px;">
+                                    <img src="data:image/png;base64,@pngPreviewBase64" style="position: absolute; inset: 0; width: 100%; height: 100%; object-fit: fill; pointer-events: none;" alt="Vista previa" />
+                                    @if (!string.IsNullOrWhiteSpace(firmaAprobadorBase64))
+                                    {
+                                        <div id="firma-imagen" style="position: absolute; left: @(firmaX.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture))%; top: @(firmaY.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture))%; width: @(firmaAncho.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture))%; height: @(firmaAlto.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture))%; border: 1px dashed var(--primary); background: rgba(13, 110, 253, 0.04); display: flex; align-items: center; justify-content: center; cursor: move; box-sizing: border-box; z-index: 5;">
+                                            <img src="data:image/png;base64,@(firmaAprobadorBase64.Contains(",") ? firmaAprobadorBase64.Substring(firmaAprobadorBase64.IndexOf(",") + 1) : firmaAprobadorBase64)" 
+                                                 style="max-width: 100%; max-height: 100%; object-fit: contain; pointer-events: none;" />
+                                            <div id="firma-handle" style="position: absolute; right: -6px; bottom: -6px; width: 12px; height: 12px; background: var(--primary); cursor: se-resize; border-radius: 50%; border: 2px solid white; box-shadow: 0 1px 3px rgba(0,0,0,0.3); z-index: 10;"></div>
+                                        </div>
+                                    }
+                                </div>
+                                
+                                <div style="font-size: 0.75rem; color: var(--text-muted); text-align: center;">
+                                    Posición: X: @(firmaX)% | Y: @(firmaY)% · Tamaño: @(firmaAncho)% x @(firmaAlto)%
+                                </div>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="revision-pdf-empty">
+                                <span class="revision-pdf-empty-icon">⚠️</span>
+                                <span class="text-sm">Lienzo no disponible</span>
+                                <span class="text-xs text-muted">LibreOffice no está disponible en el servidor para generar la vista previa de la firma.</span>
+                            </div>
+                        }
                     }
                 </div>
 
                 <!-- Panel de decisión -->
                 <div class="revision-decision-panel">
-                    <p class="revision-decision-hint">Revisa el documento y decide si apruebas o rechazas la solicitud.</p>
+                    <p class="revision-decision-hint" style="margin-bottom: 0.5rem;">Revisa el documento y decide si apruebas o rechazas la solicitud.</p>
 
-                    <!-- Datos ingresados por el colaborador -->
-                    <div class="revision-data-box" style="margin-bottom:1.25rem;padding:.75rem;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);max-height: 200px; overflow-y: auto;">
-                        <div style="font-weight:600;font-size:.875rem;margin-bottom:.5rem;color:var(--text);">📋 Datos Ingresados:</div>
-                        @if (solicitudResolviendo.VariablesCompletadas is { Count: > 0 })
-                        {
-                            <ul style="list-style:none;padding:0;margin:0;font-size:.85rem;display:flex;flex-direction:column;gap:.35rem;">
-                                @foreach (var (key, value) in solicitudResolviendo.VariablesCompletadas)
-                                {
-                                    var label = EtiquetaVariableFriendly(key);
-                                    <li><strong>@label:</strong> <span class="text-muted">@value</span></li>
-                                }
-                            </ul>
-                        }
-                        else
-                        {
-                            <span class="text-xs text-muted">No se registraron variables específicas.</span>
-                        }
-                    </div>
-
-                    <!-- Variables del aprobador a completar -->
                     @{
                         var camposAprobador = ObtenerCamposAprobador();
                     }
+
+                    <!-- Selector de pestañas si hay variables -->
                     @if (camposAprobador.Any())
                     {
-                        <div class="card" style="margin-bottom: 1.25rem; padding: 1rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); border-left: 4px solid #f97316;">
-                            <div style="font-weight:600;font-size:.875rem;margin-bottom:.75rem;color:var(--text); display: flex; align-items: center; gap: 0.35rem;">
-                                <span>🛡️ Variables del Aprobador</span>
-                                <span class="badge badge-warning" style="font-size: 0.7rem;">Requerido antes de aprobar</span>
-                            </div>
-                            
+                        <div style="display: flex; gap: 2px; background: var(--bg); padding: 2px; border-radius: 6px; border: 1px solid var(--border); margin-bottom: 0.75rem; flex-shrink: 0;">
+                            <button type="button" class="btn btn-sm @(subTabActiva == "variables" ? "btn-primary" : "btn-ghost")" @onclick='() => { subTabActiva = "variables"; }' style="flex: 1; font-size: 0.8rem; padding: 0.35rem; border-radius: 4px; border: none; font-weight: 500;">
+                                🛡️ Variables (@camposAprobador.Count)
+                            </button>
+                            <button type="button" class="btn btn-sm @(subTabActiva == "datos" ? "btn-primary" : "btn-ghost")" @onclick='() => { subTabActiva = "datos"; }' style="flex: 1; font-size: 0.8rem; padding: 0.35rem; border-radius: 4px; border: none; font-weight: 500;">
+                                👤 Datos Solicitud
+                            </button>
+                        </div>
+                    }
+
+                    <!-- Contenido de la pestaña activa (Scrollable) -->
+                    <div style="flex: 1; overflow-y: auto; margin-bottom: 0.75rem; padding-right: 0.25rem; display: flex; flex-direction: column; gap: 0.75rem;">
+                        @if (subTabActiva == "variables" && camposAprobador.Any())
+                        {
                             @foreach (var campo in camposAprobador)
                             {
                                 var c = campo;
                                 var key = c.Variable;
-                                <div class="form-group" style="margin-bottom: 0.85rem;">
-                                    <label style="font-size: 0.8rem; font-weight: 500; display: block; margin-bottom: 0.25rem; color: var(--text);">
-                                        @c.Nombre @(c.Obligatorio ? "*" : "")
+                                <div class="form-group-revision">
+                                    <label style="font-size: 0.85rem; font-weight: 600; color: var(--text); display: flex; align-items: center; justify-content: space-between;">
+                                        <span>@c.Nombre @(c.Obligatorio ? " *" : "")</span>
+                                        <span style="font-size: 0.7rem; font-weight: normal; color: var(--text-muted); background: var(--bg); padding: 0.1rem 0.35rem; border-radius: 3px;">@c.Tipo</span>
                                     </label>
                                     
                                     @if (c.Tipo == "Texto largo")
                                     {
                                         <textarea class="form-control"
-                                                  style="font-size:.85rem;padding:.4rem .6rem;width:100%;border:1px solid var(--border);border-radius:var(--radius);height:60px;resize:none;"
+                                                  style="height:70px; resize:none;"
                                                   value="@variablesAprobadorModel.GetValueOrDefault(key, "")"
                                                   placeholder="Escribe aquí..."
                                                   @oninput="e => OnVariablesAprobadorInput(key, e.Value?.ToString() ?? string.Empty)"></textarea>
                                     }
                                     else if (c.Tipo == "Número")
                                     {
-                                        <input type="number" class="form-control"
-                                               style="font-size:.85rem;padding:.4rem .6rem;width:100%;border:1px solid var(--border);border-radius:var(--radius);"
-                                               value="@variablesAprobadorModel.GetValueOrDefault(key, "")"
-                                               placeholder="Ej: 123"
-                                               @oninput="e => OnVariablesAprobadorInput(key, e.Value?.ToString() ?? string.Empty)" />
+                                        <input type="text" class="form-control"
+                                               value="@NumberFormatHelper.FormatDynamicNumber(variablesAprobadorModel.GetValueOrDefault(key, ""))"
+                                               placeholder="Ej: 1.859.928"
+                                               @onchange="@(e => OnVariablesAprobadorInput(key, NumberFormatHelper.CleanDynamicNumber(e.Value?.ToString()) ?? string.Empty))" />
                                     }
                                     else if (c.Tipo == "Fecha")
                                     {
                                         <input type="date" class="form-control"
-                                               style="font-size:.85rem;padding:.4rem .6rem;width:100%;border:1px solid var(--border);border-radius:var(--radius);"
                                                value="@variablesAprobadorModel.GetValueOrDefault(key, "")"
                                                @onchange="e => OnVariablesAprobadorInput(key, e.Value?.ToString() ?? string.Empty)" />
                                     }
                                     else if (c.Tipo == "Correo electrónico")
                                     {
                                         <input type="email" class="form-control"
-                                               style="font-size:.85rem;padding:.4rem .6rem;width:100%;border:1px solid var(--border);border-radius:var(--radius);"
                                                value="@variablesAprobadorModel.GetValueOrDefault(key, "")"
                                                placeholder="Ej: admin@novaderma.com"
                                                @oninput="e => OnVariablesAprobadorInput(key, e.Value?.ToString() ?? string.Empty)" />
@@ -940,7 +1004,6 @@ else
                                     {
                                         var opciones = c.Opciones?.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries).Select(o => o.Trim()).ToList() ?? [];
                                         <select class="form-control"
-                                                style="font-size:.85rem;padding:.4rem;width:100%;border:1px solid var(--border);border-radius:var(--radius);"
                                                 value="@variablesAprobadorModel.GetValueOrDefault(key, "")"
                                                 @onchange="e => OnVariablesAprobadorInput(key, e.Value?.ToString() ?? string.Empty)">
                                             <option value="">-- Seleccionar --</option>
@@ -955,7 +1018,7 @@ else
                                         var opciones = c.Opciones?.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries).Select(o => o.Trim()).ToList() ?? [];
                                         var currentVal = variablesAprobadorModel.GetValueOrDefault(key, string.Empty);
                                         var selectedItems = currentVal.Split(new[] { ", " }, StringSplitOptions.RemoveEmptyEntries).ToList();
-                                        <div style="display:flex; flex-direction:column; gap:0.3rem; padding: 0.4rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg); max-height: 100px; overflow-y: auto;">
+                                        <div style="display:flex; flex-direction:column; gap:0.35rem; padding: 0.5rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg); max-height: 110px; overflow-y: auto;">
                                             @foreach (var opt in opciones)
                                             {
                                                 var optionVal = opt;
@@ -970,45 +1033,84 @@ else
                                     }
                                     else
                                     {
-                                        // Texto corto (default)
                                         <input type="text" class="form-control"
-                                               style="font-size:.85rem;padding:.4rem .6rem;width:100%;border:1px solid var(--border);border-radius:var(--radius);"
                                                value="@variablesAprobadorModel.GetValueOrDefault(key, "")"
                                                placeholder="Escribe aquí..."
                                                @oninput="e => OnVariablesAprobadorInput(key, e.Value?.ToString() ?? string.Empty)" />
                                     }
                                 </div>
                             }
-                        </div>
-                    }
+                        }
+                        else
+                        {
+                            <!-- Datos del colaborador y su solicitud -->
+                            <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 0.85rem; border-left: 3px solid var(--primary-light); display: flex; flex-direction: column; gap: 0.25rem;">
+                                <div style="font-weight:600; font-size:.85rem; margin-bottom:.3rem; color:var(--text); text-transform: uppercase; letter-spacing: 0.03em;">👤 Colaborador:</div>
+                                <div style="font-size: 0.9rem; font-weight: 500; color: var(--text);">@solicitudResolviendo.ColaboradorNombre</div>
+                                <div style="font-size: 0.8rem; color: var(--text-muted);">@solicitudResolviendo.ColaboradorEmail</div>
+                            </div>
 
-                    <div class="form-group">
-                        <label>Comentario de resolución (motivo de rechazo obligatorio)</label>
-                        <textarea class="revision-comment-area"
-                                  placeholder="Escribe un comentario o motivo de rechazo..."
-                                  @bind="comentarioResolucion"></textarea>
+                            <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 0.85rem; border-left: 3px solid var(--border); display: flex; flex-direction: column; gap: 0.25rem;">
+                                <div style="font-weight:600; font-size:.85rem; margin-bottom:.3rem; color:var(--text); text-transform: uppercase; letter-spacing: 0.03em;">📄 Documento solicitado:</div>
+                                <div style="font-size: 0.9rem; font-weight: 500; color: var(--text);">@solicitudResolviendo.PlantillaNombre</div>
+                                <div style="font-size: 0.8rem; color: var(--text-muted);">Fecha: @solicitudResolviendo.FechaSolicitud.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</div>
+                            </div>
+
+                            <div style="background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 0.85rem; border-left: 3px solid var(--warning); display: flex; flex-direction: column; gap: 0.5rem;">
+                                <div style="font-weight:600; font-size:.85rem; margin-bottom:.1rem; color:var(--text); text-transform: uppercase; letter-spacing: 0.03em; display: flex; align-items: center; gap: 0.25rem;">
+                                    <span>📋 Datos del Formulario Colaborador</span>
+                                </div>
+                                @if (solicitudResolviendo.VariablesCompletadas is { Count: > 0 })
+                                {
+                                    <div style="display:flex; flex-direction:column; gap:.5rem;">
+                                        @foreach (var (key, value) in solicitudResolviendo.VariablesCompletadas)
+                                        {
+                                            var label = EtiquetaVariableFriendly(key);
+                                            <div style="display: flex; flex-direction: column; gap: 0.15rem; border-bottom: 1px solid var(--bg); padding-bottom: 0.35rem;">
+                                                <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 500;">@label</span>
+                                                <span style="font-size: 0.85rem; color: var(--text); font-weight: 600; white-space: pre-wrap;">@value</span>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                                else
+                                {
+                                    <span class="text-xs text-muted">No se registraron variables específicas.</span>
+                                }
+                            </div>
+                        }
                     </div>
 
-                    <div class="revision-actions">
-                        <button class="btn btn-primary"
-                                disabled="@resolviendo"
-                                @onclick="AprobarSolicitud">
-                            @if (resolviendo && accionResolucion == "aprobar")
-                            {
-                                <div class="spinner" style="width:.9rem;height:.9rem;border-width:2px;border-color:rgba(255,255,255,.3);border-top-color:#fff;"></div>
-                            }
-                            <span>✅ Aprobar</span>
-                        </button>
-                        <button class="btn btn-danger"
-                                disabled="@resolviendo"
-                                @onclick="RechazarSolicitud">
-                            @if (resolviendo && accionResolucion == "rechazar")
-                            {
-                                <div class="spinner" style="width:.9rem;height:.9rem;border-width:2px;border-color:rgba(255,255,255,.3);border-top-color:#fff;"></div>
-                            }
-                            <span>❌ Rechazar</span>
-                        </button>
-                        <button class="btn btn-ghost" @onclick="CerrarModalResolucion">Cancelar</button>
+                    <!-- Comentario y Acciones Fijos al Final -->
+                    <div style="flex-shrink: 0; padding-top: 0.5rem; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 0.6rem; background: var(--surface);">
+                        <div class="form-group" style="gap: 0.25rem;">
+                            <label style="font-size: 0.78rem; font-weight: 600; color: var(--text);">Comentario de resolución (motivo de rechazo obligatorio)</label>
+                            <textarea class="form-control revision-comment-area"
+                                      placeholder="Escribe un comentario o motivo de rechazo..."
+                                      @bind="comentarioResolucion"></textarea>
+                        </div>
+
+                        <div class="revision-actions">
+                            <button class="btn btn-primary" style="flex: 1; padding: 0.5rem; font-size: 0.82rem; white-space: nowrap;"
+                                    disabled="@resolviendo"
+                                    @onclick="AprobarSolicitud">
+                                @if (resolviendo && accionResolucion == "aprobar")
+                                {
+                                    <span class="spinner" style="width:.8rem;height:.8rem;border-width:2px;border-color:rgba(255,255,255,.3);border-top-color:#fff;margin-right:0.25rem;"></span>
+                                }
+                                <span>✅ Aprobar</span>
+                            </button>
+                            <button class="btn btn-danger" style="flex: 1; padding: 0.5rem; font-size: 0.82rem; white-space: nowrap;"
+                                    disabled="@resolviendo"
+                                    @onclick="RechazarSolicitud">
+                                @if (resolviendo && accionResolucion == "rechazar")
+                                {
+                                    <span class="spinner" style="width:.8rem;height:.8rem;border-width:2px;border-color:rgba(255,255,255,.3);border-top-color:#fff;margin-right:0.25rem;"></span>
+                                }
+                                <span>❌ Rechazar</span>
+                            </button>
+                            <button class="btn btn-ghost" style="padding: 0.5rem 0.75rem; font-size: 0.82rem;" @onclick="CerrarModalResolucion">Cancelar</button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1087,6 +1189,17 @@ else
     private bool resolviendo = false;
     private bool cargandoPdfPreview = false;
     private string? pdfPreviewBase64;
+    private PlantillaDocumentoDto? plantillaResolviendo;
+    private string vistaActiva = "pdf";
+    private string? pngPreviewBase64;
+    private string subTabActiva = "variables";
+    private double firmaX = 70;
+    private double firmaY = 70;
+    private double firmaAncho = 20;
+    private double firmaAlto = 15;
+    /// <summary>Firma subida por el aprobador en el modal de resolución (no persiste en la plantilla).</summary>
+    private string? firmaAprobadorBase64;
+    private DotNetObjectReference<CartasLaboralesAdmin>? objectRef;
 
     private CreatePlantillaDocumentoDto form = new();
 
@@ -1225,8 +1338,16 @@ else
         accionResolucion = "aprobar";
         comentarioResolucion = string.Empty;
         variablesAprobadorModel = [];
+        plantillaResolviendo = await ApiService.GetByIdAsync(s.PlantillaDocumentoId);
+        
+        firmaX = 70;
+        firmaY = 70;
+        firmaAncho = 20;
+        firmaAlto = 15;
+        vistaActiva = "pdf";
 
         var camposAprobador = ObtenerCamposAprobador();
+        subTabActiva = camposAprobador.Any() ? "variables" : "datos";
         foreach (var campo in camposAprobador)
         {
             var valorExistente = s.VariablesCompletadas.GetValueOrDefault(campo.Variable, string.Empty);
@@ -1243,6 +1364,12 @@ else
         accionResolucion = "rechazar";
         comentarioResolucion = string.Empty;
         variablesAprobadorModel = [];
+        plantillaResolviendo = await ApiService.GetByIdAsync(s.PlantillaDocumentoId);
+        vistaActiva = "pdf";
+        
+        var camposAprobador = ObtenerCamposAprobador();
+        subTabActiva = camposAprobador.Any() ? "variables" : "datos";
+        
         StateHasChanged();
         await CargarPdfPreviewAsync(s);
     }
@@ -1271,11 +1398,34 @@ else
 
     private async Task CargarPdfPreviewAsync(SolicitudDocumentoDto s)
     {
-        if (!s.TienePdf) return;
+        if (s == null) return;
         cargandoPdfPreview = true;
         pdfPreviewBase64 = null;
+        pngPreviewBase64 = null;
         StateHasChanged();
-        pdfPreviewBase64 = await ApiService.GetPdfSolicitudBase64Async(s.Id);
+
+        var dto = new ResolverSolicitudDto
+        {
+            Comentario = comentarioResolucion,
+            VariablesAprobador = variablesAprobadorModel,
+            FirmaImagenBase64 = firmaAprobadorBase64,
+            FirmaX = (!string.IsNullOrWhiteSpace(firmaAprobadorBase64)) ? firmaX : null,
+            FirmaY = (!string.IsNullOrWhiteSpace(firmaAprobadorBase64)) ? firmaY : null,
+            FirmaAncho = (!string.IsNullOrWhiteSpace(firmaAprobadorBase64)) ? firmaAncho : null,
+            FirmaAlto = (!string.IsNullOrWhiteSpace(firmaAprobadorBase64)) ? firmaAlto : null
+        };
+
+        var res = await ApiService.PrevisualizarSolicitudAsync(s.Id, dto);
+        if (res is not null)
+        {
+            pdfPreviewBase64 = res.PdfBase64;
+            pngPreviewBase64 = res.PngBase64;
+        }
+        else
+        {
+            pdfPreviewBase64 = await ApiService.GetPdfSolicitudBase64Async(s.Id);
+        }
+
         cargandoPdfPreview = false;
         StateHasChanged();
     }
@@ -1285,7 +1435,12 @@ else
         solicitudResolviendo = null;
         comentarioResolucion = string.Empty;
         pdfPreviewBase64 = null;
+        pngPreviewBase64 = null;
+        plantillaResolviendo = null;
+        vistaActiva = "pdf";
         cargandoPdfPreview = false;
+        firmaAprobadorBase64 = null;
+        firmaX = 70; firmaY = 70; firmaAncho = 20; firmaAlto = 15;
     }
 
     private async Task ConfirmarResolucion()
@@ -1323,7 +1478,12 @@ else
         var dto = new ResolverSolicitudDto 
         { 
             Comentario = comentarioResolucion,
-            VariablesAprobador = variablesAprobadorModel
+            VariablesAprobador = variablesAprobadorModel,
+            FirmaImagenBase64 = (accionResolucion == "aprobar") ? firmaAprobadorBase64 : null,
+            FirmaX = (accionResolucion == "aprobar" && !string.IsNullOrWhiteSpace(firmaAprobadorBase64)) ? firmaX : null,
+            FirmaY = (accionResolucion == "aprobar" && !string.IsNullOrWhiteSpace(firmaAprobadorBase64)) ? firmaY : null,
+            FirmaAncho = (accionResolucion == "aprobar" && !string.IsNullOrWhiteSpace(firmaAprobadorBase64)) ? firmaAncho : null,
+            FirmaAlto = (accionResolucion == "aprobar" && !string.IsNullOrWhiteSpace(firmaAprobadorBase64)) ? firmaAlto : null
         };
         var resultado = accionResolucion == "aprobar"
             ? await ApiService.AprobarAsync(solicitudResolviendo.Id, dto)
@@ -1349,6 +1509,53 @@ else
         Notificaciones.OnNuevaSolicitud -= OnNuevaSolicitud;
         await Notificaciones.SalirGrupoAdminAsync();
         await Notificaciones.DisposeAsync();
+        if (objectRef is not null)
+        {
+            objectRef.Dispose();
+        }
+    }
+
+    [JSInvokable]
+    public void SetCoords(double x, double y)
+    {
+        var nx = Math.Round(x, 2);
+        var ny = Math.Round(y, 2);
+        if (nx != firmaX || ny != firmaY)
+        {
+            firmaX = nx;
+            firmaY = ny;
+            StateHasChanged();
+        }
+    }
+
+    [JSInvokable]
+    public void SetSize(double w, double h)
+    {
+        var nw = Math.Round(w, 2);
+        var nh = Math.Round(h, 2);
+        if (nw != firmaAncho || nh != firmaAlto)
+        {
+            firmaAncho = nw;
+            firmaAlto = nh;
+            StateHasChanged();
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            objectRef = DotNetObjectReference.Create(this);
+        }
+
+        if (solicitudResolviendo is not null && vistaActiva == "firma" && !cargandoPdfPreview && !string.IsNullOrWhiteSpace(firmaAprobadorBase64))
+        {
+            try
+            {
+                await JS.InvokeVoidAsync("initSignatureEditor", "firma-canvas", "firma-imagen", "firma-handle", objectRef);
+            }
+            catch { }
+        }
     }
 
     private async Task CargarHistorial()
@@ -1502,6 +1709,18 @@ else
         using var ms = new MemoryStream();
         await file.OpenReadStream(2 * 1024 * 1024).CopyToAsync(ms);
         form.FirmaImagenBase64 = $"data:{file.ContentType};base64,{Convert.ToBase64String(ms.ToArray())}";
+    }
+
+    private async Task OnFirmaAprobadorSeleccionada(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        if (file.Size > 2 * 1024 * 1024) { await toast.Show("La imagen no debe superar 2 MB.", "error"); return; }
+        using var ms = new MemoryStream();
+        await file.OpenReadStream(2 * 1024 * 1024).CopyToAsync(ms);
+        firmaAprobadorBase64 = $"data:{file.ContentType};base64,{Convert.ToBase64String(ms.ToArray())}";
+        // Reset position to center for the newly loaded signature
+        firmaX = 60; firmaY = 70; firmaAncho = 25; firmaAlto = 15;
+        StateHasChanged();
     }
 
     private async Task OnDocxSeleccionado(InputFileChangeEventArgs e)

@@ -221,11 +221,11 @@ else
                             }
                             else if (c.Tipo == "Número")
                             {
-                                <input type="number" class="form-control"
+                                <input type="text" class="form-control"
                                        style="font-size:.9rem;padding:.5rem .75rem;width:100%;border:1px solid var(--border);border-radius:var(--radius);"
-                                       value="@extrasActuales.GetValueOrDefault(key, "")"
-                                       placeholder="Ej: 123"
-                                       @oninput="e => OnCampoInput(key, e.Value?.ToString() ?? string.Empty)" />
+                                       value="@NumberFormatHelper.FormatDynamicNumber(extrasActuales.GetValueOrDefault(key, ""))"
+                                       placeholder="Ej: 1.859.928"
+                                       @onchange="@(e => OnCampoInput(key, NumberFormatHelper.CleanDynamicNumber(e.Value?.ToString()) ?? string.Empty))" />
                             }
                             else if (c.Tipo == "Fecha")
                             {
@@ -303,9 +303,9 @@ else
                             <input @key="k" type="text"
                                    class="form-control"
                                    style="font-size:.9rem;padding:.5rem .75rem;width:100%;border:1px solid var(--border);border-radius:var(--radius);"
-                                   value="@extrasActuales.GetValueOrDefault(k, "")"
+                                   value="@(k == "sueldo_basico" ? NumberFormatHelper.FormatDynamicNumber(extrasActuales.GetValueOrDefault(k, "")) : extrasActuales.GetValueOrDefault(k, ""))"
                                    placeholder="@PlaceholderVariable(k)"
-                                   @oninput="e => OnCampoInput(k, e.Value?.ToString() ?? string.Empty)" />
+                                   @onchange="@(e => OnCampoInput(k, k == "sueldo_basico" ? (NumberFormatHelper.CleanDynamicNumber(e.Value?.ToString()) ?? string.Empty) : (e.Value?.ToString() ?? string.Empty)))" />
                         </div>
                     }
                 </div>

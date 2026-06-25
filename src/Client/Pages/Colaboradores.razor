@@ -274,7 +274,7 @@ else
                                 }
                                 else if (campo.CampoClave == "SueldoBasico")
                                 {
-                                    <InputNumber @bind-Value="form.SueldoBasico" />
+                                    <input type="text" class="form-control" value="@NumberFormatHelper.FormatDecimal(form.SueldoBasico)" @onchange="@(e => form.SueldoBasico = NumberFormatHelper.ParseDecimal(e.Value?.ToString()))" />
                                 }
                                 else if (campo.CampoClave == "Ciudad")
                                 {
@@ -340,7 +340,7 @@ else
                                     }
                                     else if (campo.Tipo == "Numero")
                                     {
-                                        <input type="number" class="form-control" value="@GetCampoValor(campo.CampoClave)" @onchange="@(e => SetCampoValor(campo.CampoClave, e.Value?.ToString()))" />
+                                        <input type="text" class="form-control" value="@NumberFormatHelper.FormatDynamicNumber(GetCampoValor(campo.CampoClave))" @onchange="@(e => SetCampoValor(campo.CampoClave, NumberFormatHelper.CleanDynamicNumber(e.Value?.ToString())))" />
                                     }
                                     else
                                     {
@@ -651,4 +651,5 @@ else
             await toast.Show("No se pudo restaurar.", "error");
         }
     }
+
 }

@@ -278,7 +278,7 @@
                 
                 // Notificar a C# las coordenadas finales al terminar el arrastre
                 if (signature.dotNetHelper) {
-                    signature.dotNetHelper.invokeMethodAsync('SetCoords', Math.round(finalX, 2), Math.round(finalY, 2));
+                    signature.dotNetHelper.invokeMethodAsync('SetCoords', parseFloat(finalX.toFixed(2)), parseFloat(finalY.toFixed(2)));
                 }
             };
 
@@ -329,7 +329,7 @@
                 
                 // Notificar a C# las dimensiones finales al terminar la redimensión
                 if (signature.dotNetHelper) {
-                    signature.dotNetHelper.invokeMethodAsync('SetSize', Math.round(finalW, 2), Math.round(finalH, 2));
+                    signature.dotNetHelper.invokeMethodAsync('SetSize', parseFloat(finalW.toFixed(2)), parseFloat(finalH.toFixed(2)));
                 }
             };
 

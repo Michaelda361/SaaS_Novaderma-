@@ -674,7 +674,7 @@
                                     <!-- Contenedor de Firma Arrastrable y Redimensionable -->
                                     @if (!string.IsNullOrWhiteSpace(certForm.FirmaImagenBase64) && !certForm.EliminarFirma)
                                     {
-                                        <div id="firma-imagen" style="position: absolute; left: @(certForm.FirmaX)%; top: @(certForm.FirmaY)%; width: @(certForm.FirmaAncho)%; height: @(certForm.FirmaAlto)%; border: 1px dashed var(--primary); background: rgba(13, 110, 253, 0.04); display: flex; align-items: center; justify-content: center; cursor: move; box-sizing: border-box; z-index: 5;">
+                                        <div id="firma-imagen" style="position: absolute; left: @(certForm.FirmaX?.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) ?? "70")%; top: @(certForm.FirmaY?.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) ?? "70")%; width: @(certForm.FirmaAncho?.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) ?? "20")%; height: @(certForm.FirmaAlto?.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) ?? "15")%; border: 1px dashed var(--primary); background: rgba(13, 110, 253, 0.04); display: flex; align-items: center; justify-content: center; cursor: move; box-sizing: border-box; z-index: 5;">
                                             <img src="data:image/png;base64,@(certForm.FirmaImagenBase64.Contains(",") ? certForm.FirmaImagenBase64.Substring(certForm.FirmaImagenBase64.IndexOf(",") + 1) : certForm.FirmaImagenBase64)" 
                                                  style="max-width: 100%; max-height: 100%; object-fit: contain; pointer-events: none;" />
                                             

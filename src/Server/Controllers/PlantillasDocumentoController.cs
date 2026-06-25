@@ -18,6 +18,7 @@ public class PlantillasDocumentoController(
     DocxToHtmlConverterService docxConverter,
     IHubContext<NotificacionesHub> hub,
     CurrentUserService currentUser,
+    LibreOfficeConverterService libreOffice,
     ILogger<PlantillasDocumentoController> logger) : ControllerBase
 {
     // ── Admin: CRUD (solo usuario Microsoft) ─────────────────────────────────
@@ -175,7 +176,7 @@ public class PlantillasDocumentoController(
                 CargoFirmante = dto.CargoFirmante,
                 FirmaImagenBase64 = dto.FirmaImagenBase64,
             };
-            var pdfBytes = pdfGenerator.GenerarPdfDesdeHtml(dto.Html, entidad);
+            var pdfBytes = pdfGenerator.GenerarPdfDesdeHtml(dto.Html, entidad, incluirFirmaImagen: false);
 
             var solicitud = await service.EnviarSolicitudAsync(id, email, pdfBytes);
             try
@@ -395,7 +396,7 @@ public class PlantillasDocumentoController(
                 // HTML: plantilla + variables de sistema + extras filtrados por VariablesEditables
                 var (htmlResuelto, plantilla, colaborador) = await service.ResolverPlantillaAsync(id, email, dto?.Extras);
                 variablesFinales = dto?.Extras ?? [];
-                pdfBytes = pdfGenerator.GenerarPdfDesdeHtml(htmlResuelto, plantilla);
+                pdfBytes = pdfGenerator.GenerarPdfDesdeHtml(htmlResuelto, plantilla, incluirFirmaImagen: false);
             }
 
             var solicitud = await service.EnviarSolicitudAsync(id, email, pdfBytes, variablesFinales);
@@ -490,7 +491,27 @@ public class PlantillasDocumentoController(
             else
             {
                 var (htmlResuelto, plantilla, _) = await service.ResolverPlantillaAsync(solicitud.PlantillaDocumentoId, solicitud.Colaborador.Email!, variablesFinales);
-                pdfBytes = pdfGenerator.GenerarPdfDesdeHtml(htmlResuelto, plantilla);
+                pdfBytes = pdfGenerator.GenerarPdfDesdeHtml(htmlResuelto, plantilla, incluirFirmaImagen: false);
+            }
+
+            // 3.5. Estampar firma digital si se proporcionaron coordenadas y la imagen fue enviada por el aprobador
+            if (dto.FirmaX.HasValue && dto.FirmaY.HasValue && dto.FirmaAncho.HasValue && dto.FirmaAlto.HasValue
+                && !string.IsNullOrWhiteSpace(dto.FirmaImagenBase64))
+            {
+                try
+                {
+                    var b64 = dto.FirmaImagenBase64
+                        .Replace("data:image/png;base64,", "")
+                        .Replace("data:image/jpeg;base64,", "")
+                        .Replace("data:image/jpg;base64,", "")
+                        .Replace("data:image/webp;base64,", "");
+                    var firmaBytes = Convert.FromBase64String(b64);
+                    pdfBytes = pdfGenerator.EstamparFirmaEnPdf(pdfBytes, firmaBytes, dto.FirmaX.Value, dto.FirmaY.Value, dto.FirmaAncho.Value, dto.FirmaAlto.Value);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Error al estampar firma en PDF final durante aprobacion");
+                }
             }
 
             // 4. Guardar cambios en base de datos y en almacenamiento
@@ -513,6 +534,107 @@ public class PlantillasDocumentoController(
             return Ok(resultado);
         }
         catch (Exception ex) { return StatusCode(500, ex.Message); }
+    }
+
+    [HttpPost("solicitudes/{solicitudId:int}/previsualizar")]
+    public async Task<IActionResult> Previsualizar(int solicitudId, [FromBody] ResolverSolicitudDto dto)
+    {
+        try
+        {
+            if (!await currentUser.PuedeResolverSolicitudesAsync()) return Forbid();
+
+            var solicitud = await service.GetSolicitudEntityAsync(solicitudId);
+            if (solicitud is null) return NotFound("Solicitud no encontrada.");
+
+            // 1. Mezclar variables completadas del colaborador con las del aprobador
+            var variablesFinales = new Dictionary<string, string>();
+            if (!string.IsNullOrWhiteSpace(solicitud.VariablesCompletadas))
+            {
+                try
+                {
+                    variablesFinales = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(solicitud.VariablesCompletadas) ?? [];
+                }
+                catch { }
+            }
+
+            foreach (var kv in dto.VariablesAprobador)
+            {
+                variablesFinales[kv.Key] = kv.Value;
+            }
+
+            // 2. Generar el PDF
+            var email = currentUser.GetEmail();
+            byte[] pdfBytes;
+            var plantillaDto = await service.GetByIdAsync(solicitud.PlantillaDocumentoId, email);
+            if (plantillaDto is null) return NotFound("Plantilla no encontrada.");
+
+            if (plantillaDto.TipoPlantilla == "docx")
+            {
+                var (docxBytes, plantilla, variables) = await service.ObtenerDocxConVariablesAsync(solicitud.PlantillaDocumentoId, solicitud.Colaborador.Email!, variablesFinales);
+                var payload = System.Text.Json.JsonSerializer.Serialize(new DocxReemplazoPayload
+                {
+                    DocxBase64 = Convert.ToBase64String(docxBytes),
+                    Variables = variables,
+                });
+                var docxConVariables = pdfGenerator.GenerarDocx(payload);
+                var payloadFinal = System.Text.Json.JsonSerializer.Serialize(new DocxReemplazoPayload
+                {
+                    DocxBase64 = Convert.ToBase64String(docxConVariables),
+                    Variables = [],
+                });
+                pdfBytes = pdfGenerator.GenerarPdfDesdeDocx(payloadFinal);
+            }
+            else
+            {
+                var (htmlResuelto, plantilla, _) = await service.ResolverPlantillaAsync(solicitud.PlantillaDocumentoId, solicitud.Colaborador.Email!, variablesFinales);
+                pdfBytes = pdfGenerator.GenerarPdfDesdeHtml(htmlResuelto, plantilla, incluirFirmaImagen: false);
+            }
+
+            // Guardar una copia limpia del PDF (sin estampar la firma) para la generación de la vista previa PNG del canvas.
+            // Esto evita que la firma aparezca duplicada o fija en el fondo de la pantalla de firma.
+            var cleanPdfBytes = pdfBytes;
+
+            // 2.5. Estampar firma digital si se proporcionaron coordenadas y la imagen fue enviada por el aprobador
+            if (dto.FirmaX.HasValue && dto.FirmaY.HasValue && dto.FirmaAncho.HasValue && dto.FirmaAlto.HasValue
+                && !string.IsNullOrWhiteSpace(dto.FirmaImagenBase64))
+            {
+                try
+                {
+                    var b64 = dto.FirmaImagenBase64
+                        .Replace("data:image/png;base64,", "")
+                        .Replace("data:image/jpeg;base64,", "")
+                        .Replace("data:image/jpg;base64,", "")
+                        .Replace("data:image/webp;base64,", "");
+                    var firmaBytes = Convert.FromBase64String(b64);
+                    pdfBytes = pdfGenerator.EstamparFirmaEnPdf(pdfBytes, firmaBytes, dto.FirmaX.Value, dto.FirmaY.Value, dto.FirmaAncho.Value, dto.FirmaAlto.Value);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Error al estampar firma temporal en previsualizacion");
+                }
+            }
+
+            // 3. Convertir PDF a PNG usando LibreOffice para el canvas interactivo
+            string pngBase64 = string.Empty;
+            if (libreOffice.EstaDisponible())
+            {
+                var pngBytes = libreOffice.ConvertirPdfAPng(cleanPdfBytes);
+                if (pngBytes is not null)
+                {
+                    pngBase64 = Convert.ToBase64String(pngBytes);
+                }
+            }
+
+            return Ok(new PrevisualizarResponseDto
+            {
+                PdfBase64 = Convert.ToBase64String(pdfBytes),
+                PngBase64 = pngBase64
+            });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, ex.Message);
+        }
     }
 
     [HttpPost("solicitudes/{solicitudId:int}/rechazar")]

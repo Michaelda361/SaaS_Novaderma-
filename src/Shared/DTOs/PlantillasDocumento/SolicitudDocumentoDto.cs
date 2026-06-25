@@ -23,6 +23,12 @@ public class ResolverSolicitudDto
 {
     public string? Comentario { get; set; }
     public Dictionary<string, string> VariablesAprobador { get; set; } = [];
+    /// <summary>Imagen de firma en base64 (con o sin prefijo data:image/...) subida por el aprobador al momento de aprobar.</summary>
+    public string? FirmaImagenBase64 { get; set; }
+    public double? FirmaX { get; set; }
+    public double? FirmaY { get; set; }
+    public double? FirmaAncho { get; set; }
+    public double? FirmaAlto { get; set; }
 }
 
 public class EnviarSolicitudDto
@@ -32,4 +38,10 @@ public class EnviarSolicitudDto
 
     /// <summary>Reservado; el endpoint de solicitud del colaborador no aplica edición por párrafos.</summary>
     public Dictionary<int, string> ParrafosEditados { get; set; } = [];
+}
+
+public class PrevisualizarResponseDto
+{
+    public string PdfBase64 { get; set; } = string.Empty;
+    public string PngBase64 { get; set; } = string.Empty;
 }

@@ -20,8 +20,8 @@ builder.Services.AddMsalAuthentication(options =>
     options.ProviderOptions.AdditionalScopesToConsent.Add(
         "https://graph.microsoft.com/Files.ReadWrite");
     options.ProviderOptions.LoginMode = "redirect";
-    options.ProviderOptions.Authentication.RedirectUri = $"{builder.HostEnvironment.BaseAddress}authentication/login-callback";
-    options.ProviderOptions.Authentication.PostLogoutRedirectUri = $"{builder.HostEnvironment.BaseAddress}landing";
+    // RedirectUri y PostLogoutRedirectUri se leen desde appsettings.json (AzureAd section)
+    // para que MSAL-JS pueda construir URLs válidas durante su inicialización
 });
 
 // Configuración global de JSON

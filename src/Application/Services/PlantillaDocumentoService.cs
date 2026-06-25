@@ -764,8 +764,38 @@ public class PlantillaDocumentoService(
 
         if (extrasFiltrados is { Count: > 0 })
         {
+            var camposNum = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (!string.IsNullOrWhiteSpace(p.CamposFormulario))
+            {
+                try
+                {
+                    var campos = System.Text.Json.JsonSerializer.Deserialize<List<CampoFormularioDto>>(p.CamposFormulario);
+                    if (campos is not null)
+                    {
+                        foreach (var campo in campos)
+                        {
+                            if (campo.Tipo == "Número")
+                            {
+                                camposNum.Add(campo.Variable);
+                            }
+                        }
+                    }
+                }
+                catch { }
+            }
+
             foreach (var (key, value) in extrasFiltrados)
+            {
+                if (camposNum.Contains(key))
+                {
+                    if (decimal.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var parsedValue))
+                    {
+                        variables[$"{{{{{key}}}}}"] = parsedValue.ToString("#,##0", cultura);
+                        continue;
+                    }
+                }
                 variables[$"{{{{{key}}}}}"] = value ?? string.Empty;
+            }
         }
 
         return variables;

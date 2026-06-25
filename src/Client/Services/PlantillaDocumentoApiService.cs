@@ -127,6 +127,12 @@ public class PlantillaDocumentoApiService(HttpClient http)
         return r.IsSuccessStatusCode ? await r.Content.ReadFromJsonAsync<SolicitudDocumentoDto>() : null;
     }
 
+    public async Task<PrevisualizarResponseDto?> PrevisualizarSolicitudAsync(int solicitudId, ResolverSolicitudDto dto)
+    {
+        var r = await http.PostAsJsonAsync($"{Base}/solicitudes/{solicitudId}/previsualizar", dto);
+        return r.IsSuccessStatusCode ? await r.Content.ReadFromJsonAsync<PrevisualizarResponseDto>() : null;
+    }
+
     public async Task<(byte[]? bytes, string? fileName)> DescargarAprobadaAsync(int solicitudId)
     {
         var r = await http.GetAsync($"{Base}/solicitudes/{solicitudId}/descargar");
