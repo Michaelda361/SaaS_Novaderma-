@@ -11,6 +11,7 @@ public class ColaboradorRepository(AppDbContext context) : IColaboradorRepositor
         await context.Colaboradores
             .Include(c => c.Area)
             .Include(c => c.Cargo)
+            .Include(c => c.Supervisor)
             .AsNoTracking()
             .ToListAsync();
 
@@ -18,6 +19,7 @@ public class ColaboradorRepository(AppDbContext context) : IColaboradorRepositor
         await context.Colaboradores
             .Include(c => c.Area)
             .Include(c => c.Cargo)
+            .Include(c => c.Supervisor)
             .FirstOrDefaultAsync(c => c.Id == id);
 
     public async Task<Colaborador?> GetByEmailAsync(string email) =>

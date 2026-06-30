@@ -351,7 +351,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         modelBuilder.Entity<PlantillaDocumentoArea>().HasIndex(pa => pa.AreaId);
         modelBuilder.Entity<DocumentoControl>().HasIndex(d => d.Estado);
         modelBuilder.Entity<DocumentoControl>().HasIndex(d => d.ListadoMaestroId);
+        modelBuilder.Entity<DocumentoControl>().HasIndex(d => d.AreaId); // D4: filtro frecuente en GetDocumentosAsync
         modelBuilder.Entity<SolicitudCambioDocumentoControl>().HasIndex(s => s.EstadoPropuesta);
+        modelBuilder.Entity<SolicitudDocumento>().HasIndex(s => s.PlantillaDocumentoId); // D5: filtro por plantilla en historial
 
         // ── Cuestionarios ─────────────────────────────────────────────────────
         modelBuilder.Entity<Cuestionario>().HasQueryFilter(c => c.Activo);

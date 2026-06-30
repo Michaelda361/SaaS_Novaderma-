@@ -31,6 +31,11 @@ public class CertificadoService(
 
     public async Task<CertificadoDto> CreateAsync(CreateCertificadoDto dto)
     {
+        if (dto.FechaVencimiento.HasValue && dto.FechaVencimiento.Value.Date < dto.FechaEmision.Date)
+        {
+            throw new ArgumentException("La fecha de vencimiento no puede ser anterior a la fecha de emisión.");
+        }
+
         var certificado = new Certificado
         {
             Nombre = dto.Nombre,
@@ -57,6 +62,11 @@ public class CertificadoService(
 
     public async Task<CertificadoDto?> UpdateAsync(int id, CreateCertificadoDto dto)
     {
+        if (dto.FechaVencimiento.HasValue && dto.FechaVencimiento.Value.Date < dto.FechaEmision.Date)
+        {
+            throw new ArgumentException("La fecha de vencimiento no puede ser anterior a la fecha de emisión.");
+        }
+
         var cert = await repository.GetByIdAsync(id);
         if (cert is null) return null;
         cert.Nombre = dto.Nombre;

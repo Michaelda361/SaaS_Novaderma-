@@ -244,6 +244,12 @@ else
 
     private async Task Guardar()
     {
+        if (form.FechaVencimiento.HasValue && form.FechaVencimiento.Value.Date < form.FechaEmision.Date)
+        {
+            await toast.Show("La fecha de vencimiento no puede ser anterior a la fecha de emisión.", "error");
+            return;
+        }
+
         guardando = true;
         bool ok = editandoId.HasValue
             ? await ApiService.UpdateAsync(editandoId.Value, form) is not null
@@ -251,7 +257,7 @@ else
         guardando = false;
 
         if (ok) { CerrarModal(); await Cargar(); await toast.Show(editandoId.HasValue ? "Certificado actualizado." : "Certificado creado."); }
-        else await toast.Show("Error al guardar.", "error");
+        else await toast.Show("Error al guardar o validar en servidor.", "error");
     }
 
     private void PedirConfirmacion(CertificadoDto c)

@@ -194,6 +194,9 @@ public class ControlDocumentalRepository(AppDbContext context) : IControlDocumen
             .Include(s => s.DocumentoControl)
             .Include(s => s.Solicitante)
             .Include(s => s.Aprobador)
+            .Where(s => s.EstadoPropuesta == Domain.Enums.EstadoPropuesta.PendienteRevision
+                || s.EstadoPropuesta == Domain.Enums.EstadoPropuesta.EnEdicion
+                || s.EstadoPropuesta == Domain.Enums.EstadoPropuesta.PendienteAprobacion)
             .OrderByDescending(s => s.FechaCreacion)
             .ToListAsync();
 
@@ -203,7 +206,10 @@ public class ControlDocumentalRepository(AppDbContext context) : IControlDocumen
             .Include(s => s.DocumentoControl)
             .Include(s => s.Solicitante)
             .Include(s => s.Aprobador)
-            .Where(s => s.DocumentoControl.AreaId == areaId)
+            .Where(s => s.DocumentoControl.AreaId == areaId
+                && (s.EstadoPropuesta == Domain.Enums.EstadoPropuesta.PendienteRevision
+                    || s.EstadoPropuesta == Domain.Enums.EstadoPropuesta.EnEdicion
+                    || s.EstadoPropuesta == Domain.Enums.EstadoPropuesta.PendienteAprobacion))
             .OrderByDescending(s => s.FechaCreacion)
             .ToListAsync();
 

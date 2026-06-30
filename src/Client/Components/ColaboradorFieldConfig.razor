@@ -19,6 +19,13 @@
         <button class="btn btn-sm btn-primary" @onclick="AbrirNuevoCampo">+ Nuevo campo</button>
     </div>
     <div class="card-body">
+        @if (!string.IsNullOrWhiteSpace(apiError) && !mostrarFormulario)
+        {
+            <div class="alert alert-danger" style="margin-bottom:1rem; display:flex; justify-content:space-between; align-items:center; border-radius:.5rem;">
+                <span>@apiError</span>
+                <button type="button" class="btn btn-sm btn-ghost" style="padding:.1rem .3rem; min-width:auto; min-height:auto; border-radius:50%;" @onclick="() => apiError = null">✕</button>
+            </div>
+        }
         @if (campos is null)
         {
             <div>Cargando...</div>
@@ -52,8 +59,15 @@
                             </div>
                         </div>
                         <div style="display:flex;gap:.35rem;align-items:center;flex-shrink:0;">
-                            <button class="btn btn-ghost btn-sm" @onclick="() => EditarCampo(campo)">Editar</button>
-                            <button class="btn btn-danger btn-sm" @onclick="() => ConfirmarEliminarCampo(campo)">Eliminar</button>
+                            @if (!EsCampoEstandar(campo.CampoClave))
+                            {
+                                <button class="btn btn-ghost btn-sm" @onclick="() => EditarCampo(campo)">Editar</button>
+                                <button class="btn btn-danger btn-sm" @onclick="() => ConfirmarEliminarCampo(campo)">Eliminar</button>
+                            }
+                            else
+                            {
+                                <span class="badge badge-gray" style="padding:.2rem .45rem;font-size:.8rem;opacity:.7;">Estándar</span>
+                            }
                         </div>
                     </div>
                 }
@@ -211,6 +225,9 @@
     private int totalRecords = 0;
     private readonly string[] tipos = new[] { "Texto", "Numero", "Fecha", "Seleccion", "Area", "Cargo" };
 
+    private bool EsCampoEstandar(string? clave) =>
+        standardFields.Any(s => string.Equals(s.Clave, clave, StringComparison.OrdinalIgnoreCase));
+
     private IEnumerable<ColaboradorCampoDto> PagedCampos => campos?.Skip((currentPage - 1) * pageSize).Take(pageSize) ?? Array.Empty<ColaboradorCampoDto>();
     private bool CanGoPrevious => currentPage > 1;
     private bool CanGoNext => currentPage < totalPages;
@@ -333,8 +350,16 @@
     private async Task EliminarCampoConfirmado()
     {
         mostrarConfirmEliminar = false;
-        await CampoApiService.DeleteAsync(eliminandoCampoId);
-        await CargarCampos();
+        apiError = null;
+        var success = await CampoApiService.DeleteAsync(eliminandoCampoId);
+        if (!success)
+        {
+            apiError = "No se pudo eliminar el campo. Verifica tus permisos o si el campo está en uso.";
+        }
+        else
+        {
+            await CargarCampos();
+        }
         eliminandoCampoId = 0;
         eliminandoCampoNombre = string.Empty;
     }

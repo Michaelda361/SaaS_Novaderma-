@@ -1199,12 +1199,15 @@ public class ControlDocumentalService(
         if (solicitud.EstadoPropuesta == EstadoPropuesta.Aprobada || solicitud.EstadoPropuesta == EstadoPropuesta.Publicada || solicitud.EstadoPropuesta == EstadoPropuesta.Rechazada)
             throw new InvalidOperationException("La solicitud ya fue resuelta.");
 
-        var (esJefe, areaId) = await EsJefeDeAreaAsync(aprobador.Id);
-        if (aprobador.Rol != RolUsuario.Admin && !esJefe)
-            throw new UnauthorizedAccessException("No tienes permisos para rechazar esta solicitud.");
+        var tienePermisoAprobar = aprobador.Rol == RolUsuario.Admin || 
+                                 await ValidarPermisoAsync(solicitud.DocumentoControl.ListadoMaestroId, aprobador.Id, "aprobar");
 
-        if (aprobador.Rol == RolUsuario.Jefe && solicitud.DocumentoControl.AreaId != areaId)
-            throw new UnauthorizedAccessException("No tienes permisos para rechazar esta solicitud.");
+        if (!tienePermisoAprobar)
+        {
+            var (esJefe, areaId) = await EsJefeDeAreaAsync(aprobador.Id);
+            if (!esJefe || (aprobador.Rol == RolUsuario.Jefe && solicitud.DocumentoControl.AreaId != areaId))
+                throw new UnauthorizedAccessException("No tienes permisos para rechazar esta solicitud.");
+        }
 
         // Update the borrador (if any) to state "Rechazada" and set it to Activo = false
         if (solicitud.BorradorDocumentoId.HasValue)

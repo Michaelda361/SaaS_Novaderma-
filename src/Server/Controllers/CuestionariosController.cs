@@ -21,7 +21,7 @@ public class CuestionariosController(
     [HttpGet("capacitacion/{capacitacionId:int}")]
     public async Task<IActionResult> GetByCapacitacion(int capacitacionId)
     {
-        if (await currentUser.EsAdminAsync())
+        if (await currentUser.PuedeGestionarPlantillasAsync())
         {
             var r = await service.GetByCapacitacionAsync(capacitacionId);
             return r is null ? NoContent() : Ok(r);
@@ -175,6 +175,16 @@ public class CuestionariosController(
         {
             Console.WriteLine($"[DEBUG GetResultado] Identificadores inválidos. CuestionarioId={cuestionarioId}, InscripcionId={inscripcionId}");
             return BadRequest(new { message = "CuestionarioId e InscripcionId deben ser valores válidos." });
+        }
+
+        if (!await currentUser.PuedeGestionarPlantillasAsync())
+        {
+            var inscripcion = await inscripcionService.GetByIdAsync(inscripcionId);
+            if (inscripcion is null) return NotFound();
+            
+            var miColaboradorId = await currentUser.GetColaboradorIdAsync();
+            if (miColaboradorId is null || miColaboradorId != inscripcion.ColaboradorId)
+                return Forbid();
         }
 
         var resultado = await service.GetResultadoAsync(cuestionarioId, inscripcionId);

@@ -1172,7 +1172,7 @@ else
     private bool showVariables = false;
     private bool showConfirm = false;
     private bool guardando = false;
-    private bool showInstructivoHtml = false;
+    // (showInstructivoHtml eliminado — CS0414: campo nunca leído)
     private bool showInstructivoDocx = true;
     private string tabActiva = "plantillas";
     private string filtroHistorial = string.Empty;
@@ -1308,7 +1308,10 @@ else
     private List<CampoFormularioDto> ObtenerCamposAprobador()
     {
         if (solicitudResolviendo is null) return [];
-        var plantilla = plantillas.FirstOrDefault(p => p.Id == solicitudResolviendo.PlantillaDocumentoId);
+        // Bug #2 fix: buscar en la lista local primero y como fallback en la plantilla cargada
+        // para el modal de resolución (cubre el caso donde el jefe entra directo a Pendientes).
+        var plantilla = plantillas.FirstOrDefault(p => p.Id == solicitudResolviendo.PlantillaDocumentoId)
+                        ?? plantillaResolviendo;
         return plantilla?.CamposFormulario?.Where(c => c.DiligenciadoPor == "Aprobador").ToList() ?? [];
     }
 
@@ -1338,8 +1341,12 @@ else
         accionResolucion = "aprobar";
         comentarioResolucion = string.Empty;
         variablesAprobadorModel = [];
-        plantillaResolviendo = await ApiService.GetByIdAsync(s.PlantillaDocumentoId);
-        
+
+        // Bug #2 fix: siempre cargar la plantilla desde el API para que ObtenerCamposAprobador
+        // funcione incluso cuando el jefe entra directo a la pestaña Pendientes (lista local vacía).
+        plantillaResolviendo = plantillas.FirstOrDefault(p => p.Id == s.PlantillaDocumentoId)
+                               ?? await ApiService.GetByIdAsync(s.PlantillaDocumentoId);
+
         firmaX = 70;
         firmaY = 70;
         firmaAncho = 20;
@@ -1389,7 +1396,7 @@ else
     private static string TiempoRelativo(DateTime fecha)
     {
         var diff = DateTime.UtcNow - fecha.ToUniversalTime();
-        if (diff.TotalMinutes < 1)   return "hace un moment";
+        if (diff.TotalMinutes < 1)   return "hace un momento"; // Bug #4 fix: typo
         if (diff.TotalMinutes < 60)  return $"hace {(int)diff.TotalMinutes} min";
         if (diff.TotalHours < 24)    return $"hace {(int)diff.TotalHours} h";
         if (diff.TotalDays < 7)      return $"hace {(int)diff.TotalDays} día(s)";
@@ -1593,7 +1600,6 @@ else
             TipoPlantilla = "docx"
         };
         editandoId = null;
-        showInstructivoHtml = false;
         showInstructivoDocx = true;
         showModal = true;
     }
@@ -1604,7 +1610,7 @@ else
         {
             Nombre = p.Nombre,
             Descripcion = p.Descripcion,
-            TipoPlantilla = "docx", // Force docx
+            TipoPlantilla = p.TipoPlantilla, // Bug #5 fix: respetar el tipo original (no forzar docx)
             ContenidoHtml = p.ContenidoHtml,
             FirmaImagenBase64 = p.FirmaImagenBase64,
             NombreFirmante = p.NombreFirmante,

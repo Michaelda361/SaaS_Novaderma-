@@ -255,6 +255,15 @@
     }
     else
     {
+        var filtered = GetFilteredDocumentos().ToList();
+        var totalRecords = filtered.Count;
+        var totalPages = (int)Math.Ceiling((double)totalRecords / PageSize);
+        if (totalPages < 1) totalPages = 1;
+        if (currentPage > totalPages) currentPage = totalPages;
+        if (currentPage < 1) currentPage = 1;
+        
+        var pagedItems = filtered.Skip((currentPage - 1) * PageSize).Take(PageSize).ToList();
+
         <div class="filter-bar" style="margin-bottom: 1rem; display: flex; gap: 0.5rem; justify-content: flex-start; align-items: center; flex-wrap: wrap;">
             <div style="position: relative; flex: 1; max-width: 350px;">
                 <input type="text" class="form-control" placeholder="Buscar documento..." @bind="searchText" @bind:event="oninput" style="padding-left: 2.25rem; width: 100%;" />
@@ -264,144 +273,220 @@
             {
                 <button class="btn btn-ghost btn-sm" @onclick="() => searchText = string.Empty">Limpiar</button>
             }
-            <div style="margin-left: auto; display: flex; align-items: center; gap: 0.5rem;">
-                <button class="btn btn-ghost btn-sm" @onclick="ToggleCompactMode" title="Alternar vista compacta/cómoda" style="display: inline-flex; align-items: center; gap: 0.25rem;">
-                    @if (compactMode)
-                    {
-                        <span>📱 Vista Cómoda</span>
-                    }
-                    else
-                    {
-                        <span>🔍 Vista Compacta</span>
-                    }
+            <div style="margin-left: auto; display: flex; align-items: center; gap: 0.25rem; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 0.25rem;">
+                <button class="btn btn-sm @(viewMode == "comfortable" ? "btn-secondary" : "btn-ghost")" 
+                        @onclick='() => ChangeViewMode("comfortable")' 
+                        title="Vista de Tabla Cómoda" 
+                        style="padding: 0.25rem 0.5rem; display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.8rem; border: none; border-radius: 4px;">
+                    📋 Cómoda
+                </button>
+                <button class="btn btn-sm @(viewMode == "compact" ? "btn-secondary" : "btn-ghost")" 
+                        @onclick='() => ChangeViewMode("compact")' 
+                        title="Vista de Tabla Compacta" 
+                        style="padding: 0.25rem 0.5rem; display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.8rem; border: none; border-radius: 4px;">
+                    🔍 Compacta
+                </button>
+                <button class="btn btn-sm @(viewMode == "grid" ? "btn-secondary" : "btn-ghost")" 
+                        @onclick='() => ChangeViewMode("grid")' 
+                        title="Vista de Tarjetas" 
+                        style="padding: 0.25rem 0.5rem; display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.8rem; border: none; border-radius: 4px;">
+                    🎴 Tarjetas
                 </button>
             </div>
         </div>
 
-        <div class="table-wrapper">
-            <table class="@(compactMode ? "table-compact" : "")">
-                <thead>
-                    <tr>
-                        @foreach (var campo in listadoCampos.OrderBy(c => c.Orden))
-                        {
-                            <th class="@GetResponsiveColumnClass(campo.CampoClave)">@campo.Nombre</th>
-                        }
-                        <th>Acciones</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @{
-                        var filtered = GetFilteredDocumentos().ToList();
-                        var totalRecords = filtered.Count;
-                        var totalPages = (int)Math.Ceiling((double)totalRecords / PageSize);
-                        if (totalPages < 1) totalPages = 1;
-                        if (currentPage > totalPages) currentPage = totalPages;
-                        if (currentPage < 1) currentPage = 1;
-                        
-                        var pagedItems = filtered.Skip((currentPage - 1) * PageSize).Take(PageSize).ToList();
-                    }
-                    @if (!pagedItems.Any())
+        @if (viewMode == "grid")
+        {
+            <div class="document-grid-view">
+                @if (!pagedItems.Any())
+                {
+                    <div class="empty-state" style="grid-column: 1 / -1; padding: 3rem; text-align: center; color: var(--text-muted);">
+                        <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">🔍</div>
+                        <strong>No se encontraron documentos</strong>
+                        <div style="font-size: 0.9rem; margin-top: 0.25rem;">Intenta con otros términos de búsqueda.</div>
+                    </div>
+                }
+                else
+                {
+                    @foreach (var item in pagedItems)
                     {
+                        <div class="document-grid-card">
+                            <div class="document-card-header">
+                                <div style="flex: 1; min-width: 0;">
+                                    <span class="document-card-code">@item.Codigo</span>
+                                    <h4 class="document-card-title" title="@item.Nombre">@item.Nombre</h4>
+                                </div>
+                                <span class="badge @GetEstadoClass(item.Estado)">@item.Estado</span>
+                            </div>
+                            <div class="document-card-body">
+                                <div class="card-field-row">
+                                    <span class="field-label">Proceso:</span>
+                                    <span class="field-value" title="@item.ProcesoResponsable">@item.ProcesoResponsable</span>
+                                </div>
+                                <div class="card-field-row">
+                                    <span class="field-label">Versión:</span>
+                                    <span class="field-value">@item.Version</span>
+                                </div>
+                                <div class="card-field-row">
+                                    <span class="field-label">Fecha:</span>
+                                    <span class="field-value">@item.FechaDocumento.ToString("dd/MM/yyyy")</span>
+                                </div>
+                                @if (!string.IsNullOrWhiteSpace(item.AreaNombre))
+                                {
+                                    <div class="card-field-row">
+                                        <span class="field-label">Área:</span>
+                                        <span class="field-value" title="@item.AreaNombre">@item.AreaNombre</span>
+                                    </div>
+                                }
+                                @foreach (var campo in listadoCampos.Where(c => !c.EsPredeterminado).Take(4))
+                                {
+                                    var valor = GetValorDynamic(item, campo.CampoClave);
+                                    if (!string.IsNullOrWhiteSpace(valor))
+                                    {
+                                        <div class="card-field-row">
+                                            <span class="field-label">@campo.Nombre:</span>
+                                            <span class="field-value" title="@valor">@valor</span>
+                                        </div>
+                                    }
+                                }
+                            </div>
+                            <div class="document-card-footer">
+                                @if (IsValidUrl(item.OneDriveUrl))
+                                {
+                                    <a href="@item.OneDriveUrl" target="_blank" rel="noopener noreferrer" class="btn-link" style="display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.85rem; color: var(--primary); text-decoration: underline;">
+                                        🔗 @(string.IsNullOrWhiteSpace(item.ArchivoNombre) ? "Ver archivo" : item.ArchivoNombre)
+                                    </a>
+                                }
+                                <div style="margin-left: auto; display: flex; gap: 0.25rem;">
+                                    <button class="btn btn-ghost btn-sm" @onclick="() => EditarDocumento(item.Id)">✏️ @(AuthInfo.EsSoloColaborador ? "Actualizar" : "Editar")</button>
+                                    <button class="btn btn-ghost btn-sm" @onclick="() => VerAuditoria(item.Id)">🕘 Auditoría</button>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                }
+            </div>
+        }
+        else
+        {
+            <div class="table-wrapper">
+                <table class="@(compactMode ? "table-compact" : "")">
+                    <thead>
                         <tr>
-                            <td colspan="@(listadoCampos.Count + 1)" style="text-align: center; padding: 3rem; color: var(--text-muted);">
-                                <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">🔍</div>
-                                <strong>No se encontraron documentos</strong>
-                                <div style="font-size: 0.9rem; margin-top: 0.25rem;">Intenta con otros términos de búsqueda o limpia el filtro.</div>
-                            </td>
+                            @foreach (var campo in listadoCampos.OrderBy(c => c.Orden))
+                            {
+                                <th class="@GetResponsiveColumnClass(campo.CampoClave)">@campo.Nombre</th>
+                            }
+                            <th>Acciones</th>
                         </tr>
-                    }
-                    else
-                    {
-                        @foreach (var item in pagedItems)
+                    </thead>
+                    <tbody>
+                        @if (!pagedItems.Any())
                         {
                             <tr>
-                                @foreach (var campo in listadoCampos.OrderBy(c => c.Orden))
-                                {
-                                    <td class="@GetResponsiveColumnClass(campo.CampoClave)" title="@GetValorDynamic(item, campo.CampoClave)">
-                                        @if (campo.CampoClave == "OneDriveUrl")
-                                        {
-                                            @if (IsValidUrl(item.OneDriveUrl))
-                                            {
-                                                <a href="@item.OneDriveUrl" target="_blank" rel="noopener noreferrer" style="color: var(--color-primary); text-decoration: underline; display: inline-flex; align-items: center; gap: 0.25rem;">
-                                                    🔗 @(string.IsNullOrWhiteSpace(item.ArchivoNombre) ? "Ver archivo" : item.ArchivoNombre)
-                                                </a>
-                                            }
-                                            else
-                                            {
-                                                @item.OneDriveUrl
-                                            }
-                                        }
-                                        else if (campo.CampoClave == "Estado")
-                                        {
-                                            <span class="badge @GetEstadoClass(item.Estado)">@item.Estado</span>
-                                        }
-                                        else
-                                        {
-                                            @GetValorDynamic(item, campo.CampoClave)
-                                        }
-                                    </td>
-                                }
-                                <td>
-                                    <div class="flex gap-1">
-                                        <button class="btn btn-ghost btn-sm" @onclick="() => EditarDocumento(item.Id)">✏️ @(AuthInfo.EsSoloColaborador ? "Actualizar" : "Editar")</button>
-                                        <button class="btn btn-ghost btn-sm" @onclick="() => VerAuditoria(item.Id)">🕘 Auditoría</button>
-                                    </div>
+                                <td colspan="@(listadoCampos.Count + 1)" style="text-align: center; padding: 3rem; color: var(--text-muted);">
+                                    <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">🔍</div>
+                                    <strong>No se encontraron documentos</strong>
+                                    <div style="font-size: 0.9rem; margin-top: 0.25rem;">Intenta con otros términos de búsqueda o limpia el filtro.</div>
                                 </td>
                             </tr>
                         }
-                    }
-                </tbody>
-            </table>
-        </div>
+                        else
+                        {
+                            @foreach (var item in pagedItems)
+                            {
+                                <tr>
+                                    @foreach (var campo in listadoCampos.OrderBy(c => c.Orden))
+                                    {
+                                        <td class="@GetResponsiveColumnClass(campo.CampoClave)" title="@GetValorDynamic(item, campo.CampoClave)">
+                                            @if (campo.CampoClave == "OneDriveUrl")
+                                            {
+                                                @if (IsValidUrl(item.OneDriveUrl))
+                                                {
+                                                    <a href="@item.OneDriveUrl" target="_blank" rel="noopener noreferrer" style="color: var(--color-primary); text-decoration: underline; display: inline-flex; align-items: center; gap: 0.25rem;">
+                                                        🔗 @(string.IsNullOrWhiteSpace(item.ArchivoNombre) ? "Ver archivo" : item.ArchivoNombre)
+                                                    </a>
+                                                }
+                                                else
+                                                {
+                                                    @item.OneDriveUrl
+                                                }
+                                            }
+                                            else if (campo.CampoClave == "Estado")
+                                            {
+                                                <span class="badge @GetEstadoClass(item.Estado)">@item.Estado</span>
+                                            }
+                                            else
+                                            {
+                                                @GetValorDynamic(item, campo.CampoClave)
+                                            }
+                                        </td>
+                                    }
+                                    <td>
+                                        <div class="flex gap-1">
+                                            <button class="btn btn-ghost btn-sm" @onclick="() => EditarDocumento(item.Id)">✏️ @(AuthInfo.EsSoloColaborador ? "Actualizar" : "Editar")</button>
+                                            <button class="btn btn-ghost btn-sm" @onclick="() => VerAuditoria(item.Id)">🕘 Auditoría</button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
 
-        <!-- Vista móvil alternable en tarjetas (CSS) -->
-        <div class="document-cards-mobile">
-            @foreach (var item in pagedItems)
-            {
-                <div class="mobile-doc-card">
-                    <div class="mobile-doc-header">
-                        <div style="flex: 1; min-width: 0;">
-                            <span class="mobile-doc-code">@item.Codigo</span>
-                            <h4 class="mobile-doc-title">@item.Nombre</h4>
+        @if (viewMode != "grid")
+        {
+            <!-- Vista móvil alternable en tarjetas (CSS) -->
+            <div class="document-cards-mobile">
+                @foreach (var item in pagedItems)
+                {
+                    <div class="mobile-doc-card">
+                        <div class="mobile-doc-header">
+                            <div style="flex: 1; min-width: 0;">
+                                <span class="mobile-doc-code">@item.Codigo</span>
+                                <h4 class="mobile-doc-title">@item.Nombre</h4>
+                            </div>
+                            <span class="badge @GetEstadoClass(item.Estado)">@item.Estado</span>
                         </div>
-                        <span class="badge @GetEstadoClass(item.Estado)">@item.Estado</span>
-                    </div>
-                    <div class="mobile-doc-details">
-                        @if (IsValidUrl(item.OneDriveUrl))
-                        {
+                        <div class="mobile-doc-details">
+                            @if (IsValidUrl(item.OneDriveUrl))
+                            {
+                                <div class="mobile-doc-detail-row">
+                                    <span class="label">Archivo:</span>
+                                    <a href="@item.OneDriveUrl" target="_blank" rel="noopener noreferrer" class="mobile-doc-link">
+                                        🔗 @(string.IsNullOrWhiteSpace(item.ArchivoNombre) ? "Ver archivo" : item.ArchivoNombre)
+                                    </a>
+                                </div>
+                            }
                             <div class="mobile-doc-detail-row">
-                                <span class="label">Archivo:</span>
-                                <a href="@item.OneDriveUrl" target="_blank" rel="noopener noreferrer" class="mobile-doc-link">
-                                    🔗 @(string.IsNullOrWhiteSpace(item.ArchivoNombre) ? "Ver archivo" : item.ArchivoNombre)
-                                </a>
+                                <span class="label">Versión:</span>
+                                <span>@item.Version</span>
                             </div>
-                        }
-                        <div class="mobile-doc-detail-row">
-                            <span class="label">Versión:</span>
-                            <span>@item.Version</span>
+                            @if (!string.IsNullOrWhiteSpace(item.AreaNombre))
+                            {
+                                <div class="mobile-doc-detail-row">
+                                    <span class="label">Área:</span>
+                                    <span>@item.AreaNombre</span>
+                                </div>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(item.ProcesoResponsable))
+                            {
+                                <div class="mobile-doc-detail-row">
+                                    <span class="label">Responsable:</span>
+                                    <span>@item.ProcesoResponsable</span>
+                                </div>
+                            }
                         </div>
-                        @if (!string.IsNullOrWhiteSpace(item.AreaNombre))
-                        {
-                            <div class="mobile-doc-detail-row">
-                                <span class="label">Área:</span>
-                                <span>@item.AreaNombre</span>
-                            </div>
-                        }
-                        @if (!string.IsNullOrWhiteSpace(item.ProcesoResponsable))
-                        {
-                            <div class="mobile-doc-detail-row">
-                                <span class="label">Responsable:</span>
-                                <span>@item.ProcesoResponsable</span>
-                            </div>
-                        }
+                        <div class="mobile-doc-actions">
+                            <button class="btn btn-ghost btn-sm" @onclick="() => EditarDocumento(item.Id)">✏️ @(AuthInfo.EsSoloColaborador ? "Actualizar" : "Editar")</button>
+                            <button class="btn btn-ghost btn-sm" @onclick="() => VerAuditoria(item.Id)">🕘 Auditoría</button>
+                        </div>
                     </div>
-                    <div class="mobile-doc-actions">
-                        <button class="btn btn-ghost btn-sm" @onclick="() => EditarDocumento(item.Id)">✏️ @(AuthInfo.EsSoloColaborador ? "Actualizar" : "Editar")</button>
-                        <button class="btn btn-ghost btn-sm" @onclick="() => VerAuditoria(item.Id)">🕘 Auditoría</button>
-                    </div>
-                </div>
-            }
-        </div>
+                }
+            </div>
+        }
 
 
         <!-- Paginación Premium -->
@@ -1137,8 +1222,11 @@
                                     string proposedVer = "—";
                                     try
                                     {
-                                        var p = System.Text.Json.JsonSerializer.Deserialize<TalentManagement.Shared.DTOs.ControlDocumental.UpdateDocumentoControlDto>(selectedSolicitudDetalle.DatosPropuestos, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-                                        if (p != null) proposedVer = p.Version;
+                                        if (!string.IsNullOrEmpty(selectedSolicitudDetalle.DatosPropuestos))
+                                        {
+                                            var p = System.Text.Json.JsonSerializer.Deserialize<TalentManagement.Shared.DTOs.ControlDocumental.UpdateDocumentoControlDto>(selectedSolicitudDetalle.DatosPropuestos, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                                            if (p != null) proposedVer = p.Version;
+                                        }
                                     } catch {}
                                 }
                                 Versión @proposedVer
@@ -1491,7 +1579,7 @@
     private bool editingListado = false;
 
     private int? selectedListadoId;
-    private int? selectedAreaId;
+    // (selectedAreaId eliminado — CS0169: campo nunca usado)
     private string filterBusqueda = string.Empty;
     private string filterCodigo = string.Empty;
     private string filterProceso = string.Empty;
@@ -1499,6 +1587,7 @@
     private int currentPage = 1;
     private const int PageSize = 10;
     private bool compactMode = false;
+    private string viewMode = "comfortable";
 
     private string _searchText = string.Empty;
     private string searchText
@@ -1793,13 +1882,23 @@
             colaboradores = await ColaboradorApi.GetAllAsync() ?? [];
             listados = await ControlDocumentalApi.GetListadosMaestrosAsync() ?? [];
 
-            // Cargar preferencia de modo compacto desde localStorage
+            // Cargar preferencia de vista desde localStorage
             try
             {
-                var storedCompact = await JS.InvokeAsync<string>("localStorage.getItem", "novahub_compact_mode");
-                if (bool.TryParse(storedCompact, out var isCompact))
+                var storedMode = await JS.InvokeAsync<string>("localStorage.getItem", "novahub_document_view_mode");
+                if (!string.IsNullOrEmpty(storedMode) && (storedMode == "comfortable" || storedMode == "compact" || storedMode == "grid"))
                 {
-                    compactMode = isCompact;
+                    viewMode = storedMode;
+                    compactMode = (viewMode == "compact");
+                }
+                else
+                {
+                    var storedCompact = await JS.InvokeAsync<string>("localStorage.getItem", "novahub_compact_mode");
+                    if (bool.TryParse(storedCompact, out var isCompact))
+                    {
+                        compactMode = isCompact;
+                        viewMode = isCompact ? "compact" : "comfortable";
+                    }
                 }
             }
             catch { }
@@ -1868,11 +1967,13 @@
         await Filtrar();
     }
 
-    private async Task ToggleCompactMode()
+    private async Task ChangeViewMode(string mode)
     {
-        compactMode = !compactMode;
+        viewMode = mode;
+        compactMode = (mode == "compact");
         try
         {
+            await JS.InvokeVoidAsync("localStorage.setItem", "novahub_document_view_mode", mode);
             await JS.InvokeVoidAsync("localStorage.setItem", "novahub_compact_mode", compactMode.ToString().ToLowerInvariant());
         }
         catch { }
@@ -2340,7 +2441,11 @@
                 orig = System.Text.Json.JsonSerializer.Deserialize<TalentManagement.Shared.DTOs.ControlDocumental.DocumentoControlDto>(sol.DatosOriginales, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
             }
 
-            var prop = System.Text.Json.JsonSerializer.Deserialize<TalentManagement.Shared.DTOs.ControlDocumental.UpdateDocumentoControlDto>(sol.DatosPropuestos, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            UpdateDocumentoControlDto? prop = null;
+            if (!string.IsNullOrEmpty(sol.DatosPropuestos))
+            {
+                prop = System.Text.Json.JsonSerializer.Deserialize<TalentManagement.Shared.DTOs.ControlDocumental.UpdateDocumentoControlDto>(sol.DatosPropuestos, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            }
 
             if (orig != null && prop != null)
             {

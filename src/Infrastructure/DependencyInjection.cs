@@ -15,11 +15,7 @@ public static class DependencyInjection
         this IServiceCollection services,
         IConfiguration configuration)
     {
-        var syncfusionLicense = configuration["SyncfusionLicense"];
-        if (!string.IsNullOrEmpty(syncfusionLicense))
-        {
-            Syncfusion.Licensing.SyncfusionLicenseProvider.RegisterLicense(syncfusionLicense);
-        }
+        // Syncfusion reemplazado por LibreOffice — registro de licencia eliminado
 
         services.AddDbContext<AppDbContext>(options =>
             options.UseSqlServer(

@@ -251,7 +251,7 @@
     {
         if (archivoSeleccionado is null && string.IsNullOrWhiteSpace(form.UrlExterna))
         {
-            toast.Show("Debes seleccionar un archivo o elegir uno de OneDrive", "error");
+            _ = toast.Show("Debes seleccionar un archivo o elegir uno de OneDrive", "error");
             return;
         }
         guardando = true;
@@ -263,13 +263,13 @@
         guardando = false;
         if (result is not null)
         {
-            toast.Show("Documento creado correctamente");
+            _ = toast.Show("Documento creado correctamente");
             CerrarModal();
             await Filtrar();
         }
         else
         {
-            toast.Show("Error al crear el documento", "error");
+            _ = toast.Show("Error al crear el documento", "error");
         }
     }
 
@@ -287,12 +287,12 @@
         var ok = await DocumentoApi.DeleteAsync(docAEliminar.Id);
         if (ok)
         {
-            toast.Show("Documento eliminado");
+            _ = toast.Show("Documento eliminado");
             await Filtrar();
         }
         else
         {
-            toast.Show("Error al eliminar", "error");
+            _ = toast.Show("Error al eliminar", "error");
         }
     }
 
@@ -303,12 +303,12 @@
         var ok = await DocumentoApi.AvanzarEstadoAsync(id);
         if (ok)
         {
-            toast.Show("Estado actualizado");
+            _ = toast.Show("Estado actualizado");
             await Filtrar();
         }
         else
         {
-            toast.Show("No se pudo avanzar el estado", "error");
+            _ = toast.Show("No se pudo avanzar el estado", "error");
         }
     }
 

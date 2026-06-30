@@ -22,7 +22,7 @@ public class CapacitacionesController(
     [HttpGet]
     public async Task<IActionResult> GetAll()
     {
-        if (await currentUser.EsAdminAsync())
+        if (await currentUser.PuedeGestionarPlantillasAsync())
             return Ok(await service.GetActivasAsync());
 
         var miId = await currentUser.GetColaboradorIdAsync();
@@ -50,7 +50,7 @@ public class CapacitacionesController(
     [HttpGet("area/{areaId:int}")]
     public async Task<IActionResult> GetByArea(int areaId)
     {
-        if (await currentUser.EsAdminAsync())
+        if (await currentUser.PuedeGestionarPlantillasAsync())
             return Ok(await service.GetByAreaAsync(areaId));
 
         var miId = await currentUser.GetColaboradorIdAsync();
@@ -88,7 +88,7 @@ public class CapacitacionesController(
     [HttpGet("{id:int}")]
     public async Task<IActionResult> GetById(int id)
     {
-        if (await currentUser.EsAdminAsync())
+        if (await currentUser.PuedeGestionarPlantillasAsync())
         {
             var result = await service.GetByIdAsync(id);
             return result is null ? NotFound() : Ok(result);

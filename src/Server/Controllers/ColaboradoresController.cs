@@ -62,6 +62,7 @@ public class ColaboradoresController(
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreateColaboradorDto dto)
     {
+        if (!await currentUser.PuedeGestionarPlantillasAsync()) return Forbid();
         try
         {
             var created = await service.CreateAsync(dto);
@@ -73,6 +74,7 @@ public class ColaboradoresController(
     [HttpPut("{id:int}")]
     public async Task<IActionResult> Update(int id, [FromBody] UpdateColaboradorDto dto)
     {
+        if (!await currentUser.PuedeGestionarPlantillasAsync()) return Forbid();
         try
         {
             var result = await service.UpdateAsync(id, dto);
@@ -84,6 +86,7 @@ public class ColaboradoresController(
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> Delete(int id)
     {
+        if (!await currentUser.PuedeGestionarPlantillasAsync()) return Forbid();
         var deleted = await service.DeleteAsync(id);
         return deleted ? NoContent() : NotFound();
     }
@@ -98,6 +101,7 @@ public class ColaboradoresController(
     [HttpPut("{id:int}/rol")]
     public async Task<IActionResult> CambiarRol(int id, [FromBody] CambiarRolDto dto)
     {
+        if (!await currentUser.EsAdminAsync()) return Forbid();
         try
         {
             var result = await service.CambiarRolAsync(id, dto.Rol);

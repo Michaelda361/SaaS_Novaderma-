@@ -1401,7 +1401,7 @@
     private bool editandoCertificado = false;
     private bool guardandoCertificado = false;
     private ConfigurarCertificadoDto certForm = new();
-    private string tipoCertificado = "pptx";
+    // (tipoCertificado eliminado — CS0414: campo nunca leído)
     private string certHtmlContent = string.Empty;
     private List<CapacitacionDto> capacitacionesConPlantilla = new();
     private string? nombreArchivoSeleccionado = null;
@@ -1460,7 +1460,7 @@
             FirmaAlto = capacitacion?.FirmaAlto ?? 15,
             EliminarFirma = false
         };
-        tipoCertificado = "pptx";
+        // tipoCertificado eliminado
         nombreArchivoSeleccionado = null;
         copiandoDesdeNombre = null;
         previewCertificadoBase64Temp = capacitacion?.PreviewCertificadoBase64;

@@ -19,7 +19,8 @@ builder.Host.UseSerilog((context, services, configuration) => configuration
     .ReadFrom.Services(services)
     .Enrich.FromLogContext());
 
-Console.WriteLine($"[NovaHub] Environment: {builder.Environment.EnvironmentName}");
+var logger = LoggerFactory.Create(b => b.AddConsole()).CreateLogger("Startup");
+logger.LogInformation("[NovaHub] Environment: {Environment}", builder.Environment.EnvironmentName);
 
 // Inyectar ContentRootPath en config para que MockSharePointService lo pueda leer
 builder.Configuration["ContentRootPath"] = builder.Environment.ContentRootPath;

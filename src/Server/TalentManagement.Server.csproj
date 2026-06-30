@@ -28,7 +28,7 @@
 
   <!-- Incluir web.config en la salida de publicacion -->
   <ItemGroup>
-    <Content Include="web.config" CopyToPublishDirectory="Always" />
+    <Content Update="web.config" CopyToPublishDirectory="Always" />
   </ItemGroup>
 
   <Target Name="PublishRunWebpack" AfterTargets="Build">

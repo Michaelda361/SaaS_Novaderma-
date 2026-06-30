@@ -418,9 +418,12 @@ else
 
         try
         {
-            var extrasEnvio = plantillaSeleccionada.VariablesEditables
-                .Where(k => extrasActuales.ContainsKey(k))
-                .ToDictionary(k => k, k => extrasActuales[k]);
+            // Bug #1 fix: usar todos los campos de extrasActuales (CamposFormulario modernos
+            // + VariablesEditables legacy). El servidor filtra internamente las variables
+            // permitidas, por lo que no hay riesgo de inyectar campos no autorizados.
+            var extrasEnvio = extrasActuales.Count > 0
+                ? new Dictionary<string, string>(extrasActuales)
+                : [];
 
             var resultado = await ApiService.EnviarSolicitudAsync(plantillaSeleccionada.Id,
                 new EnviarSolicitudDto { Extras = extrasEnvio });

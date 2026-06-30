@@ -24,6 +24,8 @@ public class CertificadoRepository(AppDbContext context) : ICertificadoRepositor
 
     public async Task<Certificado?> GetByIdAsync(int id) =>
         await context.Certificados
+            .Include(c => c.Colaborador)
+            .Include(c => c.Capacitacion)
             .FirstOrDefaultAsync(c => c.Id == id);
 
     public async Task<Certificado> CreateAsync(Certificado certificado)

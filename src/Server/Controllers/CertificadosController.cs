@@ -18,12 +18,22 @@ public class CertificadosController(
     ICertificadoPdfService certificadoPdfService) : ControllerBase
 {
     [HttpGet]
-    public async Task<IActionResult> GetAll() =>
-        Ok(await service.GetAllAsync());
+    public async Task<IActionResult> GetAll()
+    {
+        if (!await currentUser.PuedeGestionarPlantillasAsync()) return Forbid();
+        return Ok(await service.GetAllAsync());
+    }
 
     [HttpGet("colaborador/{colaboradorId:int}")]
-    public async Task<IActionResult> GetByColaborador(int colaboradorId) =>
-        Ok(await service.GetByColaboradorAsync(colaboradorId));
+    public async Task<IActionResult> GetByColaborador(int colaboradorId)
+    {
+        if (!await currentUser.PuedeGestionarPlantillasAsync())
+        {
+            var miId = await currentUser.GetColaboradorIdAsync();
+            if (miId is null || miId.Value != colaboradorId) return Forbid();
+        }
+        return Ok(await service.GetByColaboradorAsync(colaboradorId));
+    }
 
     /// <summary>Devuelve los certificados del colaborador autenticado.</summary>
     [HttpGet("mis")]
@@ -46,7 +56,7 @@ public class CertificadosController(
     {
         var result = await service.GetByIdAsync(id);
         if (result is null) return NotFound();
-        if (await currentUser.EsAdminAsync()) return Ok(result);
+        if (await currentUser.PuedeGestionarPlantillasAsync()) return Ok(result);
 
         var miId = await currentUser.GetColaboradorIdAsync();
         if (miId is null || miId.Value != result.ColaboradorId) return Forbid();
@@ -54,30 +64,47 @@ public class CertificadosController(
     }
 
     [HttpGet("vencidos")]
-    public async Task<IActionResult> GetVencidos() =>
-        Ok(await service.GetVencidosAsync());
+    public async Task<IActionResult> GetVencidos()
+    {
+        if (!await currentUser.PuedeGestionarPlantillasAsync()) return Forbid();
+        return Ok(await service.GetVencidosAsync());
+    }
 
     [HttpGet("proximos-a-vencer")]
-    public async Task<IActionResult> GetProximosAVencer([FromQuery] int dias = 30) =>
-        Ok(await service.GetProximosAVencerAsync(dias));
+    public async Task<IActionResult> GetProximosAVencer([FromQuery] int dias = 30)
+    {
+        if (!await currentUser.PuedeGestionarPlantillasAsync()) return Forbid();
+        return Ok(await service.GetProximosAVencerAsync(dias));
+    }
 
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreateCertificadoDto dto)
     {
-        var created = await service.CreateAsync(dto);
-        return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
+        if (!await currentUser.PuedeGestionarPlantillasAsync()) return Forbid();
+        try
+        {
+            var created = await service.CreateAsync(dto);
+            return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
+        }
+        catch (ArgumentException ex) { return BadRequest(new { message = ex.Message }); }
     }
 
     [HttpPut("{id:int}")]
     public async Task<IActionResult> Update(int id, [FromBody] CreateCertificadoDto dto)
     {
-        var result = await service.UpdateAsync(id, dto);
-        return result is null ? NotFound() : Ok(result);
+        if (!await currentUser.PuedeGestionarPlantillasAsync()) return Forbid();
+        try
+        {
+            var result = await service.UpdateAsync(id, dto);
+            return result is null ? NotFound() : Ok(result);
+        }
+        catch (ArgumentException ex) { return BadRequest(new { message = ex.Message }); }
     }
 
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> Delete(int id)
     {
+        if (!await currentUser.PuedeGestionarPlantillasAsync()) return Forbid();
         var deleted = await service.DeleteAsync(id);
         return deleted ? NoContent() : NotFound();
     }
@@ -87,7 +114,7 @@ public class CertificadosController(
     {
         var certEntity = await service.GetCertificadoEntityAsync(id);
         if (certEntity is null) return NotFound();
-        if (!await currentUser.EsAdminAsync())
+        if (!await currentUser.PuedeGestionarPlantillasAsync())
         {
             var miId = await currentUser.GetColaboradorIdAsync();
             if (miId is null || miId.Value != certEntity.ColaboradorId) return Forbid();
@@ -117,7 +144,7 @@ public class CertificadosController(
             var cert = await service.GetCertificadoEntityAsync(id);
             if (cert is null) return NotFound();
 
-            if (!await currentUser.EsAdminAsync())
+            if (!await currentUser.PuedeGestionarPlantillasAsync())
             {
                 var miId = await currentUser.GetColaboradorIdAsync();
                 if (miId is null || miId.Value != cert.ColaboradorId) return Forbid();
@@ -210,7 +237,7 @@ public class CertificadosController(
             var cert = await service.GetCertificadoEntityAsync(id);
             if (cert is null) return NotFound();
 
-            if (!await currentUser.EsAdminAsync())
+            if (!await currentUser.PuedeGestionarPlantillasAsync())
             {
                 var miId = await currentUser.GetColaboradorIdAsync();
                 if (miId is null || miId.Value != cert.ColaboradorId) return Forbid();

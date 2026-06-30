@@ -17,7 +17,7 @@ public class RecursosController(
     [HttpGet("capacitacion/{capacitacionId:int}")]
     public async Task<IActionResult> GetByCapacitacion(int capacitacionId)
     {
-        if (await currentUser.EsAdminAsync())
+        if (await currentUser.PuedeGestionarPlantillasAsync())
             return Ok(await service.GetByCapacitacionAsync(capacitacionId));
 
         // Solo colaboradores inscritos pueden ver recursos

@@ -45,7 +45,10 @@ else
 <div class="card">
     <div class="card-header">
         <span class="card-title">Colaboradores</span>
-        <button class="btn btn-primary btn-sm" @onclick="AbrirModal">+ Nuevo colaborador</button>
+        @if (AuthInfo.EsJefe || AuthInfo.EsAdmin)
+        {
+            <button class="btn btn-primary btn-sm" @onclick="AbrirModal">+ Nuevo colaborador</button>
+        }
     </div>
 
     <!-- Tabs activos / inactivos -->
@@ -168,7 +171,10 @@ else
                         <th>Ingreso</th>
                         <th>Supervisor</th>
                         <th>Rol</th>
-                        <th></th>
+                        @if (AuthInfo.EsJefe || AuthInfo.EsAdmin)
+                        {
+                            <th></th>
+                        }
                     </tr>
                 </thead>
                 <tbody>
@@ -193,20 +199,24 @@ else
                             <td>
                                 <select class="rol-selector rol-selector--@c.Rol.ToLower()"
                                         value="@c.Rol"
+                                        disabled="@(!AuthInfo.EsAdmin)"
                                         @onchange="async e => await CambiarRol(cid, e.Value?.ToString() ?? c.Rol)">
                                     <option value="Colaborador">👤 Colaborador</option>
                                     <option value="Jefe">👔 Jefe</option>
                                     <option value="Admin">🔑 Admin</option>
                                 </select>
                             </td>
-                            <td>
-                                <div class="flex gap-2">
-                                    <button class="btn btn-ghost btn-sm btn-icon"
-                                            @onclick="() => AbrirEditar(c)" title="Editar">✏️</button>
-                                    <button class="btn btn-danger btn-sm btn-icon"
-                                            @onclick="() => PedirConfirmacion(c)" title="Eliminar">🗑️</button>
-                                </div>
-                            </td>
+                            @if (AuthInfo.EsJefe || AuthInfo.EsAdmin)
+                            {
+                                <td>
+                                    <div class="flex gap-2">
+                                        <button class="btn btn-ghost btn-sm btn-icon"
+                                                @onclick="() => AbrirEditar(c)" title="Editar">✏️</button>
+                                        <button class="btn btn-danger btn-sm btn-icon"
+                                                @onclick="() => PedirConfirmacion(c)" title="Eliminar">🗑️</button>
+                                    </div>
+                                </td>
+                            }
                         </tr>
                     }
                 </tbody>

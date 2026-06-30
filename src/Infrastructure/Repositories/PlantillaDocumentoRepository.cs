@@ -9,9 +9,11 @@ namespace TalentManagement.Infrastructure.Repositories;
 public class PlantillaDocumentoRepository(AppDbContext context) : IPlantillaDocumentoRepository
 {
     // Para listados: excluye ArchivoDocx y ContenidoHtml (datos pesados)
+    // Bug #6 fix: filtrar por Activo == true para excluir soft-deletes.
     private IQueryable<PlantillaDocumento> WithAreasNoBytes() =>
         context.PlantillasDocumento
             .Include(p => p.Areas).ThenInclude(a => a.Area)
+            .Where(p => p.Activo)
             .Select(p => new PlantillaDocumento
             {
                 Id = p.Id,
@@ -31,10 +33,11 @@ public class PlantillaDocumentoRepository(AppDbContext context) : IPlantillaDocu
                 Areas = p.Areas
             });
 
-    // Para generación: incluye todo
+    // Para generación: incluye todo (también filtra soft-deletes)
     private IQueryable<PlantillaDocumento> WithAreasFull() =>
         context.PlantillasDocumento
-            .Include(p => p.Areas).ThenInclude(a => a.Area);
+            .Include(p => p.Areas).ThenInclude(a => a.Area)
+            .Where(p => p.Activo);
 
     public async Task<IEnumerable<PlantillaDocumento>> GetAllAsync() =>
         await WithAreasNoBytes().AsNoTracking().ToListAsync();
@@ -130,10 +133,12 @@ public class PlantillaDocumentoRepository(AppDbContext context) : IPlantillaDocu
 
     public async Task<IEnumerable<SolicitudDocumento>> GetTodasSolicitudesAsync()
     {
+        // Bug #3 fix: limitar a 500 registros para evitar consultas sin tope en producción.
         var rows = await context.SolicitudesDocumento
             .Include(s => s.PlantillaDocumento)
             .Include(s => s.Colaborador)
             .OrderByDescending(s => s.FechaSolicitud)
+            .Take(500)
             .Select(s => new
             {
                 s.Id, s.PlantillaDocumentoId, s.PlantillaDocumento,
