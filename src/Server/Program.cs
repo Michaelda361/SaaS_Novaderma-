@@ -67,8 +67,7 @@ builder.Services.PostConfigure<Microsoft.AspNetCore.Authentication.JwtBearer.Jwt
         };
     });
 
-if (builder.Environment.IsDevelopment())
-{
+#if DEBUG
     builder.Services.AddAuthentication()
         .AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, DevAuthHandler>("DevUser", _ => { });
     builder.Services.AddAuthorization(options =>
@@ -77,11 +76,9 @@ if (builder.Environment.IsDevelopment())
             .RequireAuthenticatedUser()
             .Build());
     builder.Services.AddSingleton<TalentManagement.Server.Services.DevUserStore>();
-}
-else
-{
+#else
     builder.Services.AddAuthorization();
-}
+#endif
 
 builder.Services.AddOpenApi();
 builder.Services.AddRazorPages();

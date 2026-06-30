@@ -15,8 +15,15 @@ public class ColaboradoresController(
     CurrentUserService currentUser) : ControllerBase
 {
     [HttpGet]
-    public async Task<IActionResult> GetAll() =>
-        Ok(await service.GetAllAsync());
+    public async Task<IActionResult> GetAll()
+    {
+        var list = await service.GetAllAsync();
+        if (!await currentUser.PuedeGestionarPlantillasAsync())
+        {
+            foreach (var c in list) c.SueldoBasico = null;
+        }
+        return Ok(list);
+    }
 
     [HttpGet("inactivos")]
     public async Task<IActionResult> GetInactivos()
@@ -29,7 +36,17 @@ public class ColaboradoresController(
     public async Task<IActionResult> GetById(int id)
     {
         var result = await service.GetByIdAsync(id);
-        return result is null ? NotFound() : Ok(result);
+        if (result is null) return NotFound();
+
+        if (!await currentUser.PuedeGestionarPlantillasAsync())
+        {
+            var miEmail = currentUser.GetEmail();
+            if (!string.Equals(result.Email, miEmail, StringComparison.OrdinalIgnoreCase))
+            {
+                result.SueldoBasico = null;
+            }
+        }
+        return Ok(result);
     }
 
     [HttpGet("campos")]
