@@ -149,13 +149,7 @@
             <input type="search" placeholder="Buscar capacitación..."
                    @bind="busqueda" @bind:event="oninput" />
         </div>
-        <select @bind="filtroTipo" style="min-width:140px">
-            <option value="">Todos</option>
-            <option value="General">General</option>
-            <option value="Área">Por área</option>
-            <option value="Colaborador">Por colaborador</option>
-        </select>
-        @if (!string.IsNullOrEmpty(busqueda) || !string.IsNullOrEmpty(filtroTipo))
+        @if (!string.IsNullOrEmpty(busqueda))
         {
             <span class="text-sm text-muted">@Filtradas.Count resultado(s)</span>
         }
@@ -189,7 +183,6 @@
                     <tr>
                         <th>Nombre</th>
                         <th>Estado</th>
-                        <th>Asignación</th>
                         <th>Duración</th>
                         <th>Inicio</th>
                         <th>Fin</th>
@@ -210,20 +203,6 @@
                                 }
                             </td>
                             <td><span class="badge @estado.Clase">@estado.Texto</span></td>
-                            <td>
-                                @if (c.AreaId.HasValue)
-                                {
-                                    <span class="badge badge-info">🏢 @c.AreaNombre</span>
-                                }
-                                else if (c.ColaboradorId.HasValue)
-                                {
-                                    <span class="badge badge-warning">👤 @c.ColaboradorNombre</span>
-                                }
-                                else
-                                {
-                                    <span class="badge badge-gray">General</span>
-                                }
-                            </td>
                             <td><span class="badge badge-info">@c.DuracionHoras h</span></td>
                             <td class="text-sm">@c.FechaInicio.ToString("dd/MM/yyyy")</td>
                             <td class="text-sm">@c.FechaFin.ToString("dd/MM/yyyy")</td>
@@ -313,40 +292,7 @@
                             <InputDate @bind-Value="form.FechaFin" />
                             <ValidationMessage For="() => form.FechaFin" class="validation-message" />
                         </div>
-                        <div class="form-group full">
-                            <label>Tipo de asignación</label>
-                            <select class="form-select" @bind="tipoAsignacion">
-                                <option value="general">General</option>
-                                <option value="area">Por área</option>
-                                <option value="colaborador">Por colaborador</option>
-                            </select>
-                        </div>
-                        @if (tipoAsignacion == "area")
-                        {
-                            <div class="form-group full">
-                                <label>Área *</label>
-                                <select class="form-select" @bind="form.AreaId">
-                                    <option value="">-- Seleccionar área --</option>
-                                    @foreach (var a in areas)
-                                    {
-                                        <option value="@a.Id">@a.Nombre</option>
-                                    }
-                                </select>
-                            </div>
-                        }
-                        else if (tipoAsignacion == "colaborador")
-                        {
-                            <div class="form-group full">
-                                <label>Colaborador *</label>
-                                <select class="form-select" @bind="form.ColaboradorId">
-                                    <option value="">-- Seleccionar colaborador --</option>
-                                    @foreach (var col in colaboradores)
-                                    {
-                                        <option value="@col.Id">@col.Nombre @col.Apellido</option>
-                                    }
-                                </select>
-                            </div>
-                        }
+
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -551,7 +497,7 @@
             EmiteCertificado = c.EmiteCertificado,
             NombreCertificado = c.NombreCertificado
         };
-        tipoAsignacion = c.AreaId.HasValue ? "area" : c.ColaboradorId.HasValue ? "colaborador" : "general";
+        tipoAsignacion = "general";
         editandoId = c.Id;
         mostrarModal = true;
     }

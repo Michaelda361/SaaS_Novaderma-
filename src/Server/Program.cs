@@ -93,7 +93,10 @@ builder.Services.AddResponseCompression(opts =>
     opts.MimeTypes = Microsoft.AspNetCore.ResponseCompression.ResponseCompressionDefaults.MimeTypes
         .Concat(["application/json", "application/pdf"]);
 });
-builder.Services.AddControllers()
+builder.Services.AddControllers(options =>
+{
+    options.Filters.Add<TalentManagement.Server.Filters.ValidarColaboradorFilter>();
+})
     .AddJsonOptions(options =>
     {
         options.JsonSerializerOptions.DefaultIgnoreCondition =

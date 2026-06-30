@@ -1,10 +1,11 @@
-﻿using System.Net.Http.Json;
+using System.Net.Http.Json;
 
 namespace TalentManagement.Client.Services;
 
 public class AuthInfoService(HttpClient http)
 {
     public bool EsMicrosoftUser { get; private set; }
+    public bool EsColaborador { get; private set; }
     public bool EsSoloColaborador { get; private set; }
     public bool EsJefe { get; private set; }
     public bool EsAdmin { get; private set; }
@@ -37,6 +38,7 @@ public class AuthInfoService(HttpClient http)
             if (perfil is not null)
             {
                 EsMicrosoftUser = !perfil.EsDevUser;
+                EsColaborador = perfil.EsColaborador;
                 Rol = perfil.Rol ?? "Colaborador";
                 EsJefe = Rol == "Jefe";
                 EsAdmin = Rol == "Admin";
@@ -55,6 +57,7 @@ public class AuthInfoService(HttpClient http)
         {
             // No marcar _loaded=true para que se reintente en el proximo render
             EsMicrosoftUser = false;
+            EsColaborador = false;
             EsSoloColaborador = true;
             EsAdmin = false;
             EsJefe = false;

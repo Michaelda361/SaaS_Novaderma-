@@ -145,6 +145,26 @@
     protected override async Task OnInitializedAsync()
     {
         await AuthInfo.LoadAsync();
+        VerificarColaborador();
+    }
+
+    protected override void OnParametersSet()
+    {
+        VerificarColaborador();
+    }
+
+    private void VerificarColaborador()
+    {
+        var uri = Nav.Uri.ToLower();
+        if (uri.Contains("/authentication/") || uri.Contains("/landing") || uri.Contains("/sin-registro"))
+        {
+            return;
+        }
+
+        if (AuthInfo.EsColaborador == false && !string.IsNullOrWhiteSpace(AuthInfo.Email))
+        {
+            Nav.NavigateTo("sin-registro");
+        }
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)

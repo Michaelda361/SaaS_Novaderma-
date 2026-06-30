@@ -44,8 +44,23 @@ public class NotificacionesHub(
     /// <summary>
     /// El cliente llama este método al conectar para asociar su ColaboradorId con su ConnectionId.
     /// </summary>
-    public Task RegistrarColaborador(int colaboradorId)
+    public async Task RegistrarColaborador(int colaboradorId)
     {
+        var email = Context.User?.FindFirst("preferred_username")?.Value 
+                    ?? Context.User?.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value;
+
+        if (string.IsNullOrEmpty(email))
+        {
+            throw new HubException("No autorizado. Email no encontrado en el token.");
+        }
+
+        var colaborador = await _colaboradorRepo.GetByEmailAsync(email);
+        if (colaborador is null || colaborador.Id != colaboradorId)
+        {
+            logger.LogWarning("[Hub] RegistrarColaborador denegado para Email={Email} ColaboradorId={ColId}", email, colaboradorId);
+            throw new HubException("No autorizado.");
+        }
+
         var connId = Context.ConnectionId;
         // Si el colaborador tenía una conexión anterior, limpiarla
         if (_conexiones.TryGetValue(colaboradorId, out var connAnterior))
@@ -56,7 +71,6 @@ public class NotificacionesHub(
 
         logger.LogInformation("[Hub] RegistrarColaborador — ColaboradorId={ColId} ConnectionId={Id}",
             colaboradorId, connId);
-        return Task.CompletedTask;
     }
 
     public async Task JoinAdminGroup()

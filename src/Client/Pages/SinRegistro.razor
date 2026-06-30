@@ -1,0 +1,57 @@
+@page "/sin-registro"
+@attribute [PageTitle("Acceso restringido")]
+@layout EmptyLayout
+@attribute [AllowAnonymous]
+@inject NavigationManager Navigation
+@inject AuthInfoService AuthInfo
+
+<div class="landing-page">
+    <div class="landing-card" style="text-align: center;">
+        <div class="landing-logo" style="justify-content: center; margin-bottom: 2rem;">
+            <div class="landing-logo-icon">
+                <img src="logo.png" alt="NovaHub" class="landing-logo-img" />
+            </div>
+            <div class="landing-logo-text" style="text-align: left;">
+                <h1>NovaHub</h1>
+                <span>Gestión de Talento</span>
+            </div>
+        </div>
+
+        <div class="landing-body">
+            <div style="font-size: 4rem; margin-bottom: 1rem; animation: pulse 2s infinite;">🔒</div>
+            <h2 style="color: var(--text-primary); margin-bottom: 1rem; font-weight: 700;">Acceso Restringido</h2>
+            
+            <p style="color: var(--text-secondary); line-height: 1.6; margin-bottom: 1.5rem;">
+                Tu cuenta de correo no se encuentra registrada como colaborador activo en NovaHub.
+            </p>
+
+            <div style="background: var(--bg-app); border: 1px solid var(--border-color); border-radius: 0.5rem; padding: 1rem; margin-bottom: 2rem;">
+                <span style="font-size: 0.85rem; color: var(--text-muted); display: block; margin-bottom: 0.25rem;">Correo autenticado</span>
+                <strong style="color: var(--primary); font-size: 1rem; word-break: break-all;">@AuthInfo.Email</strong>
+            </div>
+
+            <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 2rem;">
+                Por favor, solicita al administrador del sistema o al equipo de Recursos Humanos que asocie tu cuenta a un colaborador.
+            </p>
+
+            <button class="btn btn-primary landing-btn" @onclick="Logout" style="width: 100%; justify-content: center;">
+                <span>Cerrar sesión / Usar otra cuenta</span>
+                <span class="landing-btn-icon">→</span>
+            </button>
+        </div>
+    </div>
+
+    <div class="landing-bg">
+        <div class="landing-bg-circle c1" style="background: radial-gradient(circle, rgba(239,68,68,0.15) 0%, transparent 70%);"></div>
+        <div class="landing-bg-circle c2"></div>
+        <div class="landing-bg-circle c3"></div>
+    </div>
+</div>
+
+@code {
+    private void Logout()
+    {
+        AuthInfo.Invalidar();
+        Navigation.NavigateToLogout("authentication/logout", "landing");
+    }
+}
