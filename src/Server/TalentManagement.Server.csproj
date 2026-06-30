@@ -26,6 +26,11 @@
     <ProjectReference Include="..\Shared\TalentManagement.Shared.csproj" />
   </ItemGroup>
 
+  <!-- Incluir web.config en la salida de publicacion -->
+  <ItemGroup>
+    <Content Include="web.config" CopyToPublishDirectory="Always" />
+  </ItemGroup>
+
   <Target Name="PublishRunWebpack" AfterTargets="Build">
     <Exec Command="dotnet build ../Client -c $(Configuration)" />
     <ItemGroup>

@@ -6,15 +6,32 @@ obj/
 .vs/
 *.swp
 
-## Configuración sensible
+## Configuración sensible — nunca subir al repo
 appsettings.json
 appsettings.Development.json
 appsettings.Production.json
+appsettings.*.json
+!appsettings.example.json
 
-## Publicación
+## Publicación y builds
 publish/
 out/
 
 ## Logs
 *.log
 logs/
+*.bak
+
+## Archivos temporales / scratch
+scratch/
+tmp-build-server/
+
+## Artefactos de build de Blazor WASM (generados automáticamente, no versionar)
+src/Server/wwwroot/_framework/
+
+## Uploads / archivos subidos por usuarios
+src/Server/wwwroot/uploads/
+
+## Archivos de datos exportados temporales
+*.xlsx
+!exported_test.xlsx

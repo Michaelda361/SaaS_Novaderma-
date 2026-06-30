@@ -37,7 +37,7 @@ if (Test-Path $tempPublishDir) {
 }
 New-Item -ItemType Directory -Path $tempPublishDir -Force | Out-Null
 
-dotnet publish $projectPath -c Release -o $tempPublishDir
+dotnet publish $projectPath -c Release -o $tempPublishDir -r win-x64 --self-contained false
 
 # 3. Detener el Pool de Aplicaciones de IIS para desbloquear archivos
 Write-Host "[2/6] Deteniendo el Application Pool '$appPoolName'..." -ForegroundColor Green
@@ -96,6 +96,22 @@ if (Get-WebAppPoolState -Name $appPoolName -ErrorAction SilentlyContinue) {
 Write-Host "[6/6] Limpiando archivos temporales..." -ForegroundColor Green
 if (Test-Path $tempPublishDir) {
     Remove-Item -Path $tempPublishDir -Recurse -Force
+}
+
+# 8. Validar health check
+Write-Host "Esperando que la aplicación inicie (5 segundos)..." -ForegroundColor Gray
+Start-Sleep -Seconds 5
+try {
+    $response = Invoke-WebRequest -Uri "http://localhost/health" -UseBasicParsing -TimeoutSec 10 -ErrorAction Stop
+    if ($response.StatusCode -eq 200) {
+        Write-Host "✓ Health check OK — La aplicación está respondiendo correctamente." -ForegroundColor Green
+    } else {
+        Write-Warning "Health check retornó estado HTTP $($response.StatusCode). Verifica los logs en C:\ProgramData\TalentManagement\logs\"
+    }
+} catch {
+    Write-Warning "No se pudo alcanzar /health: $($_.Exception.Message)"
+    Write-Warning "Verifica manualmente: http://localhost/health"
+    Write-Warning "Revisa los logs en: C:\ProgramData\TalentManagement\logs\"
 }
 
 Write-Host "=== DESPLIEGUE FINALIZADO CON ÉXITO ===" -ForegroundColor Cyan
