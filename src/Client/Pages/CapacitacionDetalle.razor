@@ -140,11 +140,9 @@
                         <th>Área</th>
                         <th>Cargo</th>
                         <th>Fecha inscripción</th>
-                        <th>Asistió</th>
                         <th>Calificación</th>
                         <th>Cuestionario</th>
                         <th>Fecha de Finalización</th>
-                        <th>Observaciones</th>
                         <th></th>
                     </tr>
                 </thead>
@@ -157,19 +155,7 @@
                             <td class="font-medium">@i.ColaboradorNombre</td>
                             <td class="text-sm text-muted">@i.ColaboradorArea</td>
                             <td class="text-sm text-muted">@i.ColaboradorCargo</td>
-                            <td class="text-sm">@i.FechaInscripcion.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
-                            <td>
-                                @if (editandoId == i.Id)
-                                {
-                                    <input type="checkbox" @bind="editForm.Asistio" />
-                                }
-                                else
-                                {
-                                    <span class="badge @(i.Asistio ? "badge-success" : "badge-gray")">
-                                        @(i.Asistio ? "Sí" : "No")
-                                    </span>
-                                }
-                            </td>
+                            <td class="text-sm">@i.FechaInscripcion.ToLocalTime().ToString("dd/MM/yyyy")</td>
                             <td>
                                 @if (editandoId == i.Id)
                                 {
@@ -178,17 +164,21 @@
                                 }
                                 else
                                 {
-                                    @if (respondio && res is not null)
+                                    @if (i.Calificacion.HasValue)
                                     {
-                                        <span class="@(res.Aprobado ? "text-success" : "text-danger")">
+                                        <span class="@(i.Calificacion >= 7 ? "text-success" : "text-danger")">
+                                            @i.Calificacion.Value.ToString("0.##")
+                                        </span>
+                                    }
+                                    else if (respondio && res is not null)
+                                    {
+                                        <span class="@(res.Aprobado ? "text-success" : "text-danger")" style="font-weight: normal;">
                                             @($"{res.Correctas} / {res.TotalPreguntas}")
                                         </span>
                                     }
                                     else
                                     {
-                                        <span class="@(i.Calificacion >= 7 ? "text-success" : i.Calificacion.HasValue ? "text-danger" : "")">
-                                            @(i.Calificacion.HasValue ? i.Calificacion.Value.ToString("0.##") : "-")
-                                        </span>
+                                        <span class="text-muted">-</span>
                                     }
                                 }
                             </td>
@@ -215,17 +205,6 @@
                                 else
                                 {
                                     @("—")
-                                }
-                            </td>
-                            <td>
-                                @if (editandoId == i.Id)
-                                {
-                                    <input type="text" @bind="editForm.Observaciones"
-                                           placeholder="Observaciones..." style="width:150px" />
-                                }
-                                else
-                                {
-                                    <span class="text-sm text-muted">@(i.Observaciones ?? "-")</span>
                                 }
                             </td>
                             <td>
@@ -556,7 +535,7 @@
                             <div style="margin-top:.35rem;display:flex;align-items:center;gap:.75rem;">
                                 <span class="badge badge-success">✅ Plantilla cargada</span>
                                 <button type="button" class="btn btn-ghost btn-sm"
-                                        @onclick="() => { certForm.EliminarDocx = true; certForm.CopiarPlantillaDesdeId = null; copiandoDesdeNombre = null; nombreArchivoSeleccionado = null; previewCertificadoBase64Temp = null; }">Quitar</button>
+                                        @onclick="QuitarPlantilla">Quitar</button>
                             </div>
                         }
                         @if (capacitacion?.TienePlantillaDocx != true || certForm.EliminarDocx)
@@ -623,7 +602,7 @@
                                     {
                                         <span class="badge badge-success">✅ Firma cargada</span>
                                         <button type="button" class="btn btn-outline-danger btn-sm"
-                                                @onclick="() => { certForm.EliminarFirma = true; certForm.FirmaImagenBase64 = null; }">
+                                                @onclick="QuitarFirma">
                                             Quitar Firma
                                         </button>
                                     }
@@ -653,13 +632,21 @@
                                 <!-- Canvas de Vista Previa 16:9 con fondo del Certificado -->
                                 <div id="firma-canvas" style="width: 100%; aspect-ratio: 16 / 9; background-color: #f1f5f9; @(string.IsNullOrWhiteSpace(previewCertificadoBase64Temp) ? "border: 2px dashed #ccd5e0;" : "background-image: url('data:image/png;base64," + previewCertificadoBase64Temp + "'); background-size: contain; background-repeat: no-repeat; background-position: center; border: 1px solid var(--border);") border-radius: 6px; position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; user-select: none; box-shadow: inset 0 2px 4px rgba(0,0,0,0.06);">
                                     
+                                    @if (guardandoCertificado)
+                                    {
+                                        <div style="position: absolute; inset: 0; background: rgba(255, 255, 255, 0.7); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.5rem; z-index: 20;">
+                                            <div class="spinner" style="width: 1.5rem; height: 1.5rem; border-color: rgba(79, 70, 229, 0.2); border-top-color: #4f46e5;"></div>
+                                            <span style="font-size: 0.8rem; font-weight: 500; color: #4f46e5;">Procesando plantilla...</span>
+                                        </div>
+                                    }
+
                                     @if (string.IsNullOrWhiteSpace(previewCertificadoBase64Temp))
                                     {
                                         @if (!string.IsNullOrWhiteSpace(certForm.ArchivoDocxBase64))
                                         {
                                             <span style="color: #4f46e5; font-size: 0.8rem; font-weight: 500; pointer-events: none; text-align: center; line-height: 1.4; padding: 1rem;">
                                                 📁 NUEVA PLANTILLA SUBIDA<br />
-                                                <span style="font-size: 0.7rem; color: #6366f1;">Haz clic en "Guardar" para procesar la plantilla y generar la vista previa.</span>
+                                                <span style="font-size: 0.7rem; color: #6366f1;">Procesando plantilla y generando vista previa...</span>
                                             </span>
                                         }
                                         else
@@ -731,7 +718,7 @@
             </div>
             <div class="flex gap-2" style="margin-top:1rem;">
                 <button class="btn btn-primary btn-sm" @onclick="GuardarCertificado" disabled="@guardandoCertificado">
-                    @(guardandoCertificado ? "Guardando..." : "Guardar")
+                    @(guardandoCertificado ? "Guardando..." : "Guardar y Cerrar")
                 </button>
                 <button class="btn btn-ghost btn-sm" @onclick="() => editandoCertificado = false">Cancelar</button>
             </div>
@@ -1513,9 +1500,48 @@
         certForm.ArchivoDocxBase64 = Convert.ToBase64String(ms.ToArray());
         certForm.TipoArchivoCertificado = "application/vnd.openxmlformats-officedocument.presentationml.presentation";
         certForm.EliminarDocx = false;
+
+        // Guardado automático para generar y mostrar la vista previa sin cerrar la edición
+        await AutoGuardarPlantillaParaPreview();
     }
 
-    private void OnCopiarDesdeSeleccionado(ChangeEventArgs e)
+    private async Task AutoGuardarPlantillaParaPreview()
+    {
+        guardandoCertificado = true;
+        
+        bool tienePlantilla = !string.IsNullOrWhiteSpace(certForm.ArchivoDocxBase64)
+            || (capacitacion?.TienePlantillaDocx == true && !certForm.EliminarDocx)
+            || certForm.CopiarPlantillaDesdeId.HasValue;
+            
+        bool tieneNombre = !string.IsNullOrWhiteSpace(certForm.PlantillaNombreCertificado);
+        certForm.EmiteCertificado = tienePlantilla || tieneNombre;
+
+        var result = await CapacitacionService.ConfigurarCertificadoAsync(Id, certForm);
+        guardandoCertificado = false;
+        
+        if (result is not null)
+        {
+            capacitacion = result;
+            previewCertificadoBase64Temp = result.PreviewCertificadoBase64;
+            
+            // Preservar la firma si ya estaba configurada en el servidor y no la hemos tocado localmente
+            if (result.FirmaImagenBase64 is not null && string.IsNullOrWhiteSpace(certForm.FirmaImagenBase64) && !certForm.EliminarFirma)
+            {
+                certForm.FirmaImagenBase64 = result.FirmaImagenBase64;
+            }
+
+            // Limpiar el base64 local ya que está guardado en el servidor
+            certForm.ArchivoDocxBase64 = null;
+            
+            await toast.Show("Nueva plantilla subida y procesada con éxito.");
+        }
+        else
+        {
+            await toast.Show("Error al procesar la plantilla en el servidor.", "error");
+        }
+    }
+
+    private async Task OnCopiarDesdeSeleccionado(ChangeEventArgs e)
     {
         var val = e.Value?.ToString();
         if (int.TryParse(val, out var selectedId))
@@ -1547,6 +1573,9 @@
                     certForm.FirmaAlto = selectedCap.FirmaAlto ?? 15;
                     certForm.EliminarFirma = false;
                 }
+
+                await AutoGuardarCertificadoSilencioso();
+                await toast.Show("Plantilla copiada y guardada.");
             }
         }
         else
@@ -1562,6 +1591,8 @@
             certForm.FirmaAncho = capacitacion?.FirmaAncho ?? 20;
             certForm.FirmaAlto = capacitacion?.FirmaAlto ?? 15;
             certForm.EliminarFirma = false;
+
+            await AutoGuardarCertificadoSilencioso();
         }
     }
 
@@ -1614,32 +1645,82 @@
         certForm.FirmaY ??= 70;
         certForm.FirmaAncho ??= 20;
         certForm.FirmaAlto ??= 15;
+
+        // Guardado automático de la firma subida
+        await AutoGuardarCertificadoSilencioso();
+        await toast.Show("Firma subida y guardada con éxito.");
     }
 
-    private void RestablecerFirma()
+    private async Task RestablecerFirma()
     {
         certForm.FirmaX = 70;
         certForm.FirmaY = 70;
         certForm.FirmaAncho = 20;
         certForm.FirmaAlto = 15;
+        await AutoGuardarCertificadoSilencioso();
+        await toast.Show("Posición y tamaño de firma restablecidos.");
+    }
+
+    private async Task QuitarFirma()
+    {
+        certForm.EliminarFirma = true;
+        certForm.FirmaImagenBase64 = null;
+        await AutoGuardarCertificadoSilencioso();
+        await toast.Show("Firma quitada y guardada.");
+    }
+
+    private async Task QuitarPlantilla()
+    {
+        certForm.EliminarDocx = true;
+        certForm.CopiarPlantillaDesdeId = null;
+        copiandoDesdeNombre = null;
+        nombreArchivoSeleccionado = null;
+        previewCertificadoBase64Temp = null;
+        await AutoGuardarCertificadoSilencioso();
+        await toast.Show("Plantilla quitada y guardada.");
+    }
+
+    private async Task AutoGuardarCertificadoSilencioso()
+    {
+        bool tienePlantilla = !string.IsNullOrWhiteSpace(certForm.ArchivoDocxBase64)
+            || (capacitacion?.TienePlantillaDocx == true && !certForm.EliminarDocx)
+            || certForm.CopiarPlantillaDesdeId.HasValue;
+            
+        bool tieneNombre = !string.IsNullOrWhiteSpace(certForm.PlantillaNombreCertificado);
+        certForm.EmiteCertificado = tienePlantilla || tieneNombre;
+
+        var result = await CapacitacionService.ConfigurarCertificadoAsync(Id, certForm);
+        if (result is not null)
+        {
+            capacitacion = result;
+            previewCertificadoBase64Temp = result.PreviewCertificadoBase64;
+            
+            // Preservar la firma
+            if (result.FirmaImagenBase64 is not null && string.IsNullOrWhiteSpace(certForm.FirmaImagenBase64) && !certForm.EliminarFirma)
+            {
+                certForm.FirmaImagenBase64 = result.FirmaImagenBase64;
+            }
+        }
     }
 
     private DotNetObjectReference<CapacitacionDetalle>? objectRef;
 
     [JSInvokable]
-    public void SetCoords(double x, double y)
+    public async Task SetCoords(double x, double y)
     {
         certForm.FirmaX = Math.Round(x, 2);
         certForm.FirmaY = Math.Round(y, 2);
         StateHasChanged();
+        await AutoGuardarCertificadoSilencioso();
     }
 
     [JSInvokable]
-    public void SetSize(double w, double h)
+    public async Task SetSize(double w, double h)
     {
         certForm.FirmaAncho = Math.Round(w, 2);
         certForm.FirmaAlto = Math.Round(h, 2);
         StateHasChanged();
+        await AutoGuardarCertificadoSilencioso();
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)

@@ -31,8 +31,9 @@ public class ApiAuthorizationMessageHandler : AuthorizationMessageHandler
         {
             return await base.SendAsync(request, cancellationToken);
         }
-        catch (AccessTokenNotAvailableException)
+        catch (AccessTokenNotAvailableException ex)
         {
+            ex.Redirect();
             return new HttpResponseMessage(System.Net.HttpStatusCode.Unauthorized);
         }
     }

@@ -338,7 +338,7 @@
                                         <span class="field-value" title="@item.AreaNombre">@item.AreaNombre</span>
                                     </div>
                                 }
-                                @foreach (var campo in listadoCampos.Where(c => !c.EsPredeterminado).Take(4))
+                                @foreach (var campo in listadoCampos.Where(c => !c.EsPredeterminado && !string.Equals(c.CampoClave, "Version", StringComparison.OrdinalIgnoreCase) && !string.Equals(c.Nombre, "Versión", StringComparison.OrdinalIgnoreCase)).Take(4))
                                 {
                                     var valor = GetValorDynamic(item, campo.CampoClave);
                                     if (!string.IsNullOrWhiteSpace(valor))
@@ -351,12 +351,6 @@
                                 }
                             </div>
                             <div class="document-card-footer">
-                                @if (IsValidUrl(item.OneDriveUrl))
-                                {
-                                    <a href="@item.OneDriveUrl" target="_blank" rel="noopener noreferrer" class="btn-link" style="display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.85rem; color: var(--primary); text-decoration: underline;">
-                                        🔗 @(string.IsNullOrWhiteSpace(item.ArchivoNombre) ? "Ver archivo" : item.ArchivoNombre)
-                                    </a>
-                                }
                                 <div style="margin-left: auto; display: flex; gap: 0.25rem;">
                                     <button class="btn btn-ghost btn-sm" @onclick="() => EditarDocumento(item.Id)">✏️ @(AuthInfo.EsSoloColaborador ? "Actualizar" : "Editar")</button>
                                     <button class="btn btn-ghost btn-sm" @onclick="() => VerAuditoria(item.Id)">🕘 Auditoría</button>
@@ -986,114 +980,166 @@
                             </div>
                         }
 
-                        <!-- SECCIÓN 2: Línea de Tiempo Documental -->
+                        <!-- SECCIÓN 2: Línea de Tiempo Documental Paginada por Ciclo de Solicitud -->
                         <div style="margin-bottom: 2rem; border-bottom: 1px solid var(--border); padding-bottom: 1.5rem;">
-                            <h4 style="margin-bottom: 1rem; color: var(--primary); font-weight: 600;">Línea de tiempo de trazabilidad</h4>
-                            
-                            <div class="timeline-container">
-                                @foreach (var ev in BuildTimeline())
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
+                                <h4 style="margin: 0; color: var(--primary); font-weight: 600;">Línea de tiempo de trazabilidad</h4>
+                                
+                                @{
+                                    var timelineGroups = GetTimelineGroups();
+                                    var totalTimelinePages = timelineGroups.Count;
+                                    if (timelineCurrentPage > totalTimelinePages) timelineCurrentPage = totalTimelinePages;
+                                    if (timelineCurrentPage < 1) timelineCurrentPage = 1;
+                                    var currentGroup = timelineGroups.ElementAtOrDefault(timelineCurrentPage - 1);
+                                }
+                                
+                                @if (totalTimelinePages > 1)
                                 {
-                                    <div class="timeline-item">
-                                        <!-- Icon dot -->
-                                        <div class="timeline-badge" style="border: 2px solid @(ev.Tipo == "Creacion" ? "#22c55e" : ev.Tipo == "Solicitud" ? "#eab308" : ev.Tipo == "Edicion" ? "#06b6d4" : "#22c55e");">
-                                            @ev.Icon
-                                        </div>
-                                        
-                                        <!-- Event Card -->
-                                        <div class="timeline-content" style="border-left: 4px solid @(ev.Tipo == "Creacion" ? "#22c55e" : ev.Tipo == "Solicitud" ? "#eab308" : ev.Tipo == "Edicion" ? "#06b6d4" : ev.BadgeClass == "badge-danger" ? "#ef4444" : "#22c55e");">
-                                            <!-- Event Title & Date -->
-                                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; border-bottom: 1px dashed var(--border); padding-bottom: 0.25rem;">
-                                                <span style="font-weight: 600; font-size: 1rem; color: var(--text);">@ev.Titulo</span>
-                                                <span style="font-size: 0.8rem; color: var(--text-muted); font-weight: 500;">@ev.Fecha.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</span>
-                                            </div>
-
-                                            @if (ev.Tipo == "Creacion")
-                                            {
-                                                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 0.5rem; font-size: 0.85rem;">
-                                                    <div><span style="color: var(--text-muted);">Código:</span> <strong>@ev.Codigo</strong></div>
-                                                    <div><span style="color: var(--text-muted);">Nombre:</span> <strong>@ev.Nombre</strong></div>
-                                                    <div><span style="color: var(--text-muted);">Versión:</span> <strong>@ev.Version</strong></div>
-                                                    <div><span style="color: var(--text-muted);">Área:</span> <strong>@ev.Area</strong></div>
-                                                    <div><span style="color: var(--text-muted);">Creado por:</span> <strong>@ev.Usuario</strong></div>
-                                                </div>
-                                            }
-                                            else if (ev.Tipo == "Solicitud")
-                                            {
-                                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; font-size: 0.85rem; margin-bottom: 0.5rem;">
-                                                    <div><span style="color: var(--text-muted);">Solicitado por:</span> <strong>@ev.Usuario</strong></div>
-                                                    <div><span style="color: var(--text-muted);">Fecha:</span> <strong>@ev.Fecha.ToLocalTime().ToString("dd/MM/yyyy")</strong></div>
-                                                    <div style="grid-column: span 2;"><span style="color: var(--text-muted);">Motivo:</span> <strong>@ev.Motivo</strong></div>
-                                                    <div style="grid-column: span 2;"><span style="color: var(--text-muted);">Observaciones:</span> <strong>@ev.Observaciones</strong></div>
-                                                </div>
-                                                @if (ev.SnapshotOriginal != null)
-                                                {
-                                                    <div style="margin-top: 0.75rem; padding: 0.5rem 0.75rem; background: var(--surface-muted); border-radius: 4px; border: 1px solid var(--surface-border);">
-                                                        <div style="font-size: 0.75rem; font-weight: 600; text-transform: uppercase; color: var(--text-muted); margin-bottom: 0.25rem;">Datos del documento antes del cambio:</div>
-                                                        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.5rem; font-size: 0.8rem;">
-                                                            <div><span style="color: var(--text-muted);">Código</span><br/><strong>@ev.SnapshotOriginal.Codigo</strong></div>
-                                                            <div><span style="color: var(--text-muted);">Nombre</span><br/><strong>@ev.SnapshotOriginal.Nombre</strong></div>
-                                                            <div><span style="color: var(--text-muted);">Versión</span><br/><strong>@ev.SnapshotOriginal.Version</strong></div>
-                                                            <div><span style="color: var(--text-muted);">Área</span><br/><strong>@(ev.SnapshotOriginal.AreaNombre ?? "—")</strong></div>
-                                                        </div>
-                                                    </div>
-                                                }
-                                            }
-                                            else if (ev.Tipo == "Edicion")
-                                            {
-                                                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; font-size: 0.85rem; margin-bottom: 0.5rem;">
-                                                    <div><span style="color: var(--text-muted);">Editado por:</span> <strong>@ev.Usuario</strong></div>
-                                                    <div><span style="color: var(--text-muted);">Fecha:</span> <strong>@ev.Fecha.ToLocalTime().ToString("dd/MM/yyyy")</strong></div>
-                                                    <div><span style="color: var(--text-muted);">Estado:</span> <span class="badge badge-info">@ev.Estado</span></div>
-                                                </div>
-                                                @if (ev.Cambios != null && ev.Cambios.Any())
-                                                {
-                                                    <div class="diff-viewer">
-                                                        <div style="font-size: 0.75rem; font-weight: 600; text-transform: uppercase; color: var(--text-muted); padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border);">Cambios detectados:</div>
-                                                        <table>
-                                                            <thead>
-                                                                <tr>
-                                                                    <th style="width: 30%;">Campo</th>
-                                                                    <th style="width: 35%;">Antes</th>
-                                                                    <th style="width: 35%;">Después</th>
-                                                                </tr>
-                                                            </thead>
-                                                            <tbody>
-                                                                @foreach (var c in ev.Cambios)
-                                                                {
-                                                                    <tr>
-                                                                        <td style="font-weight: 600;">@c.Name</td>
-                                                                        <td class="diff-row-deleted">@c.OriginalValue</td>
-                                                                        <td class="diff-row-added">@c.ProposedValue</td>
-                                                                    </tr>
-                                                                }
-                                                            </tbody>
-                                                        </table>
-                                                    </div>
-                                                }
-                                                else
-                                                {
-                                                    <div style="margin-top: 0.5rem; font-size: 0.8rem; color: var(--text-muted); font-style: italic;">
-                                                        No se detectaron cambios en los metadatos.
-                                                    </div>
-                                                }
-                                            }
-                                            else if (ev.Tipo == "Aprobacion")
-                                            {
-                                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; font-size: 0.85rem;">
-                                                    <div><span style="color: var(--text-muted);">@(ev.Titulo.Contains("Rechazado") ? "Rechazado por:" : "Aprobado por:")</span> <strong>@ev.Usuario</strong></div>
-                                                    <div><span style="color: var(--text-muted);">Fecha:</span> <strong>@ev.Fecha.ToLocalTime().ToString("dd/MM/yyyy")</strong></div>
-                                                    <div style="grid-column: span 2;"><span style="color: var(--text-muted);">Comentarios:</span> <strong>@ev.Comentarios</strong></div>
-                                                </div>
-                                            }
+                                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                        <span class="text-sm text-muted">Solicitud @timelineCurrentPage de @totalTimelinePages</span>
+                                        <div style="display: flex; gap: 0.25rem;">
+                                            <button type="button" class="btn btn-sm btn-secondary" style="padding: 0.2rem 0.5rem;" disabled="@(timelineCurrentPage <= 1)" @onclick="() => timelineCurrentPage--">◀ Reciente</button>
+                                            <button type="button" class="btn btn-sm btn-secondary" style="padding: 0.2rem 0.5rem;" disabled="@(timelineCurrentPage >= totalTimelinePages)" @onclick="() => timelineCurrentPage++">Antiguo ▶</button>
                                         </div>
                                     </div>
                                 }
                             </div>
+                            
+                            @if (currentGroup != null)
+                            {
+                                var mainEvent = currentGroup.FirstOrDefault(e => e.Tipo == "Solicitud" || e.Tipo == "Creacion");
+                                var cycleTitle = mainEvent?.Titulo ?? "Ciclo de Trazabilidad";
+                                var cycleDate = mainEvent?.Fecha.ToLocalTime().ToString("dd/MM/yyyy") ?? "";
+
+                                <div style="margin-bottom: 1rem; padding: 0.5rem 0.75rem; background: var(--surface-muted); border-radius: 6px; font-size: 0.9rem; font-weight: 500; color: var(--text-color); display: flex; align-items: center; gap: 0.5rem; border: 1px solid var(--border);">
+                                    <span>📅</span> <strong>@cycleTitle</strong> · @cycleDate
+                                </div>
+
+                                <div class="timeline-container">
+                                    @foreach (var ev in currentGroup.OrderBy(e => e.Fecha).ThenBy(e => e.SortOrder))
+                                    {
+                                        <div class="timeline-item">
+                                            <!-- Icon dot -->
+                                            <div class="timeline-badge" style="border: 2px solid @(ev.Tipo == "Creacion" ? "#22c55e" : ev.Tipo == "Solicitud" ? "#eab308" : ev.Tipo == "Edicion" ? "#06b6d4" : "#22c55e");">
+                                                @ev.Icon
+                                            </div>
+                                            
+                                            <!-- Event Card -->
+                                            <div class="timeline-content" style="border-left: 4px solid @(ev.Tipo == "Creacion" ? "#22c55e" : ev.Tipo == "Solicitud" ? "#eab308" : ev.Tipo == "Edicion" ? "#06b6d4" : ev.BadgeClass == "badge-danger" ? "#ef4444" : "#22c55e");">
+                                                <!-- Event Title & Date -->
+                                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; border-bottom: 1px dashed var(--border); padding-bottom: 0.25rem;">
+                                                    <span style="font-weight: 600; font-size: 1rem; color: var(--text);">@ev.Titulo</span>
+                                                    <span style="font-size: 0.8rem; color: var(--text-muted); font-weight: 500;">@ev.Fecha.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</span>
+                                                </div>
+
+                                                @if (ev.Tipo == "Creacion")
+                                                {
+                                                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 0.5rem; font-size: 0.85rem;">
+                                                        <div><span style="color: var(--text-muted);">Código:</span> <strong>@ev.Codigo</strong></div>
+                                                        <div><span style="color: var(--text-muted);">Nombre:</span> <strong>@ev.Nombre</strong></div>
+                                                        <div><span style="color: var(--text-muted);">Versión:</span> <strong>@ev.Version</strong></div>
+                                                        <div><span style="color: var(--text-muted);">Área:</span> <strong>@ev.Area</strong></div>
+                                                        <div><span style="color: var(--text-muted);">Creado por:</span> <strong>@ev.Usuario</strong></div>
+                                                    </div>
+                                                }
+                                                else if (ev.Tipo == "Solicitud")
+                                                {
+                                                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; font-size: 0.85rem; margin-bottom: 0.5rem;">
+                                                        <div><span style="color: var(--text-muted);">Solicitado por:</span> <strong>@ev.Usuario</strong></div>
+                                                        <div><span style="color: var(--text-muted);">Fecha:</span> <strong>@ev.Fecha.ToLocalTime().ToString("dd/MM/yyyy")</strong></div>
+                                                        <div style="grid-column: span 2;"><span style="color: var(--text-muted);">Motivo:</span> <strong>@ev.Motivo</strong></div>
+                                                        <div style="grid-column: span 2;"><span style="color: var(--text-muted);">Observaciones:</span> <strong>@ev.Observaciones</strong></div>
+                                                    </div>
+                                                    @if (ev.SnapshotOriginal != null)
+                                                    {
+                                                        <div style="margin-top: 0.75rem; padding: 0.5rem 0.75rem; background: var(--surface-muted); border-radius: 4px; border: 1px solid var(--surface-border);">
+                                                            <div style="font-size: 0.75rem; font-weight: 600; text-transform: uppercase; color: var(--text-muted); margin-bottom: 0.25rem;">Datos del documento antes del cambio:</div>
+                                                            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.5rem; font-size: 0.8rem;">
+                                                                <div><span style="color: var(--text-muted);">Código</span><br/><strong>@ev.SnapshotOriginal.Codigo</strong></div>
+                                                                <div><span style="color: var(--text-muted);">Nombre</span><br/><strong>@ev.SnapshotOriginal.Nombre</strong></div>
+                                                                <div><span style="color: var(--text-muted);">Versión</span><br/><strong>@ev.SnapshotOriginal.Version</strong></div>
+                                                                <div><span style="color: var(--text-muted);">Área</span><br/><strong>@(ev.SnapshotOriginal.AreaNombre ?? "—")</strong></div>
+                                                            </div>
+                                                        </div>
+                                                    }
+                                                }
+                                                else if (ev.Tipo == "Edicion")
+                                                {
+                                                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; font-size: 0.85rem; margin-bottom: 0.5rem;">
+                                                        <div><span style="color: var(--text-muted);">Editado por:</span> <strong>@ev.Usuario</strong></div>
+                                                        <div><span style="color: var(--text-muted);">Fecha:</span> <strong>@ev.Fecha.ToLocalTime().ToString("dd/MM/yyyy")</strong></div>
+                                                        <div><span style="color: var(--text-muted);">Estado:</span> <span class="badge badge-info">@ev.Estado</span></div>
+                                                    </div>
+                                                    @if (ev.Cambios != null && ev.Cambios.Any())
+                                                    {
+                                                        <div class="diff-viewer">
+                                                            <div style="font-size: 0.75rem; font-weight: 600; text-transform: uppercase; color: var(--text-muted); padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border);">Cambios detectados:</div>
+                                                            <table>
+                                                                <thead>
+                                                                    <tr>
+                                                                        <th style="width: 30%;">Campo</th>
+                                                                        <th style="width: 35%;">Antes</th>
+                                                                        <th style="width: 35%;">Después</th>
+                                                                    </tr>
+                                                                </thead>
+                                                                <tbody>
+                                                                    @foreach (var c in ev.Cambios)
+                                                                    {
+                                                                        <tr>
+                                                                            <td style="font-weight: 600;">@c.Name</td>
+                                                                            <td class="diff-row-deleted">@c.OriginalValue</td>
+                                                                            <td class="diff-row-added">@c.ProposedValue</td>
+                                                                        </tr>
+                                                                    }
+                                                                </tbody>
+                                                            </table>
+                                                        </div>
+                                                    }
+                                                    else
+                                                    {
+                                                        <div style="margin-top: 0.5rem; font-size: 0.8rem; color: var(--text-muted); font-style: italic;">
+                                                            No se detectaron cambios en los metadatos.
+                                                        </div>
+                                                    }
+                                                }
+                                                else if (ev.Tipo == "Aprobacion")
+                                                {
+                                                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; font-size: 0.85rem;">
+                                                        <div><span style="color: var(--text-muted);">@(ev.Titulo.Contains("Rechazado") ? "Rechazado por:" : "Aprobado por:")</span> <strong>@ev.Usuario</strong></div>
+                                                        <div><span style="color: var(--text-muted);">Fecha:</span> <strong>@ev.Fecha.ToLocalTime().ToString("dd/MM/yyyy")</strong></div>
+                                                        <div style="grid-column: span 2;"><span style="color: var(--text-muted);">Comentarios:</span> <strong>@ev.Comentarios</strong></div>
+                                                    </div>
+                                                }
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            }
                         </div>
 
                         <!-- SECCIÓN 3: Historial de Versiones -->
                         <div style="margin-bottom: 1rem;">
-                            <h4 style="margin-bottom: 1rem; color: var(--color-primary); font-weight: 600;">Historial de versiones</h4>
+                            @{
+                                var totalVerPages = Math.Max(1, (int)Math.Ceiling((sortedHistorial?.Count ?? 0) / 2.0));
+                                if (versionCurrentPage > totalVerPages) versionCurrentPage = totalVerPages;
+                                if (versionCurrentPage < 1) versionCurrentPage = 1;
+                                var pagedVersions = sortedHistorial?.Skip((versionCurrentPage - 1) * 2).Take(2).ToList() ?? new List<DocumentoControlDto>();
+                            }
+                            
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
+                                <h4 style="margin: 0; color: var(--color-primary); font-weight: 600;">Historial de versiones</h4>
+                                
+                                @if (totalVerPages > 1)
+                                {
+                                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                        <span class="text-sm text-muted">Página @versionCurrentPage de @totalVerPages</span>
+                                        <div style="display: flex; gap: 0.25rem;">
+                                            <button type="button" class="btn btn-sm btn-secondary" style="padding: 0.2rem 0.5rem;" disabled="@(versionCurrentPage <= 1)" @onclick="() => versionCurrentPage--">Anterior</button>
+                                            <button type="button" class="btn btn-sm btn-secondary" style="padding: 0.2rem 0.5rem;" disabled="@(versionCurrentPage >= totalVerPages)" @onclick="() => versionCurrentPage++">Siguiente</button>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
                             
                             @if (!sortedHistorial.Any())
                             {
@@ -1106,7 +1152,7 @@
                             else
                             {
                                 <div style="display: flex; flex-direction: column; gap: 0.5rem;">
-                                    @foreach (var doc in sortedHistorial)
+                                    @foreach (var doc in pagedVersions)
                                     {
                                         <div class="version-horizontal-card" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 1rem; padding: 0.75rem 1.25rem; background: var(--surface-card); border: 1px solid @(doc.Estado == "Vigente" ? "var(--color-success, #22c55e)" : "var(--surface-border)"); border-left: 4px solid @(doc.Estado == "Vigente" ? "var(--color-success, #22c55e)" : "var(--text-muted, #64748b)"); border-radius: 6px; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.03);">
                                             @foreach (var campo in listadoCampos.OrderBy(c => c.Orden))
@@ -1569,6 +1615,8 @@
     private bool showModal = false;
     private bool showListadoModal = false;
     private bool showAuditModal = false;
+    private int timelineCurrentPage = 1;
+    private int versionCurrentPage = 1;
     private bool showPermisosModal = false;
     private bool permisosLoading = false;
     private bool permisosGuardando = false;
@@ -1771,6 +1819,8 @@
 
     private async Task VerAuditoria(int id)
     {
+        timelineCurrentPage = 1;
+        versionCurrentPage = 1;
         auditDocumentDetail = await ControlDocumentalApi.GetDocumentoAsync(id);
         historial = await ControlDocumentalApi.GetHistorialAsync(id);
         documentoSolicitudes = await ControlDocumentalApi.GetSolicitudesPorDocumentoAsync(id);
@@ -2222,6 +2272,7 @@
             events.Add(new TimelineEvent
             {
                 Tipo = "Creacion",
+                SolicitudId = 0,
                 Titulo = "📄 Documento Creado",
                 Fecha = baseDoc.FechaDocumento,
                 Usuario = baseDoc.SolicitanteNombre ?? baseDoc.EditorNombre ?? "Sistema",
@@ -2254,6 +2305,7 @@
             events.Add(new TimelineEvent
             {
                 Tipo = "Solicitud",
+                SolicitudId = sol.Id,
                 Titulo = "📝 Solicitud de Cambio",
                 Fecha = sol.FechaCreacion,
                 Usuario = sol.SolicitanteNombre ?? "Colaborador",
@@ -2325,6 +2377,7 @@
                 events.Add(new TimelineEvent
                 {
                     Tipo = "Edicion",
+                    SolicitudId = sol.Id,
                     Titulo = "✏️ Documento Editado",
                     Fecha = sol.FechaEdicion.Value,
                     Usuario = !string.IsNullOrWhiteSpace(sol.EditorNombre) ? sol.EditorNombre : (!string.IsNullOrWhiteSpace(sol.SolicitanteNombre) ? sol.SolicitanteNombre : "Editor"),
@@ -2357,6 +2410,7 @@
                 events.Add(new TimelineEvent
                 {
                     Tipo = "Aprobacion",
+                    SolicitudId = sol.Id,
                     Titulo = esAprobada ? "✅ Cambio Aprobado" : "❌ Cambio Rechazado",
                     Fecha = sol.FechaResolucion.Value,
                     Usuario = approverName,
@@ -2369,6 +2423,15 @@
         }
 
         return events.OrderBy(e => e.Fecha).ThenBy(e => e.SortOrder).ToList();
+    }
+
+    private List<IGrouping<int, TimelineEvent>> GetTimelineGroups()
+    {
+        var allEvents = BuildTimeline();
+        return allEvents
+            .GroupBy(e => e.SolicitudId)
+            .OrderByDescending(g => g.Max(e => e.Fecha))
+            .ToList();
     }
 
     private int PendingRequestsCount => pendingSolicitudes?.Count(s => s.EstadoPropuesta == "PendienteRevision" || s.EstadoPropuesta == "EnEdicion" || s.EstadoPropuesta == "PendienteAprobacion") ?? 0;
@@ -2556,6 +2619,7 @@
     public class TimelineEvent
     {
         public string Tipo { get; set; } = string.Empty;
+        public int SolicitudId { get; set; }
         public string Titulo { get; set; } = string.Empty;
         public DateTime Fecha { get; set; }
         public string Usuario { get; set; } = string.Empty;

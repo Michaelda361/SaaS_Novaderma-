@@ -70,10 +70,6 @@
             {
                 <NavLink class="nav-link" href="cartas/admin?tab=pendientes">
                     <span class="nav-icon"><svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></span> Aprobar Cartas
-                    @if (cartasPendientes > 0)
-                    {
-                        <span class="badge badge-warning badge-pill">@cartasPendientes</span>
-                    }
                 </NavLink>
             }
 
@@ -137,7 +133,6 @@
 @code {
     [CascadingParameter] private RouteData? RouteData { get; set; }
     private bool sidebarOpen = false;
-    private int cartasPendientes = 0;
     private Toast layoutToast = default!;
     private void OpenSidebar() => sidebarOpen = true;
     private void CloseSidebar() => sidebarOpen = false;
@@ -174,9 +169,6 @@
             Theme.OnChange += StateHasChanged;
             await Theme.InitAsync();
             await AuthInfo.LoadAsync();
-
-            if (AuthInfo.PuedeResolverSolicitudes)
-                try { cartasPendientes = await CartasApi.CountPendientesAsync(); } catch { }
         }
 
         // Reconectar el hub si se desconectó (server reiniciado, etc.)

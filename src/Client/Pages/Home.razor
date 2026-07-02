@@ -1,4 +1,4 @@
-﻿@page "/"
+@page "/"
 @attribute [PageTitle("Dashboard")]
 @attribute [Authorize]
 @inject ColaboradorApiService ColaboradorSvc
@@ -116,18 +116,13 @@
             {
                 <div class="table-wrapper">
                     <table>
-                        <thead><tr><th>Capacitación</th><th>Inscripción</th><th>Asistencia</th></tr></thead>
+                        <thead><tr><th>Capacitación</th><th>Inscripción</th></tr></thead>
                         <tbody>
                             @foreach (var ins in misInscripciones.Take(5))
                             {
                                 <tr>
                                     <td class="font-medium text-sm">@ins.CapacitacionNombre</td>
                                     <td class="text-sm text-muted">@ins.FechaInscripcion.ToString("dd/MM/yyyy")</td>
-                                    <td>
-                                        <span class="badge @(ins.Asistio ? "badge-success" : "badge-gray")">
-                                            @(ins.Asistio ? "Asistió" : "Pendiente")
-                                        </span>
-                                    </td>
                                 </tr>
                             }
                         </tbody>

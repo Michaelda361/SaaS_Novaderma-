@@ -98,13 +98,25 @@
                                     @(h.Inscripcion.FechaFinalizacion?.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ?? "—")
                                 </td>
                                 <td class="text-sm font-medium">
-                                    @if (h.Resultado is not null)
+                                    @if (h.Inscripcion.Calificacion.HasValue)
+                                    {
+                                        <div class="@(h.Inscripcion.Calificacion >= 7 ? "text-success" : "text-danger")">
+                                            @h.Inscripcion.Calificacion.Value.ToString("0.##")
+                                        </div>
+                                        @if (h.Resultado is not null)
+                                        {
+                                            <div class="text-xs text-muted" style="font-weight:normal;">
+                                                Eval: @h.Resultado.Correctas/@h.Resultado.TotalPreguntas
+                                            </div>
+                                        }
+                                    }
+                                    else if (h.Resultado is not null)
                                     {
                                         @($"{h.Resultado.Correctas} / {h.Resultado.TotalPreguntas}")
                                     }
                                     else
                                     {
-                                        @(h.Inscripcion.Calificacion.HasValue ? h.Inscripcion.Calificacion.Value.ToString("0.##") : "—")
+                                        <span>—</span>
                                     }
                                 </td>
                                 <td>

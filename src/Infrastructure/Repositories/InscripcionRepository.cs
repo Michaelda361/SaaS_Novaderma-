@@ -90,6 +90,7 @@ public class InscripcionRepository(AppDbContext context) : IInscripcionRepositor
         // 2. Cuestionarios de las capacitaciones involucradas — una sola query
         var capacitacionIds = inscripciones.Select(i => i.CapacitacionId).Distinct().ToList();
         var cuestionarios = await context.Cuestionarios
+            .Include(c => c.Preguntas)
             .Where(c => capacitacionIds.Contains(c.CapacitacionId))
             .AsNoTracking()
             .ToListAsync();
@@ -138,6 +139,7 @@ public class InscripcionRepository(AppDbContext context) : IInscripcionRepositor
 
         var capacitacionIds = inscripciones.Select(i => i.CapacitacionId).Distinct().ToList();
         var cuestionarios = await context.Cuestionarios
+            .Include(c => c.Preguntas)
             .Where(c => capacitacionIds.Contains(c.CapacitacionId))
             .AsNoTracking()
             .ToListAsync();
@@ -184,6 +186,7 @@ public class InscripcionRepository(AppDbContext context) : IInscripcionRepositor
 
         var capacitacionIds = inscripciones.Select(i => i.CapacitacionId).Distinct().ToList();
         var cuestionarios = await context.Cuestionarios
+            .Include(c => c.Preguntas)
             .Where(c => capacitacionIds.Contains(c.CapacitacionId))
             .AsNoTracking()
             .ToListAsync();

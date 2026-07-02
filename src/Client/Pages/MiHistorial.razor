@@ -29,33 +29,39 @@ else if (!items.Any())
 else
 {
     <div style="display:flex;flex-direction:column;gap:1rem;">
-        @foreach (var item in items)
+        @foreach (var item in ItemsPagina)
         {
             var i = item;
+            var aprobado = (i.Resultado is not null && i.Resultado.Aprobado) || (i.Inscripcion.Calificacion >= 7);
+            var reprobado = (i.Resultado is not null && !i.Resultado.Aprobado) || (i.Inscripcion.Calificacion.HasValue && i.Inscripcion.Calificacion.Value < 7);
+            var evaluado = i.Resultado is not null || i.Inscripcion.Calificacion.HasValue;
+
             <div class="card" style="padding:0;">
                 <div style="padding:1rem 1.25rem;display:flex;align-items:flex-start;gap:1rem;flex-wrap:wrap;">
                     <div style="font-size:2rem;line-height:1;flex-shrink:0;">
-                        @if (i.Resultado is not null)
-                        { @(i.Resultado.Aprobado ? "🎉" : "😔") }
-                        else if (i.Inscripcion.Asistio)
-                        { <span>✅</span> }
+                        @if (evaluado)
+                        {
+                            @(aprobado ? "🎉" : "😔")
+                        }
                         else
-                        { <span>📚</span> }
+                        {
+                            <span>📚</span>
+                        }
                     </div>
 
                     <div style="flex:1;min-width:0;">
                         <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;">
                             <span class="font-medium" style="font-size:1rem;">@i.Inscripcion.CapacitacionNombre</span>
-                            @if (i.Resultado is not null)
+                            @if (evaluado)
                             {
-                                <span class="badge @(i.Resultado.Aprobado ? "badge-success" : "badge-danger")">
-                                    @(i.Resultado.Aprobado ? "Aprobado" : "No aprobado")
+                                <span class="badge @(aprobado ? "badge-success" : "badge-danger")">
+                                    @(aprobado ? "Aprobado" : "No aprobado")
                                 </span>
                             }
-                            else if (i.Inscripcion.Asistio)
-                            { <span class="badge badge-info">Asistió</span> }
                             else
-                            { <span class="badge badge-gray">Inscrito</span> }
+                            {
+                                <span class="badge badge-gray">Inscrito</span>
+                            }
                         </div>
 
                         <div style="display:flex;gap:1.25rem;flex-wrap:wrap;margin-top:.4rem;">
@@ -84,13 +90,6 @@ else
                                 </span>
                             }
                         </div>
-
-                        @if (!string.IsNullOrWhiteSpace(i.Inscripcion.Observaciones))
-                        {
-                            <div class="text-sm text-muted" style="margin-top:.3rem;font-style:italic;">
-                                💬 @i.Inscripcion.Observaciones
-                            </div>
-                        }
                     </div>
 
                     <button class="btn btn-ghost btn-sm" style="flex-shrink:0;"
@@ -102,10 +101,17 @@ else
         }
     </div>
 
+    <div class="pagination" style="display:flex;align-items:center;justify-content:space-between;gap:.75rem;padding:.75rem 0;margin-top:1rem;border-top:1px solid var(--border);">
+        <div class="text-sm text-muted">Página @pagina de @TotalPaginas</div>
+        <div>
+            <button class="btn btn-sm btn-secondary" disabled="@(!CanPrev)" @onclick="IrPaginaAnterior">Anterior</button>
+            <button class="btn btn-sm btn-secondary" disabled="@(!CanNext)" @onclick="IrPaginaSiguiente">Siguiente</button>
+        </div>
+    </div>
+
     <div class="text-sm text-muted" style="margin-top:1rem;text-align:center;">
         @items.Count capacitación(es) en total ·
-        @items.Count(x => x.Resultado?.Aprobado == true) aprobada(s) ·
-        @items.Count(x => x.Inscripcion.Asistio) con asistencia
+        @items.Count(x => (x.Resultado?.Aprobado == true) || (x.Inscripcion.Calificacion >= 7)) aprobada(s)
     </div>
 }
 
@@ -114,6 +120,15 @@ else
 
     private List<HistorialItem> items = [];
     private bool cargando = true;
+
+    private int pagina = 1;
+    private const int PageSize = 10;
+    private int TotalPaginas => Math.Max(1, (int)Math.Ceiling(items.Count / (double)PageSize));
+    private bool CanPrev => pagina > 1;
+    private bool CanNext => pagina < TotalPaginas;
+    private void IrPaginaAnterior() => pagina = Math.Max(1, pagina - 1);
+    private void IrPaginaSiguiente() => pagina = Math.Min(TotalPaginas, pagina + 1);
+    private IEnumerable<HistorialItem> ItemsPagina => items.Skip((pagina - 1) * PageSize).Take(PageSize);
 
     protected override async Task OnInitializedAsync()
     {
@@ -125,7 +140,7 @@ else
             return;
         }
 
-        // Una sola llamada al servidor � endpoint batch en lugar de N+1 requests
+        // Una sola llamada al servidor – endpoint batch en lugar de N+1 requests
         var filas = await InscripcionService.GetHistorialCompletoAsync();
         items = filas
             .Select(f => new HistorialItem(f.Inscripcion, f.Resultado))
