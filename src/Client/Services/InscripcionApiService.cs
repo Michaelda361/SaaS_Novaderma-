@@ -1,4 +1,4 @@
-﻿using System.Net.Http.Json;
+using System.Net.Http.Json;
 using TalentManagement.Shared.DTOs.Inscripciones;
 
 namespace TalentManagement.Client.Services;
@@ -51,12 +51,40 @@ public class InscripcionApiService(HttpClient http)
         return response.IsSuccessStatusCode;
     }
 
+    public async Task<InscripcionDto?> MarcarRecursoVistoAsync(int id, int recursoId)
+    {
+        var response = await http.PostAsync($"{Base}/{id}/recursos/{recursoId}/visto", null);
+        return response.IsSuccessStatusCode
+            ? await response.Content.ReadFromJsonAsync<InscripcionDto>()
+            : null;
+    }
+
     /// <summary>
     /// Endpoint batch: devuelve historial completo (inscripciones + resultados) en una sola llamada.
     /// Reemplaza el N+1 masivo de CargarHistorial.
     /// </summary>
     public async Task<List<HistorialInscripcionDto>> GetHistorialCompletoAsync() =>
         await http.GetFromJsonAsync<List<HistorialInscripcionDto>>($"{Base}/historial-completo") ?? [];
+
+    public async Task<byte[]?> ExportarTodoExcelAsync()
+    {
+        var response = await http.GetAsync($"{Base}/exportar-todo");
+        if (response.IsSuccessStatusCode)
+        {
+            return await response.Content.ReadAsByteArrayAsync();
+        }
+        return null;
+    }
+
+    public async Task<byte[]?> ExportarColaboradorExcelAsync(int colaboradorId)
+    {
+        var response = await http.GetAsync($"{Base}/exportar/colaborador/{colaboradorId}");
+        if (response.IsSuccessStatusCode)
+        {
+            return await response.Content.ReadAsByteArrayAsync();
+        }
+        return null;
+    }
 
     private record ErrorResponse(string Message);
 }

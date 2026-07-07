@@ -1045,7 +1045,7 @@
                                                 else if (ev.Tipo == "Solicitud")
                                                 {
                                                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; font-size: 0.85rem; margin-bottom: 0.5rem;">
-                                                        <div><span style="color: var(--text-muted);">Solicitado por:</span> <strong>@ev.Usuario</strong></div>
+                                                        <div><span style="color: var(--text-muted);">Elaborado y/o cambiado por:</span> <strong>@ev.Usuario</strong></div>
                                                         <div><span style="color: var(--text-muted);">Fecha:</span> <strong>@ev.Fecha.ToLocalTime().ToString("dd/MM/yyyy")</strong></div>
                                                         <div style="grid-column: span 2;"><span style="color: var(--text-muted);">Motivo:</span> <strong>@ev.Motivo</strong></div>
                                                         <div style="grid-column: span 2;"><span style="color: var(--text-muted);">Observaciones:</span> <strong>@ev.Observaciones</strong></div>
@@ -1066,7 +1066,7 @@
                                                 else if (ev.Tipo == "Edicion")
                                                 {
                                                     <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; font-size: 0.85rem; margin-bottom: 0.5rem;">
-                                                        <div><span style="color: var(--text-muted);">Editado por:</span> <strong>@ev.Usuario</strong></div>
+                                                        <div><span style="color: var(--text-muted);">Verificado por:</span> <strong>@ev.Usuario</strong></div>
                                                         <div><span style="color: var(--text-muted);">Fecha:</span> <strong>@ev.Fecha.ToLocalTime().ToString("dd/MM/yyyy")</strong></div>
                                                         <div><span style="color: var(--text-muted);">Estado:</span> <span class="badge badge-info">@ev.Estado</span></div>
                                                     </div>
@@ -1460,7 +1460,14 @@
                     </div>
 
                     <div class="alert alert-info" style="margin-top:1.5rem;">
-                        <strong>ℹ️ Nota:</strong> Tu solicitud será revisada por un administrador o jefe. Ellos editarán el documento según tu solicitud y lo enviarán a aprobación.
+                        @if (AuthInfo.EsSoloColaborador)
+                        {
+                            <span><strong>ℹ️ Nota:</strong> Tu solicitud será revisada por un administrador o jefe. Ellos editarán el documento según tu solicitud y lo enviarán a aprobación.</span>
+                        }
+                        else
+                        {
+                            <span><strong>ℹ️ Nota:</strong> Se creará una solicitud de cambio en estado pendiente de aprobación y un borrador asociado. Podrás revisarla y aprobarla tú mismo desde la sección de solicitudes para aplicar los cambios y mantener la trazabilidad.</span>
+                        }
                     </div>
                 }
             </div>
@@ -2306,7 +2313,7 @@
             {
                 Tipo = "Solicitud",
                 SolicitudId = sol.Id,
-                Titulo = "📝 Solicitud de Cambio",
+                Titulo = "📝 Elaborado y/o cambiado",
                 Fecha = sol.FechaCreacion,
                 Usuario = sol.SolicitanteNombre ?? "Colaborador",
                 BadgeClass = "badge-warning",
@@ -2378,7 +2385,7 @@
                 {
                     Tipo = "Edicion",
                     SolicitudId = sol.Id,
-                    Titulo = "✏️ Documento Editado",
+                    Titulo = "✏️ Verificado",
                     Fecha = sol.FechaEdicion.Value,
                     Usuario = !string.IsNullOrWhiteSpace(sol.EditorNombre) ? sol.EditorNombre : (!string.IsNullOrWhiteSpace(sol.SolicitanteNombre) ? sol.SolicitanteNombre : "Editor"),
                     BadgeClass = "badge-info",
@@ -2840,6 +2847,7 @@
             {
                 await toast.Show("Solicitud de cambio enviada correctamente. Un administrador o jefe la revisará y editará el documento según tu solicitud.", "success");
                 CerrarSolicitudCambioModal();
+                await LoadPendingSolicitudesAsync();
                 await Filtrar();
                 return;
             }
@@ -2853,6 +2861,7 @@
 
             await toast.Show("Solicitud enviada correctamente.", "success");
             CerrarSolicitudCambioModal();
+            await LoadPendingSolicitudesAsync();
             await Filtrar();
         }
         catch (Exception ex)
@@ -2924,8 +2933,8 @@
 
         await LoadListadoCamposAsync(detail.ListadoMaestroId);
 
-        // Si el usuario es solo colaborador (sin permisos de edición), abrir modal de solicitud de cambio
-        if (AuthInfo.EsSoloColaborador && !editingSolicitudId.HasValue)
+        // Si no se está editando un borrador de solicitud existente, todos deben crear una solicitud de cambio primero
+        if (!editingSolicitudId.HasValue)
         {
             documentoParaSolicitud = detail;
             solicitudMotivo = string.Empty;

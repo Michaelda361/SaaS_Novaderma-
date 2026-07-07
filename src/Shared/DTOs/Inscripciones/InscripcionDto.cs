@@ -15,4 +15,5 @@ public class InscripcionDto
     public decimal? Calificacion { get; set; }
     public DateTime? FechaFinalizacion { get; set; }
     public string? Observaciones { get; set; }
+    public string? RecursosVistos { get; set; }
 }

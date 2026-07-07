@@ -157,6 +157,28 @@ public class InscripcionService(IInscripcionRepository repository)
         }).ToList();
     }
 
+    public async Task<InscripcionDto?> MarcarRecursoVistoAsync(int id, int recursoId)
+    {
+        var inscripcion = await repository.GetByIdAsync(id);
+        if (inscripcion is null) return null;
+
+        var vistos = string.IsNullOrEmpty(inscripcion.RecursosVistos)
+            ? new List<int>()
+            : inscripcion.RecursosVistos.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                .Select(int.Parse)
+                .ToList();
+
+        if (!vistos.Contains(recursoId))
+        {
+            vistos.Add(recursoId);
+            inscripcion.RecursosVistos = string.Join(",", vistos);
+            var updated = await repository.UpdateAsync(inscripcion);
+            return MapToDto(updated);
+        }
+
+        return MapToDto(inscripcion);
+    }
+
     private static InscripcionDto MapToDto(Inscripcion i, DateTime? fechaFinalizacion = null) => new()
     {
         Id = i.Id,
@@ -171,6 +193,7 @@ public class InscripcionService(IInscripcionRepository repository)
         FechaFinalizacion = fechaFinalizacion ?? i.Capacitacion?.FechaFinalizacion,
         Asistio = i.Asistio,
         Calificacion = i.Calificacion,
-        Observaciones = i.Observaciones
+        Observaciones = i.Observaciones,
+        RecursosVistos = i.RecursosVistos
     };
 }

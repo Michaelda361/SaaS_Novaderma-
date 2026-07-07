@@ -74,33 +74,374 @@
 }
 else
 {
-    <div class="card">
-        <div class="card-header">
-            <span class="card-title">Certificados</span>
-            <button class="btn btn-primary btn-sm" @onclick="AbrirModal">+ Nuevo certificado</button>
-        </div>
-        <div class="filter-bar">
-            <div class="search-input-wrap"><span class="search-icon">🔍</span><input type="search" placeholder="Buscar..." @bind="busqueda" @bind:event="oninput" /></div>
-            <div class="flex gap-2"><button class="btn btn-ghost btn-sm @(filtroEstado == "todos" ? "active" : "")" @onclick='() => filtroEstado = "todos"'>Todos</button><button class="btn btn-ghost btn-sm @(filtroEstado == "vencidos" ? "active" : "")" @onclick='() => filtroEstado = "vencidos"'>Vencidos</button><button class="btn btn-ghost btn-sm @(filtroEstado == "proximos" ? "active" : "")" @onclick='() => filtroEstado = "proximos"'>Próximos</button></div>
-        </div>
-        @if (cargando) { <div class="loading"><div class="spinner"></div> Cargando...</div> }
-        else if (!Filtrados.Any()) { <div class="empty-state"><div class="empty-state-icon">��</div><h3>Sin certificados</h3></div> }
-        else
-        {
-            <div class="table-wrapper"><table><thead><tr><th>Certificado</th><th>Colaborador</th><th>Institución</th><th>Emisión</th><th>Vencimiento</th><th>Estado</th><th></th></tr></thead><tbody>
-            @foreach (var c in Filtrados) { var cert = c;
-                <tr>
-                    <td><div class="font-medium">@c.Nombre</div>@if (!string.IsNullOrWhiteSpace(c.CapacitacionNombre)){<div class="text-xs text-muted">📚 @c.CapacitacionNombre</div>}</td>
-                    <td class="text-sm">@c.ColaboradorNombre</td>
-                    <td class="text-muted text-sm">@c.Institucion</td>
-                    <td class="text-sm">@c.FechaEmision.ToString("dd/MM/yyyy")</td>
-                    <td class="text-sm">@(c.FechaVencimiento?.ToString("dd/MM/yyyy") ?? "Sin vencimiento")</td>
-                    <td>@if(c.EstaVencido){<span class="badge badge-danger">Vencido</span>}else if(c.VenceProximamente){<span class="badge badge-warning">Próximo</span>}else{<span class="badge badge-success">Vigente</span>}</td>
-                    <td><div class="flex gap-2">@if(c.TienePdf || c.CapacitacionId.HasValue){<button class="btn btn-primary btn-sm btn-icon" @onclick="@(() => DescargarPdf(cert.Id))">⬇ PDF</button>}@if(!string.IsNullOrEmpty(c.UrlDocumento)){<a href="@c.UrlDocumento" target="_blank" class="btn btn-ghost btn-sm btn-icon">📄</a>}<button class="btn btn-ghost btn-sm btn-icon" @onclick="@(() => AbrirEditar(cert))">✏️</button><button class="btn btn-danger btn-sm btn-icon" @onclick="@(() => PedirConfirmacion(cert))">🗑️</button></div></td>
-                </tr>
-            }
-            </tbody></table></div>
+    <style>
+        .cert-split-container {
+            display: flex;
+            gap: 1.25rem;
+            align-items: stretch;
+            margin-top: 1rem;
         }
+
+        @@media (max-width: 992px) {
+            .cert-split-container {
+                flex-direction: column;
+            }
+        }
+
+        .cert-sidebar {
+            flex: 0 0 340px;
+            background: var(--surface, #ffffff);
+            border: 1px solid var(--border, #e2e8f0);
+            border-radius: var(--radius, 8px);
+            display: flex;
+            flex-direction: column;
+            height: 620px;
+        }
+
+        .cert-sidebar-header {
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid var(--border, #e2e8f0);
+            background: var(--bg, #f8fafc);
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .cert-collaborator-list {
+            flex: 1;
+            overflow-y: auto;
+            background: var(--surface, #ffffff);
+        }
+
+        .collaborator-item-btn {
+            width: 100%;
+            text-align: left;
+            padding: 0.75rem 1rem;
+            border: none;
+            background: none;
+            border-bottom: 1px solid var(--border, #f1f5f9);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            cursor: pointer;
+            transition: all 0.15s ease-in-out;
+            border-left: 4px solid transparent;
+        }
+
+        .collaborator-item-btn:hover {
+            background-color: var(--border, #f1f5f9);
+            opacity: 0.95;
+        }
+
+        .collaborator-item-btn--active {
+            background-color: rgba(34, 110, 253, 0.05) !important;
+            border-left-color: var(--primary, #0d6efd);
+        }
+
+        .collaborator-item-info {
+            display: flex;
+            flex-direction: column;
+            gap: 0.2rem;
+            min-width: 0;
+            flex: 1;
+            margin-right: 0.5rem;
+        }
+
+        .collaborator-item-name {
+            font-weight: 600;
+            color: var(--text, #1e293b);
+            font-size: 0.875rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .collaborator-item-sub {
+            font-size: 0.75rem;
+            color: var(--text-muted, #64748b);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .collaborator-badge-count {
+            background: var(--border, #e2e8f0);
+            color: var(--text-muted, #475569);
+            font-size: 0.7rem;
+            font-weight: 700;
+            padding: 0.15rem 0.5rem;
+            border-radius: 12px;
+            white-space: nowrap;
+        }
+
+        .collaborator-item-btn--active .collaborator-badge-count {
+            background: var(--primary, #0d6efd);
+            color: #ffffff;
+        }
+
+        .cert-detail-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            min-width: 0;
+        }
+
+        .detail-colab-card {
+            background: var(--surface, #ffffff);
+            border: 1px solid var(--border, #e2e8f0);
+            border-radius: var(--radius, 8px);
+            padding: 1rem 1.25rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .detail-colab-avatar {
+            width: 44px;
+            height: 44px;
+            background: rgba(34, 110, 253, 0.1);
+            color: var(--primary, #0d6efd);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.1rem;
+            font-weight: 700;
+        }
+
+        .detail-colab-meta {
+            display: flex;
+            flex-direction: column;
+            gap: 0.15rem;
+            min-width: 0;
+        }
+
+        .detail-colab-name {
+            font-size: 1.05rem;
+            font-weight: 700;
+            color: var(--text, #1e293b);
+            margin: 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .detail-colab-subtitle {
+            font-size: 0.75rem;
+            color: var(--text-muted, #64748b);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .detail-stats {
+            display: flex;
+            gap: 1rem;
+            margin-left: auto;
+        }
+
+        .detail-stat-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background: var(--bg, #f8fafc);
+            padding: 0.35rem 0.75rem;
+            border-radius: 6px;
+            border: 1px solid var(--border, #e2e8f0);
+        }
+
+        .detail-stat-val {
+            font-size: 0.95rem;
+            font-weight: 700;
+        }
+
+        .detail-stat-lbl {
+            font-size: 0.65rem;
+            color: var(--text-muted, #64748b);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+    </style>
+
+    <div class="cert-split-container">
+        <!-- Sidebar: Lista de Colaboradores -->
+        <div class="cert-sidebar">
+            <div class="cert-sidebar-header">
+                <div class="search-input-wrap" style="width: 100%;">
+                    <span class="search-icon">🔍</span>
+                    <input type="search" placeholder="Buscar colaborador..."
+                           @bind="busquedaColaborador" @bind:event="oninput" style="width: 100%;" />
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; color: var(--text-muted);">
+                    <span>Colaboradores: <strong>@ColaboradoresConCertificadosFiltrados.Count()</strong></span>
+                    <button class="btn btn-primary btn-sm" @onclick="AbrirModal" style="padding: 0.2rem 0.5rem; font-size: 0.7rem; border-radius: 4px;">
+                        + Nuevo
+                    </button>
+                </div>
+            </div>
+
+            <div class="cert-collaborator-list">
+                @if (!ColaboradoresConCertificadosFiltrados.Any())
+                {
+                    <div style="padding: 2rem; text-align: center; color: var(--text-muted); font-size: 0.85rem;">
+                        No se encontraron colaboradores.
+                    </div>
+                }
+                else
+                {
+                    @foreach (var c in ColaboradoresConCertificadosFiltrados)
+                    {
+                        var col = c;
+                        var activeClass = ColaboradorSeleccionado?.Id == col.Id ? "collaborator-item-btn--active" : "";
+                        <button type="button" class="collaborator-item-btn @activeClass" @onclick="() => SeleccionarColaborador(col.Id)">
+                            <div class="collaborator-item-info">
+                                <span class="collaborator-item-name">@col.Nombre</span>
+                                <span class="collaborator-item-sub">@col.Area · @col.Cargo</span>
+                            </div>
+                            <span class="collaborator-badge-count">@col.Certificados.Count</span>
+                        </button>
+                    }
+                }
+            </div>
+        </div>
+
+        <!-- Panel de Detalle: Certificados del Colaborador Seleccionado -->
+        <div class="cert-detail-panel">
+            @if (ColaboradorSeleccionado is null)
+            {
+                <div class="card" style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 400px; margin: 0;">
+                    <span style="font-size: 3rem;">👥</span>
+                    <h3 style="margin-top: 1rem; color: var(--text);">Selecciona un Colaborador</h3>
+                    <p class="text-sm text-muted">Elige un colaborador de la lista para ver sus certificados.</p>
+                </div>
+            }
+            else
+            {
+                <!-- Resumen del Colaborador -->
+                <div class="detail-colab-card">
+                    <div class="detail-colab-avatar">
+                        @ObtenerIniciales(ColaboradorSeleccionado.Nombre)
+                    </div>
+                    <div class="detail-colab-meta">
+                        <h3 class="detail-colab-name">@ColaboradorSeleccionado.Nombre</h3>
+                        <span class="detail-colab-subtitle">@ColaboradorSeleccionado.Email · @ColaboradorSeleccionado.Area (<strong>@ColaboradorSeleccionado.Cargo</strong>)</span>
+                    </div>
+                    <div class="detail-stats">
+                        <div class="detail-stat-item">
+                            <span class="detail-stat-val text-success">@ColaboradorSeleccionado.Certificados.Count(c => !c.EstaVencido && !c.VenceProximamente)</span>
+                            <span class="detail-stat-lbl">Vigentes</span>
+                        </div>
+                        <div class="detail-stat-item">
+                            <span class="detail-stat-val text-warning">@ColaboradorSeleccionado.Certificados.Count(c => c.VenceProximamente)</span>
+                            <span class="detail-stat-lbl">Próximos</span>
+                        </div>
+                        <div class="detail-stat-item">
+                            <span class="detail-stat-val text-danger">@ColaboradorSeleccionado.Certificados.Count(c => c.EstaVencido)</span>
+                            <span class="detail-stat-lbl">Vencidos</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tabla de Certificados del Colaborador -->
+                <div class="card" style="margin: 0; flex: 1; display: flex; flex-direction: column; overflow: hidden;">
+                    <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+                        <span class="card-title">Certificados Obtenidos</span>
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <button class="btn btn-primary btn-sm" @onclick="() => AbrirModalConColaborador(ColaboradorSeleccionado.Id)">+ Nuevo certificado</button>
+                        </div>
+                    </div>
+
+                    <div class="filter-bar" style="border-bottom: 1px solid var(--border);">
+                        <div class="search-input-wrap">
+                            <span class="search-icon">🔍</span>
+                            <input type="search" placeholder="Buscar certificado..." @bind="busqueda" @bind:event="oninput" />
+                        </div>
+                        <div class="flex gap-2">
+                            <button class="btn btn-ghost btn-sm @(filtroEstado == "todos" ? "active" : "")" @onclick='() => filtroEstado = "todos"'>Todos</button>
+                            <button class="btn btn-ghost btn-sm @(filtroEstado == "vencidos" ? "active" : "")" @onclick='() => filtroEstado = "vencidos"'>Vencidos</button>
+                            <button class="btn btn-ghost btn-sm @(filtroEstado == "proximos" ? "active" : "")" @onclick='() => filtroEstado = "proximos"'>Próximos</button>
+                        </div>
+                    </div>
+
+                    <div class="table-wrapper" style="flex: 1; overflow-y: auto;">
+                        @if (!CertificadosFiltrados.Any())
+                        {
+                            <div style="padding: 3rem; text-align: center; color: var(--text-muted);">
+                                <h3>Sin certificados</h3>
+                                <p class="text-sm">No se encontraron certificados para este colaborador con los filtros seleccionados.</p>
+                            </div>
+                        }
+                        else
+                        {
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Certificado</th>
+                                        <th>Institución</th>
+                                        <th>Emisión</th>
+                                        <th>Vencimiento</th>
+                                        <th>Estado</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var c in CertificadosFiltradosPagina)
+                                    {
+                                        var cert = c;
+                                        <tr>
+                                            <td>
+                                                <div class="font-medium">@c.Nombre</div>
+                                                @if (!string.IsNullOrWhiteSpace(c.CapacitacionNombre))
+                                                {
+                                                    <div class="text-xs text-muted">📚 @c.CapacitacionNombre</div>
+                                                }
+                                            </td>
+                                            <td class="text-muted text-sm">@c.Institucion</td>
+                                            <td class="text-sm">@c.FechaEmision.ToString("dd/MM/yyyy")</td>
+                                            <td class="text-sm">@(c.FechaVencimiento?.ToString("dd/MM/yyyy") ?? "Sin vencimiento")</td>
+                                            <td>
+                                                @if (c.EstaVencido)
+                                                { <span class="badge badge-danger">Vencido</span> }
+                                                else if (c.VenceProximamente)
+                                                { <span class="badge badge-warning">Próximo</span> }
+                                                else
+                                                { <span class="badge badge-success">Vigente</span> }
+                                            </td>
+                                            <td>
+                                                <div class="flex gap-2">
+                                                    @if (c.TienePdf || c.CapacitacionId.HasValue)
+                                                    {
+                                                        <button class="btn btn-primary btn-sm btn-icon" @onclick="@(() => DescargarPdf(cert.Id))" title="Descargar PDF">⬇ PDF</button>
+                                                    }
+                                                    @if (!c.TienePdf && c.CapacitacionId.HasValue)
+                                                    {
+                                                        <button class="btn btn-ghost btn-sm btn-icon" @onclick="@(() => RegenerarPdf(cert.Id))" title="Generar PDF desde plantilla">🔄</button>
+                                                    }
+                                                    @if (!string.IsNullOrEmpty(c.UrlDocumento))
+                                                    {
+                                                        <a href="@c.UrlDocumento" target="_blank" class="btn btn-ghost btn-sm btn-icon" title="Ver Documento">📄</a>
+                                                    }
+                                                    <button class="btn btn-ghost btn-sm btn-icon" @onclick="@(() => AbrirEditar(cert))" title="Editar">✏️</button>
+                                                    <button class="btn btn-danger btn-sm btn-icon" @onclick="@(() => PedirConfirmacion(cert))" title="Eliminar">🗑️</button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        }
+                    </div>
+                    <div class="pagination" style="display:flex;align-items:center;justify-content:space-between;gap:.75rem;padding:.75rem 1rem;border-top:1px solid var(--border);">
+                        <div class="text-sm text-muted">Página @paginaCertificados de @TotalPaginasCertificados</div>
+                        <div>
+                            <button class="btn btn-sm btn-secondary" disabled="@(!CanPrevCertificados)" @onclick="IrPaginaAnteriorCertificados">Anterior</button>
+                            <button class="btn btn-sm btn-secondary" disabled="@(!CanNextCertificados)" @onclick="IrPaginaSiguienteCertificados">Siguiente</button>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
     </div>
 }
 
@@ -169,13 +510,211 @@ else
     private bool mostrarModal = false;
     private bool guardando = false;
     private int? editandoId = null;
-    private string busqueda = string.Empty;
-    private string filtroEstado = "todos";
     private Toast toast = default!;
     private bool confirmVisible = false;
     private int eliminandoId;
     private string confirmMensaje = string.Empty;
     private CreateCertificadoDto form = new();
+
+    private int paginaCertificados = 1;
+    private const int CertificadosPaginaSize = 10;
+
+    private string _busqueda = string.Empty;
+    private string busqueda
+    {
+        get => _busqueda;
+        set
+        {
+            if (_busqueda != value)
+            {
+                _busqueda = value;
+                paginaCertificados = 1;
+            }
+        }
+    }
+
+    private string _filtroEstado = "todos";
+    private string filtroEstado
+    {
+        get => _filtroEstado;
+        set
+        {
+            if (_filtroEstado != value)
+            {
+                _filtroEstado = value;
+                paginaCertificados = 1;
+            }
+        }
+    }
+
+    private string _busquedaColaborador = string.Empty;
+    private string busquedaColaborador
+    {
+        get => _busquedaColaborador;
+        set
+        {
+            if (_busquedaColaborador != value)
+            {
+                _busquedaColaborador = value;
+                paginaCertificados = 1;
+            }
+        }
+    }
+
+    private int? colaboradorSeleccionadoId = null;
+
+    public class ColaboradorCertificados
+    {
+        public int Id { get; set; }
+        public string Nombre { get; set; } = string.Empty;
+        public string Email { get; set; } = string.Empty;
+        public string Area { get; set; } = string.Empty;
+        public string Cargo { get; set; } = string.Empty;
+        public List<CertificadoDto> Certificados { get; set; } = new();
+    }
+
+    private List<ColaboradorCertificados> ColaboradoresConCertificados
+    {
+        get
+        {
+            var colabs = colaboradores ?? [];
+            var certs = certificados ?? [];
+
+            var map = colabs.ToDictionary(c => c.Id, c => new ColaboradorCertificados
+            {
+                Id = c.Id,
+                Nombre = c.NombreCompleto,
+                Email = c.Email,
+                Area = c.AreaNombre ?? "Sin Área",
+                Cargo = c.CargoNombre ?? "Sin Cargo",
+                Certificados = new List<CertificadoDto>()
+            });
+
+            foreach (var cert in certs)
+            {
+                if (map.TryGetValue(cert.ColaboradorId, out var colCert))
+                {
+                    colCert.Certificados.Add(cert);
+                }
+                else
+                {
+                    var temp = new ColaboradorCertificados
+                    {
+                        Id = cert.ColaboradorId,
+                        Nombre = cert.ColaboradorNombre,
+                        Email = string.Empty,
+                        Area = "Otros",
+                        Cargo = "Otros",
+                        Certificados = new List<CertificadoDto> { cert }
+                    };
+                    map[cert.ColaboradorId] = temp;
+                }
+            }
+
+            return map.Values.OrderBy(c => c.Nombre).ToList();
+        }
+    }
+
+    private IEnumerable<ColaboradorCertificados> ColaboradoresConCertificadosFiltrados
+    {
+        get
+        {
+            var list = ColaboradoresConCertificados;
+            if (!string.IsNullOrWhiteSpace(busquedaColaborador))
+            {
+                list = list.Where(c => c.Nombre.Contains(busquedaColaborador, StringComparison.OrdinalIgnoreCase)).ToList();
+            }
+            return list;
+        }
+    }
+
+    private ColaboradorCertificados? ColaboradorSeleccionado
+    {
+        get
+        {
+            var filtrados = ColaboradoresConCertificadosFiltrados;
+            if (colaboradorSeleccionadoId.HasValue)
+            {
+                var sel = filtrados.FirstOrDefault(c => c.Id == colaboradorSeleccionadoId.Value);
+                if (sel != null) return sel;
+            }
+            var primero = filtrados.FirstOrDefault();
+            if (primero != null)
+            {
+                colaboradorSeleccionadoId = primero.Id;
+                return primero;
+            }
+            return null;
+        }
+    }
+
+    private IEnumerable<CertificadoDto> CertificadosFiltrados
+    {
+        get
+        {
+            var col = ColaboradorSeleccionado;
+            if (col == null) return [];
+
+            var lista = col.Certificados;
+            if (!string.IsNullOrWhiteSpace(busqueda))
+            {
+                lista = lista.Where(c => c.Nombre.Contains(busqueda, StringComparison.OrdinalIgnoreCase)).ToList();
+            }
+
+            return filtroEstado switch
+            {
+                "vencidos"  => lista.Where(c => c.EstaVencido),
+                "proximos"  => lista.Where(c => c.VenceProximamente),
+                _           => lista
+            };
+        }
+    }
+
+    private void SeleccionarColaborador(int id)
+    {
+        if (colaboradorSeleccionadoId != id)
+        {
+            colaboradorSeleccionadoId = id;
+            paginaCertificados = 1;
+        }
+    }
+
+    private void AbrirModalConColaborador(int colaboradorId)
+    {
+        form = new CreateCertificadoDto { FechaEmision = DateTime.Today, ColaboradorId = colaboradorId };
+        editandoId = null;
+        mostrarModal = true;
+    }
+
+    private string ObtenerIniciales(string nombreCompleto)
+    {
+        if (string.IsNullOrWhiteSpace(nombreCompleto)) return "?";
+        var partes = nombreCompleto.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (partes.Length >= 2)
+            return $"{partes[0][0]}{partes[1][0]}".ToUpper();
+        return partes[0][0].ToString().ToUpper();
+    }
+
+    private IEnumerable<CertificadoDto> CertificadosFiltradosPagina =>
+        CertificadosFiltrados
+            .Skip((paginaCertificados - 1) * CertificadosPaginaSize)
+            .Take(CertificadosPaginaSize);
+
+    private int TotalPaginasCertificados =>
+        Math.Max(1, (int)Math.Ceiling(CertificadosFiltrados.Count() / (double)CertificadosPaginaSize));
+
+    private bool CanPrevCertificados => paginaCertificados > 1;
+    private bool CanNextCertificados => paginaCertificados < TotalPaginasCertificados;
+
+    private void IrPaginaAnteriorCertificados()
+    {
+        if (CanPrevCertificados) paginaCertificados--;
+    }
+
+    private void IrPaginaSiguienteCertificados()
+    {
+        if (CanNextCertificados) paginaCertificados++;
+    }
 
     private IEnumerable<CertificadoDto> Filtrados
     {

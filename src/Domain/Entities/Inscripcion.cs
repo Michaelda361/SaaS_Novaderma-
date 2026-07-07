@@ -14,4 +14,6 @@ public class Inscripcion : BaseEntity
 
     public int CapacitacionId { get; set; }
     public Capacitacion Capacitacion { get; set; } = null!;
+
+    public string? RecursosVistos { get; set; }
 }

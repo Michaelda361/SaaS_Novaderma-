@@ -81,23 +81,37 @@
         <div style="padding:1rem;display:flex;flex-direction:column;gap:0.75rem;">
             @foreach (var r in recursos.OrderBy(x => x.Orden))
             {
+                var rec = r;
                 <div class="recurso-item">
-                    <span class="recurso-icon">@IconoTipo(r.Tipo)</span>
+                    <span class="recurso-icon">@IconoTipo(rec.Tipo)</span>
                     <div class="recurso-info">
-                        <span class="font-medium">@r.Titulo</span>
-                        @if (!string.IsNullOrEmpty(r.Descripcion))
+                        <span class="font-medium">
+                            @rec.Titulo
+                            @if (!PuedeGestionar && RecursoVisto(rec.Id))
+                            {
+                                <span class="badge badge-success" style="margin-left: 0.5rem; font-size: 0.75rem;">✓ Revisado</span>
+                            }
+                        </span>
+                        @if (!string.IsNullOrEmpty(rec.Descripcion))
                         {
-                            <span class="text-sm text-muted">@r.Descripcion</span>
+                            <span class="text-sm text-muted">@rec.Descripcion</span>
                         }
                     </div>
                     <div class="flex gap-2" style="margin-left:auto;">
-                        <a href="@r.Url" target="_blank" class="btn btn-primary btn-sm">Abrir →</a>
+                        @if (!PuedeGestionar)
+                        {
+                            <button class="btn btn-primary btn-sm" @onclick="() => AbrirRecurso(rec)">Abrir →</button>
+                        }
+                        else
+                        {
+                            <a href="@rec.Url" target="_blank" class="btn btn-primary btn-sm">Abrir →</a>
+                        }
                         @if (PuedeGestionar)
                         {
                             <button class="btn btn-ghost btn-sm btn-icon"
-                                    @onclick="() => AbrirEditarRecurso(r)" title="Editar">✏️</button>
+                                    @onclick="() => AbrirEditarRecurso(rec)" title="Editar">✏️</button>
                             <button class="btn btn-danger btn-sm btn-icon"
-                                    @onclick="() => EliminarRecurso(r.Id)" title="Eliminar">🗑️</button>
+                                    @onclick="() => EliminarRecurso(rec.Id)" title="Eliminar">🗑️</button>
                         }
                     </div>
                 </div>
@@ -311,12 +325,22 @@
                 }
             </div>
 
-            @if (resultadoPropio.PuedeResponderOtroIntento)
+             @if (resultadoPropio.PuedeResponderOtroIntento)
             {
                 <div style="margin-top: 1.25rem;">
-                    <button class="btn btn-primary" @onclick="IniciarCuestionario">
-                        🔄 Realizar otro intento
-                    </button>
+                    @if (!TodosRecursosVistos() && !PuedeGestionar)
+                    {
+                        <div style="padding:0.75rem;display:flex;align-items:center;gap:0.5rem;background-color:rgba(255, 193, 7, 0.08);border:1px solid rgba(255, 193, 7, 0.2);border-radius:var(--radius);color:#664d03;text-align:left;font-weight:normal;max-width:320px;margin:0 auto;">
+                            <span>🔒</span>
+                            <span style="font-size:0.85rem;">Para realizar otro intento, debes revisar todos los materiales y recursos.</span>
+                        </div>
+                    }
+                    else
+                    {
+                        <button class="btn btn-primary" @onclick="IniciarCuestionario">
+                            🔄 Realizar otro intento
+                        </button>
+                    }
                 </div>
             }
         </div>
@@ -347,7 +371,17 @@
                     ℹ️ Estás inscrito en esta capacitación — puedes responder el cuestionario como participante.
                 </div>
             }
-            @if (!respondiendo)
+            @if (!TodosRecursosVistos() && !PuedeGestionar)
+            {
+                <div style="padding:1rem;display:flex;align-items:center;gap:0.75rem;background-color:rgba(255, 193, 7, 0.08);border:1px solid rgba(255, 193, 7, 0.2);border-radius:var(--radius);color:#664d03;">
+                    <span style="font-size:1.25rem;">🔒</span>
+                    <div>
+                        <strong style="display:block;">Cuestionario bloqueado</strong>
+                        <span style="font-size:0.875rem;">Debes revisar todos los materiales y recursos de la capacitación arriba antes de poder responder este cuestionario.</span>
+                    </div>
+                </div>
+            }
+            else if (!respondiendo)
             {
                 <div class="cuest-info-card">
                     <div class="cuest-info-icon">📝</div>
@@ -1701,6 +1735,44 @@
                 certForm.FirmaImagenBase64 = result.FirmaImagenBase64;
             }
         }
+    }
+
+    private bool RecursoVisto(int recursoId)
+    {
+        if (inscripcionPropia is null || string.IsNullOrEmpty(inscripcionPropia.RecursosVistos))
+            return false;
+
+        var vistos = inscripcionPropia.RecursosVistos.Split(',', StringSplitOptions.RemoveEmptyEntries)
+            .Select(int.Parse)
+            .ToHashSet();
+
+        return vistos.Contains(recursoId);
+    }
+
+    private bool TodosRecursosVistos()
+    {
+        if (recursos == null || recursos.Count == 0) return true;
+        if (inscripcionPropia == null) return false;
+        if (string.IsNullOrEmpty(inscripcionPropia.RecursosVistos)) return false;
+
+        var vistos = inscripcionPropia.RecursosVistos.Split(',', StringSplitOptions.RemoveEmptyEntries)
+            .Select(int.Parse)
+            .ToHashSet();
+
+        return recursos.All(r => vistos.Contains(r.Id));
+    }
+
+    private async Task AbrirRecurso(RecursoDto r)
+    {
+        if (inscripcionPropia is not null)
+        {
+            var result = await InscripcionService.MarcarRecursoVistoAsync(inscripcionPropia.Id, r.Id);
+            if (result is not null)
+            {
+                inscripcionPropia = result;
+            }
+        }
+        await JS.InvokeVoidAsync("open", r.Url, "_blank");
     }
 
     private DotNetObjectReference<CapacitacionDetalle>? objectRef;

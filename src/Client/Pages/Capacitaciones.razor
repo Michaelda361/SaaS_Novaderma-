@@ -9,6 +9,7 @@
 @inject AuthInfoService AuthInfo
 @inject NavigationManager Nav
 @inject NotificacionesService Notificaciones
+@inject IJSRuntime JS
 @implements IAsyncDisposable
 <Toast @ref="toast" />
 <ConfirmDialog Visible="confirmVisible"
@@ -64,85 +65,349 @@
     }
     else
     {
-        <div class="card">
-            <div class="filter-bar">
-                <div class="search-input-wrap">
-                    <span class="search-icon">🔍</span>
-                    <input type="search" placeholder="Buscar colaborador o capacitación..."
-                           @bind="BusquedaHistorial" @bind:event="oninput" />
+        <style>
+            .historial-split-container {
+                display: flex;
+                gap: 1.25rem;
+                align-items: stretch;
+                margin-top: 1rem;
+            }
+
+            @@media (max-width: 992px) {
+                .historial-split-container {
+                    flex-direction: column;
+                }
+            }
+
+            .historial-sidebar {
+                flex: 0 0 340px;
+                background: var(--surface, #ffffff);
+                border: 1px solid var(--border, #e2e8f0);
+                border-radius: var(--radius, 8px);
+                display: flex;
+                flex-direction: column;
+                height: 620px;
+            }
+
+            .historial-sidebar-header {
+                padding: 0.75rem 1rem;
+                border-bottom: 1px solid var(--border, #e2e8f0);
+                background: var(--bg, #f8fafc);
+                display: flex;
+                flex-direction: column;
+                gap: 0.5rem;
+            }
+
+            .historial-collaborator-list {
+                flex: 1;
+                overflow-y: auto;
+                background: var(--surface, #ffffff);
+            }
+
+            .collaborator-item-btn {
+                width: 100%;
+                text-align: left;
+                padding: 0.75rem 1rem;
+                border: none;
+                background: none;
+                border-bottom: 1px solid var(--border, #f1f5f9);
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                cursor: pointer;
+                transition: all 0.15s ease-in-out;
+                border-left: 4px solid transparent;
+            }
+
+            .collaborator-item-btn:hover {
+                background-color: var(--border, #f1f5f9);
+                opacity: 0.95;
+            }
+
+            .collaborator-item-btn--active {
+                background-color: rgba(34, 110, 253, 0.05) !important;
+                border-left-color: var(--primary, #0d6efd);
+            }
+
+            .collaborator-item-info {
+                display: flex;
+                flex-direction: column;
+                gap: 0.2rem;
+                min-width: 0;
+                flex: 1;
+                margin-right: 0.5rem;
+            }
+
+            .collaborator-item-name {
+                font-weight: 600;
+                color: var(--text, #1e293b);
+                font-size: 0.875rem;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+
+            .collaborator-item-sub {
+                font-size: 0.75rem;
+                color: var(--text-muted, #64748b);
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+
+            .collaborator-badge-count {
+                background: var(--border, #e2e8f0);
+                color: var(--text-muted, #475569);
+                font-size: 0.7rem;
+                font-weight: 700;
+                padding: 0.15rem 0.5rem;
+                border-radius: 12px;
+                white-space: nowrap;
+            }
+
+            .collaborator-item-btn--active .collaborator-badge-count {
+                background: var(--primary, #0d6efd);
+                color: #ffffff;
+            }
+
+            .historial-detail-panel {
+                flex: 1;
+                display: flex;
+                flex-direction: column;
+                gap: 1rem;
+                min-width: 0;
+            }
+
+            .detail-colab-card {
+                background: var(--surface, #ffffff);
+                border: 1px solid var(--border, #e2e8f0);
+                border-radius: var(--radius, 8px);
+                padding: 1rem 1.25rem;
+                display: flex;
+                align-items: center;
+                gap: 1rem;
+            }
+
+            .detail-colab-avatar {
+                width: 44px;
+                height: 44px;
+                background: rgba(34, 110, 253, 0.1);
+                color: var(--primary, #0d6efd);
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 1.1rem;
+                font-weight: 700;
+            }
+
+            .detail-colab-meta {
+                display: flex;
+                flex-direction: column;
+                gap: 0.15rem;
+                min-width: 0;
+            }
+
+            .detail-colab-name {
+                font-size: 1.05rem;
+                font-weight: 700;
+                color: var(--text, #1e293b);
+                margin: 0;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+
+            .detail-colab-subtitle {
+                font-size: 0.75rem;
+                color: var(--text-muted, #64748b);
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+
+            .detail-stats {
+                display: flex;
+                gap: 1rem;
+                margin-left: auto;
+            }
+
+            .detail-stat-item {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                background: var(--bg, #f8fafc);
+                padding: 0.35rem 0.75rem;
+                border-radius: 6px;
+                border: 1px solid var(--border, #e2e8f0);
+            }
+
+            .detail-stat-val {
+                font-size: 0.95rem;
+                font-weight: 700;
+            }
+
+            .detail-stat-lbl {
+                font-size: 0.65rem;
+                color: var(--text-muted, #64748b);
+                text-transform: uppercase;
+                letter-spacing: 0.05em;
+            }
+        </style>
+
+        <div class="historial-split-container">
+            <!-- Sidebar: Lista de Colaboradores -->
+            <div class="historial-sidebar">
+                <div class="historial-sidebar-header">
+                    <div class="search-input-wrap" style="width: 100%;">
+                        <span class="search-icon">🔍</span>
+                        <input type="search" placeholder="Buscar colaborador..."
+                               @bind="BusquedaHistorial" @bind:event="oninput" style="width: 100%;" />
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; color: var(--text-muted);">
+                        <span>Colaboradores: <strong>@ColaboradoresFiltrados.Count()</strong></span>
+                        <button type="button" class="btn btn-sm btn-secondary" @onclick="ExportarTodoCsv" style="padding: 0.2rem 0.5rem; font-size: 0.7rem; border-radius: 4px; display: flex; align-items: center; gap: 0.25rem;">
+                            📥 Exportar Todo
+                        </button>
+                    </div>
                 </div>
-                <span class="text-sm text-muted">@HistorialFiltrado.Count() registro(s)</span>
-            </div>
-            <div class="table-wrapper">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Colaborador</th>
-                            <th>Área</th>
-                            <th>Capacitación</th>
-                            <th>Inscripción</th>
-                            <th>Fecha de Finalización</th>
-                            <th>Calificación</th>
-                            <th>Resultado</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var h in HistorialPagina)
+
+                <div class="historial-collaborator-list">
+                    @if (!ColaboradoresFiltrados.Any())
+                    {
+                        <div style="padding: 2rem; text-align: center; color: var(--text-muted); font-size: 0.85rem;">
+                            No se encontraron colaboradores.
+                        </div>
+                    }
+                    else
+                    {
+                        @foreach (var c in ColaboradoresFiltrados)
                         {
-                            <tr>
-                                <td class="font-medium">@h.Inscripcion.ColaboradorNombre</td>
-                                <td class="text-sm text-muted">@h.Inscripcion.ColaboradorArea</td>
-                                <td class="text-sm">@h.Inscripcion.CapacitacionNombre</td>
-                                <td class="text-sm text-muted">@h.Inscripcion.FechaInscripcion.ToString("dd/MM/yyyy")</td>
-                                <td class="text-sm">
-                                    @(h.Inscripcion.FechaFinalizacion?.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ?? "—")
-                                </td>
-                                <td class="text-sm font-medium">
-                                    @if (h.Inscripcion.Calificacion.HasValue)
-                                    {
-                                        <div class="@(h.Inscripcion.Calificacion >= 7 ? "text-success" : "text-danger")">
-                                            @h.Inscripcion.Calificacion.Value.ToString("0.##")
-                                        </div>
-                                        @if (h.Resultado is not null)
-                                        {
-                                            <div class="text-xs text-muted" style="font-weight:normal;">
-                                                Eval: @h.Resultado.Correctas/@h.Resultado.TotalPreguntas
-                                            </div>
-                                        }
-                                    }
-                                    else if (h.Resultado is not null)
-                                    {
-                                        @($"{h.Resultado.Correctas} / {h.Resultado.TotalPreguntas}")
-                                    }
-                                    else
-                                    {
-                                        <span>—</span>
-                                    }
-                                </td>
-                                <td>
-                                    @if (h.Resultado is null)
-                                    { <span class="badge badge-gray">Pendiente</span> }
-                                    else if (h.Resultado.Aprobado)
-                                    { <span class="badge badge-success">✅ Aprobado</span> }
-                                    else
-                                    { <span class="badge badge-danger">❌ No aprobado</span> }
-                                </td>
-                            </tr>
+                            var col = c;
+                            var activeClass = ColaboradorSeleccionado?.Id == col.Id ? "collaborator-item-btn--active" : "";
+                            <button type="button" class="collaborator-item-btn @activeClass" @onclick="() => SeleccionarColaborador(col.Id)">
+                                <div class="collaborator-item-info">
+                                    <span class="collaborator-item-name">@col.Nombre</span>
+                                    <span class="collaborator-item-sub">@col.Area · @col.Cargo</span>
+                                </div>
+                                <span class="collaborator-badge-count">@col.Items.Count</span>
+                            </button>
                         }
-                    </tbody>
-                </table>
-            </div>
-            <div class="pagination" style="display:flex;align-items:center;justify-content:space-between;gap:.75rem;padding:.75rem 1rem;border-top:1px solid var(--border);">
-                <div class="text-sm text-muted">Página @paginaHistorial de @TotalPaginas</div>
-                <div>
-                    <button class="btn btn-sm btn-secondary" disabled="@(!CanPrevHistorial)" @onclick="IrPaginaAnterior">Anterior</button>
-                    <button class="btn btn-sm btn-secondary" disabled="@(!CanNextHistorial)" @onclick="IrPaginaSiguiente">Siguiente</button>
+                    }
                 </div>
             </div>
-            <div class="text-sm text-muted" style="padding:.75rem 1rem;border-top:1px solid var(--border);">
-                @historialItems.Count(h => h.Resultado?.Aprobado == true) aprobado(s) ·
-                @historialItems.Count(h => h.Resultado is not null && !h.Resultado.Aprobado) no aprobado(s) ·
-                @historialItems.Count(h => h.Resultado is null) pendiente(s)
+
+            <!-- Detail Panel: Historial del Colaborador Seleccionado -->
+            <div class="historial-detail-panel">
+                @if (ColaboradorSeleccionado is null)
+                {
+                    <div class="card" style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 400px; margin: 0;">
+                        <span style="font-size: 3rem;">👥</span>
+                        <h3 style="margin-top: 1rem; color: var(--text);">Selecciona un Colaborador</h3>
+                        <p class="text-sm text-muted">Elige un colaborador de la lista para ver su historial completo de capacitaciones.</p>
+                    </div>
+                }
+                else
+                {
+                    <!-- Resumen del Colaborador -->
+                    <div class="detail-colab-card">
+                        <div class="detail-colab-avatar">
+                            @ObtenerIniciales(ColaboradorSeleccionado.Nombre)
+                        </div>
+                        <div class="detail-colab-meta">
+                            <h3 class="detail-colab-name">@ColaboradorSeleccionado.Nombre</h3>
+                            <span class="detail-colab-subtitle">@ColaboradorSeleccionado.Email · @ColaboradorSeleccionado.Area (<strong>@ColaboradorSeleccionado.Cargo</strong>)</span>
+                        </div>
+                        <div class="detail-stats">
+                            <div class="detail-stat-item">
+                                <span class="detail-stat-val text-success">@ColaboradorSeleccionado.Items.Count(h => h.Resultado?.Aprobado == true)</span>
+                                <span class="detail-stat-lbl">Aprobadas</span>
+                            </div>
+                            <div class="detail-stat-item">
+                                <span class="detail-stat-val text-danger">@ColaboradorSeleccionado.Items.Count(h => h.Resultado is not null && !h.Resultado.Aprobado)</span>
+                                <span class="detail-stat-lbl">No Aprobadas</span>
+                            </div>
+                            <div class="detail-stat-item">
+                                <span class="detail-stat-val text-muted">@ColaboradorSeleccionado.Items.Count(h => h.Resultado is null)</span>
+                                <span class="detail-stat-lbl">Pendientes</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tabla de Capacitaciones del Colaborador -->
+                    <div class="card" style="margin: 0; flex: 1; display: flex; flex-direction: column; overflow: hidden;">
+                        <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+                            <span class="card-title">Historial de Capacitaciones</span>
+                            <button type="button" class="btn btn-sm btn-outline-primary" @onclick="ExportarColaboradorCsv" style="padding: 0.35rem 0.75rem; font-size: 0.75rem; border-radius: 6px; display: flex; align-items: center; gap: 0.25rem;">
+                                📥 Exportar Excel/CSV
+                            </button>
+                        </div>
+                        <div class="table-wrapper" style="flex: 1; overflow-y: auto;">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Capacitación</th>
+                                        <th>Fecha Inscripción</th>
+                                        <th>Fecha Finalización</th>
+                                        <th>Calificación</th>
+                                        <th>Resultado</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var h in ColaboradorSeleccionadoItemsPagina)
+                                    {
+                                        <tr>
+                                            <td>
+                                                <div class="font-medium">@h.Inscripcion.CapacitacionNombre</div>
+                                            </td>
+                                            <td class="text-sm text-muted">@h.Inscripcion.FechaInscripcion.ToString("dd/MM/yyyy")</td>
+                                            <td class="text-sm">
+                                                @(h.Inscripcion.FechaFinalizacion?.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ?? "—")
+                                            </td>
+                                            <td class="text-sm font-medium">
+                                                @if (h.Inscripcion.Calificacion.HasValue)
+                                                {
+                                                    <div class="@(h.Inscripcion.Calificacion >= 7 ? "text-success" : "text-danger")">
+                                                        @h.Inscripcion.Calificacion.Value.ToString("0.##")
+                                                    </div>
+                                                    @if (h.Resultado is not null)
+                                                    {
+                                                        <div class="text-xs text-muted" style="font-weight:normal;">
+                                                            Eval: @h.Resultado.Correctas/@h.Resultado.TotalPreguntas
+                                                        </div>
+                                                    }
+                                                }
+                                                else if (h.Resultado is not null)
+                                                {
+                                                    @($"{h.Resultado.Correctas} / {h.Resultado.TotalPreguntas}")
+                                                }
+                                                else
+                                                {
+                                                    <span>—</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (h.Resultado is null)
+                                                { <span class="badge badge-gray">Pendiente</span> }
+                                                else if (h.Resultado.Aprobado)
+                                                { <span class="badge badge-success">✅ Aprobado</span> }
+                                                else
+                                                { <span class="badge badge-danger">❌ No aprobado</span> }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="pagination" style="display:flex;align-items:center;justify-content:space-between;gap:.75rem;padding:.75rem 1rem;border-top:1px solid var(--border);">
+                            <div class="text-sm text-muted">Página @paginaDetalleHistorial de @TotalPaginasDetalle</div>
+                            <div>
+                                <button class="btn btn-sm btn-secondary" disabled="@(!CanPrevDetalle)" @onclick="IrPaginaAnteriorDetalle">Anterior</button>
+                                <button class="btn btn-sm btn-secondary" disabled="@(!CanNextDetalle)" @onclick="IrPaginaSiguienteDetalle">Siguiente</button>
+                            </div>
+                        </div>
+                    </div>
+                }
             </div>
         </div>
     }
@@ -341,14 +606,11 @@
 
     // Historial
     private record HistorialItem(InscripcionDto Inscripcion, ResultadoCuestionarioDto? Resultado);
+    private record ColaboradorHistorial(int Id, string Nombre, string Email, string Area, string Cargo, List<HistorialItem> Items);
     private List<HistorialItem> historialItems = [];
     private bool cargandoHistorial = false;
-    // (historialCargado eliminado — CS0414: campo nunca leído)
     private string busquedaHistorial = string.Empty;
-    private int paginaHistorial = 1;
-    private const int HistorialPaginaSize = 10;
-
-    // Capacitaciones completadas por el colaborador (excluidas de la lista activa)
+    private int? colaboradorSeleccionadoId = null;
     private HashSet<int> capacitacionesCompletadas = [];
 
     private string BusquedaHistorial
@@ -358,28 +620,158 @@
         {
             if (busquedaHistorial == value) return;
             busquedaHistorial = value;
-            paginaHistorial = 1;
         }
     }
 
-    private IEnumerable<HistorialItem> HistorialFiltrado =>
+    private List<ColaboradorHistorial> ColaboradoresHistorial
+    {
+        get
+        {
+            if (historialItems == null || !historialItems.Any()) return [];
+            
+            return historialItems
+                .GroupBy(h => h.Inscripcion.ColaboradorId)
+                .Select(g => {
+                    var primerItem = g.First().Inscripcion;
+                    return new ColaboradorHistorial(
+                        primerItem.ColaboradorId,
+                        primerItem.ColaboradorNombre,
+                        primerItem.ColaboradorEmail,
+                        primerItem.ColaboradorArea,
+                        primerItem.ColaboradorCargo,
+                        g.ToList()
+                    );
+                })
+                .OrderBy(c => c.Nombre)
+                .ToList();
+        }
+    }
+
+    private IEnumerable<ColaboradorHistorial> ColaboradoresFiltrados =>
         string.IsNullOrWhiteSpace(busquedaHistorial)
-            ? historialItems
-            : historialItems.Where(h =>
-                h.Inscripcion.ColaboradorNombre.Contains(busquedaHistorial, StringComparison.OrdinalIgnoreCase) ||
-                h.Inscripcion.CapacitacionNombre.Contains(busquedaHistorial, StringComparison.OrdinalIgnoreCase));
+            ? ColaboradoresHistorial
+            : ColaboradoresHistorial.Where(c =>
+                c.Nombre.Contains(busquedaHistorial, StringComparison.OrdinalIgnoreCase) ||
+                c.Area.Contains(busquedaHistorial, StringComparison.OrdinalIgnoreCase) ||
+                c.Cargo.Contains(busquedaHistorial, StringComparison.OrdinalIgnoreCase));
 
-    private IEnumerable<HistorialItem> HistorialPagina =>
-        HistorialFiltrado
-            .Skip((paginaHistorial - 1) * HistorialPaginaSize)
-            .Take(HistorialPaginaSize);
+    private ColaboradorHistorial? ColaboradorSeleccionado
+    {
+        get
+        {
+            if (colaboradorSeleccionadoId.HasValue)
+            {
+                var sel = ColaboradoresHistorial.FirstOrDefault(c => c.Id == colaboradorSeleccionadoId.Value);
+                if (sel is not null) return sel;
+            }
+            
+            var primero = ColaboradoresFiltrados.FirstOrDefault();
+            if (primero is not null)
+            {
+                colaboradorSeleccionadoId = primero.Id;
+                return primero;
+            }
+            
+            return null;
+        }
+    }
 
-    private int TotalPaginas => Math.Max(1, (int)Math.Ceiling(HistorialFiltrado.Count() / (double)HistorialPaginaSize));
-    private bool CanPrevHistorial => paginaHistorial > 1;
-    private bool CanNextHistorial => paginaHistorial < TotalPaginas;
+    private int paginaDetalleHistorial = 1;
+    private const int DetalleHistorialPaginaSize = 10;
 
-    private void IrPaginaAnterior() => paginaHistorial = Math.Max(1, paginaHistorial - 1);
-    private void IrPaginaSiguiente() => paginaHistorial = Math.Min(TotalPaginas, paginaHistorial + 1);
+    private IEnumerable<HistorialItem> ColaboradorSeleccionadoItemsPagina =>
+        ColaboradorSeleccionado?.Items
+            .Skip((paginaDetalleHistorial - 1) * DetalleHistorialPaginaSize)
+            .Take(DetalleHistorialPaginaSize) ?? [];
+
+    private int TotalPaginasDetalle =>
+        ColaboradorSeleccionado is null
+            ? 1
+            : Math.Max(1, (int)Math.Ceiling(ColaboradorSeleccionado.Items.Count / (double)DetalleHistorialPaginaSize));
+
+    private bool CanPrevDetalle => paginaDetalleHistorial > 1;
+    private bool CanNextDetalle => paginaDetalleHistorial < TotalPaginasDetalle;
+
+    private void IrPaginaAnteriorDetalle() => paginaDetalleHistorial = Math.Max(1, paginaDetalleHistorial - 1);
+    private void IrPaginaSiguienteDetalle() => paginaDetalleHistorial = Math.Min(TotalPaginasDetalle, paginaDetalleHistorial + 1);
+
+    private void SeleccionarColaborador(int id)
+    {
+        if (colaboradorSeleccionadoId != id)
+        {
+            colaboradorSeleccionadoId = id;
+            paginaDetalleHistorial = 1;
+        }
+    }
+
+    private static string ObtenerIniciales(string nombreCompleto)
+    {
+        if (string.IsNullOrWhiteSpace(nombreCompleto)) return "?";
+        var partes = nombreCompleto.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (partes.Length >= 2)
+            return $"{partes[0][0]}{partes[1][0]}".ToUpper();
+        return partes[0][0].ToString().ToUpper();
+    }
+
+    private async Task ExportarTodoCsv()
+    {
+        cargandoHistorial = true;
+        StateHasChanged();
+        try
+        {
+            var bytes = await InscripcionService.ExportarTodoExcelAsync();
+            if (bytes != null && bytes.Length > 0)
+            {
+                var base64 = Convert.ToBase64String(bytes);
+                await JS.InvokeVoidAsync("descargarArchivo", base64, "historial_completo_capacitaciones.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+            }
+            else
+            {
+                await toast.Show("No se pudo exportar el historial consolidado.", "error");
+            }
+        }
+        catch (Exception ex)
+        {
+            await toast.Show($"Error al exportar: {ex.Message}", "error");
+        }
+        finally
+        {
+            cargandoHistorial = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task ExportarColaboradorCsv()
+    {
+        var colab = ColaboradorSeleccionado;
+        if (colab == null) return;
+
+        cargandoHistorial = true;
+        StateHasChanged();
+        try
+        {
+            var bytes = await InscripcionService.ExportarColaboradorExcelAsync(colab.Id);
+            if (bytes != null && bytes.Length > 0)
+            {
+                var base64 = Convert.ToBase64String(bytes);
+                var safeFileName = $"historial_{colab.Nombre.Replace(" ", "_")}.xlsx";
+                await JS.InvokeVoidAsync("descargarArchivo", base64, safeFileName, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+            }
+            else
+            {
+                await toast.Show("No se pudo exportar el historial del colaborador.", "error");
+            }
+        }
+        catch (Exception ex)
+        {
+            await toast.Show($"Error al exportar: {ex.Message}", "error");
+        }
+        finally
+        {
+            cargandoHistorial = false;
+            StateHasChanged();
+        }
+    }
 
     private List<CapacitacionDto> Filtradas
     {
@@ -593,7 +985,8 @@
                 .OrderByDescending(h => h.Inscripcion.FechaFinalizacion)
                 .ThenByDescending(h => h.Inscripcion.FechaInscripcion)
                 .ToList();
-            paginaHistorial = 1;
+            colaboradorSeleccionadoId = null;
+            paginaDetalleHistorial = 1;
         }
         catch { historialItems = []; }
 

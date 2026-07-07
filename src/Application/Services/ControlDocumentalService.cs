@@ -824,9 +824,6 @@ public class ControlDocumentalService(
         var documento = await repository.GetDocumentoByIdAsync(documentoId)
             ?? throw new KeyNotFoundException("Documento no encontrado.");
 
-        if (solicitante.Rol == RolUsuario.Admin || solicitante.Rol == RolUsuario.Jefe)
-            throw new InvalidOperationException("Los usuarios con permisos de administración deben actualizar el documento directamente.");
-
         if (await repository.ExisteSolicitudCambioPendienteAsync(documentoId, solicitante.Id))
             throw new InvalidOperationException("Ya existe una solicitud de cambio pendiente para este documento.");
 
