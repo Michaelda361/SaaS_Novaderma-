@@ -1466,7 +1466,7 @@
                         }
                         else
                         {
-                            <span><strong>ℹ️ Nota:</strong> Se creará una solicitud de cambio en estado pendiente de aprobación y un borrador asociado. Podrás revisarla y aprobarla tú mismo desde la sección de solicitudes para aplicar los cambios y mantener la trazabilidad.</span>
+                            <span><strong>ℹ️ Nota:</strong> Se creará una solicitud de cambio en estado pendiente. Podrás iniciar la revisión, editar el borrador y aprobarla tú mismo para mantener la trazabilidad del proceso.</span>
                         }
                     </div>
                 }
@@ -2834,8 +2834,8 @@
                 CamposPersonalizados = documentoParaSolicitud.CamposPersonalizados ?? new Dictionary<string, string?>()
             };
 
-            // Enviar la solicitud - el servidor retornará 201 (Created) indicando que creó una solicitud de cambio
-            var response = await ControlDocumentalApi.UpdateDocumentoAsync(documentoParaSolicitud.Id, updateDto);
+            // Enviar la solicitud - el servidor retornará 201 (Created) indicando que creó una solicitud de cambio en estado Pendiente
+            var response = await ControlDocumentalApi.CreateSolicitudCambioAsync(documentoParaSolicitud.Id, updateDto);
 
             if (response.StatusCode == HttpStatusCode.Forbidden)
             {
@@ -2845,7 +2845,10 @@
 
             if (response.StatusCode == HttpStatusCode.Created)
             {
-                await toast.Show("Solicitud de cambio enviada correctamente. Un administrador o jefe la revisará y editará el documento según tu solicitud.", "success");
+                var msg = AuthInfo.EsSoloColaborador 
+                    ? "Solicitud de cambio enviada correctamente. Un administrador o jefe la revisará y editará el documento según tu solicitud."
+                    : "Solicitud de cambio creada correctamente. Aparecerá en tus pendientes para su revisión y aprobación.";
+                await toast.Show(msg, "success");
                 CerrarSolicitudCambioModal();
                 await LoadPendingSolicitudesAsync();
                 await Filtrar();
@@ -2859,7 +2862,10 @@
                 return;
             }
 
-            await toast.Show("Solicitud enviada correctamente.", "success");
+            var successMsg = AuthInfo.EsSoloColaborador 
+                ? "Solicitud enviada correctamente."
+                : "Solicitud creada correctamente.";
+            await toast.Show(successMsg, "success");
             CerrarSolicitudCambioModal();
             await LoadPendingSolicitudesAsync();
             await Filtrar();
