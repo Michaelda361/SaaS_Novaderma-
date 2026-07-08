@@ -25,16 +25,35 @@ public class AzureBlobStorageService : IFileStorageService
         "application/octet-stream",
     };
 
+    private readonly bool _disabled;
+
     public AzureBlobStorageService(IConfiguration configuration)
     {
-        var connStr = configuration["AzureStorage:ConnectionString"]
-            ?? throw new InvalidOperationException("AzureStorage:ConnectionString no configurado.");
-        _client = new BlobServiceClient(connStr);
+        var connStr = configuration["AzureStorage:ConnectionString"];
+
+        if (string.IsNullOrWhiteSpace(connStr) || connStr.StartsWith("REEMPLAZA"))
+        {
+            _disabled = true;
+            _client = null!;
+            return;
+        }
+
+        try
+        {
+            _client = new BlobServiceClient(connStr);
+        }
+        catch (Exception)
+        {
+            _disabled = true;
+            _client = null!;
+        }
     }
 
     public async Task<string> UploadAsync(
         Stream contenido, string nombreArchivo, string contenedor, string mimeType)
     {
+        if (_disabled) return await Task.FromResult(string.Empty);
+
         if (!MimeTypesPermitidos.Contains(mimeType))
             throw new InvalidOperationException($"Tipo de archivo no permitido: {mimeType}");
 
@@ -60,6 +79,8 @@ public class AzureBlobStorageService : IFileStorageService
 
     public async Task<byte[]?> DownloadAsync(string blobKey)
     {
+        if (_disabled) return await Task.FromResult<byte[]?>(null);
+
         var (contenedor, nombre) = ParseKey(blobKey);
         var blobClient = _client.GetBlobContainerClient(contenedor).GetBlobClient(nombre);
 
@@ -72,6 +93,8 @@ public class AzureBlobStorageService : IFileStorageService
 
     public async Task DeleteAsync(string blobKey)
     {
+        if (_disabled) return;
+
         var (contenedor, nombre) = ParseKey(blobKey);
         var blobClient = _client.GetBlobContainerClient(contenedor).GetBlobClient(nombre);
         await blobClient.DeleteIfExistsAsync();
@@ -79,6 +102,8 @@ public class AzureBlobStorageService : IFileStorageService
 
     public async Task<string> GetSignedUrlAsync(string blobKey, TimeSpan? expiry = null)
     {
+        if (_disabled) return await Task.FromResult(string.Empty);
+
         var (contenedor, nombre) = ParseKey(blobKey);
         var blobClient = _client.GetBlobContainerClient(contenedor).GetBlobClient(nombre);
 
