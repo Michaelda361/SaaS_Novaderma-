@@ -409,11 +409,54 @@ else
                     }
                 </div>
 
-                @if (plantillaVariables.VariablesEditables.Any())
+                @if (plantillaVariables.CamposFormulario != null && plantillaVariables.CamposFormulario.Any())
+                {
+                    var camposColaborador = plantillaVariables.CamposFormulario.Where(c => c.DiligenciadoPor != "Aprobador").ToList();
+                    var camposAprobador = plantillaVariables.CamposFormulario.Where(c => c.DiligenciadoPor == "Aprobador").ToList();
+
+                    @if (camposColaborador.Any())
+                    {
+                        <div style="margin-top:1.25rem;padding-top:1rem;border-top:1px solid var(--border);">
+                            <p class="text-sm" style="margin-bottom:.5rem;font-weight:500;">
+                                ✏️ Campos que el colaborador completa
+                            </p>
+                            <div class="variables-grid">
+                                @foreach (var campo in camposColaborador)
+                                {
+                                    <div class="variable-item variable-item--editable">
+                                        <code class="variable-tag">@("{{" + campo.Variable + "}}")</code>
+                                        <span class="text-muted text-sm">@campo.Nombre (@campo.Tipo)</span>
+                                        <span class="variable-editable-badge" style="background-color: var(--primary-light, rgba(99, 102, 241, 0.08)); color: var(--primary, #6366f1);">colaborador</span>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    }
+
+                    @if (camposAprobador.Any())
+                    {
+                        <div style="margin-top:1.25rem;padding-top:1rem;border-top:1px solid var(--border);">
+                            <p class="text-sm" style="margin-bottom:.5rem;font-weight:500;">
+                                🛡️ Campos que el aprobador completa
+                            </p>
+                            <div class="variables-grid">
+                                @foreach (var campo in camposAprobador)
+                                {
+                                    <div class="variable-item variable-item--editable">
+                                        <code class="variable-tag">@("{{" + campo.Variable + "}}")</code>
+                                        <span class="text-muted text-sm">@campo.Nombre (@campo.Tipo)</span>
+                                        <span class="variable-editable-badge" style="background-color: rgba(217, 119, 6, 0.08); color: #d97706;">aprobador</span>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    }
+                }
+                else if (plantillaVariables.VariablesEditables != null && plantillaVariables.VariablesEditables.Any())
                 {
                     <div style="margin-top:1.25rem;padding-top:1rem;border-top:1px solid var(--border);">
                         <p class="text-sm" style="margin-bottom:.5rem;font-weight:500;">
-                            ✏️ Campos que el colaborador completa
+                            ✏️ Campos que el colaborador completa (Legacy)
                         </p>
                         <p class="text-muted text-xs" style="margin-bottom:.5rem;">
                             Recomendado: solo <code>{{destinatario}}</code> para cartas a terceros. Use <code>{{destinatario}}</code> en el cuerpo y marque «destinatario» abajo al crear la plantilla.

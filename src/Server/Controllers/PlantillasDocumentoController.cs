@@ -435,10 +435,26 @@ public class PlantillasDocumentoController(
             var camposAprobador = campos.Where(c => c.DiligenciadoPor == "Aprobador").ToList();
             var missingFields = new List<string>();
 
+            // Obtener variables previas rellenadas por el colaborador
+            var variablesColaborador = new Dictionary<string, string>();
+            if (!string.IsNullOrWhiteSpace(solicitud.VariablesCompletadas))
+            {
+                try
+                {
+                    variablesColaborador = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(solicitud.VariablesCompletadas) ?? [];
+                }
+                catch { }
+            }
+
             foreach (var campo in camposAprobador)
             {
-                var val = dto.VariablesAprobador.GetValueOrDefault(campo.Variable, string.Empty);
-                if (campo.Obligatorio && string.IsNullOrWhiteSpace(val))
+                var valAprobador = dto.VariablesAprobador.GetValueOrDefault(campo.Variable, string.Empty);
+                var valColaborador = variablesColaborador.GetValueOrDefault(campo.Variable, string.Empty);
+                
+                // Si el aprobador no ingresó nada, pero el solicitante ya lo había llenado, lo tomamos como válido.
+                var valorFinal = !string.IsNullOrWhiteSpace(valAprobador) ? valAprobador : valColaborador;
+
+                if (campo.Obligatorio && string.IsNullOrWhiteSpace(valorFinal))
                 {
                     missingFields.Add(campo.Nombre);
                 }
@@ -446,24 +462,19 @@ public class PlantillasDocumentoController(
 
             if (missingFields.Any())
             {
-                return BadRequest($"Falta diligenciar las siguientes variables obligatorias del aprobador: {string.Join(", ", missingFields)}");
+                return BadRequest($"Falta diligenciar las siguientes variables obligatorias: {string.Join(", ", missingFields)}");
             }
 
             // 2. Mezclar variables completadas del colaborador con las del aprobador
-            var variablesFinales = new Dictionary<string, string>();
-            if (!string.IsNullOrWhiteSpace(solicitud.VariablesCompletadas))
-            {
-                try
-                {
-                    variablesFinales = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(solicitud.VariablesCompletadas) ?? [];
-                }
-                catch { }
-            }
+            var variablesFinales = new Dictionary<string, string>(variablesColaborador);
 
-            // Agregar/actualizar las variables del aprobador en el diccionario de variables finales
+            // Agregar/actualizar las variables del aprobador en el diccionario de variables finales (sin pisar con vacío si ya hay valor del colaborador)
             foreach (var kv in dto.VariablesAprobador)
             {
-                variablesFinales[kv.Key] = kv.Value;
+                if (!string.IsNullOrWhiteSpace(kv.Value))
+                {
+                    variablesFinales[kv.Key] = kv.Value;
+                }
             }
 
             // 3. Generar el PDF final con todas las variables reemplazadas
@@ -491,7 +502,8 @@ public class PlantillasDocumentoController(
             else
             {
                 var (htmlResuelto, plantilla, _) = await service.ResolverPlantillaAsync(solicitud.PlantillaDocumentoId, solicitud.Colaborador.Email!, variablesFinales);
-                pdfBytes = pdfGenerator.GenerarPdfDesdeHtml(htmlResuelto, plantilla, incluirFirmaImagen: false);
+                var incluirFirmaDefecto = string.IsNullOrWhiteSpace(dto.FirmaImagenBase64) || !dto.FirmaX.HasValue;
+                pdfBytes = pdfGenerator.GenerarPdfDesdeHtml(htmlResuelto, plantilla, incluirFirmaImagen: incluirFirmaDefecto);
             }
 
             // 3.5. Estampar firma digital si se proporcionaron coordenadas y la imagen fue enviada por el aprobador
@@ -546,7 +558,7 @@ public class PlantillasDocumentoController(
             var solicitud = await service.GetSolicitudEntityAsync(solicitudId);
             if (solicitud is null) return NotFound("Solicitud no encontrada.");
 
-            // 1. Mezclar variables completadas del colaborador con las del aprobador
+            // 1. Mezclar variables completadas del colaborador con las del aprobador (sin pisar con vacío si ya hay valor)
             var variablesFinales = new Dictionary<string, string>();
             if (!string.IsNullOrWhiteSpace(solicitud.VariablesCompletadas))
             {
@@ -559,7 +571,10 @@ public class PlantillasDocumentoController(
 
             foreach (var kv in dto.VariablesAprobador)
             {
-                variablesFinales[kv.Key] = kv.Value;
+                if (!string.IsNullOrWhiteSpace(kv.Value))
+                {
+                    variablesFinales[kv.Key] = kv.Value;
+                }
             }
 
             // 2. Generar el PDF
@@ -587,7 +602,8 @@ public class PlantillasDocumentoController(
             else
             {
                 var (htmlResuelto, plantilla, _) = await service.ResolverPlantillaAsync(solicitud.PlantillaDocumentoId, solicitud.Colaborador.Email!, variablesFinales);
-                pdfBytes = pdfGenerator.GenerarPdfDesdeHtml(htmlResuelto, plantilla, incluirFirmaImagen: false);
+                var incluirFirmaDefecto = string.IsNullOrWhiteSpace(dto.FirmaImagenBase64) || !dto.FirmaX.HasValue;
+                pdfBytes = pdfGenerator.GenerarPdfDesdeHtml(htmlResuelto, plantilla, incluirFirmaImagen: incluirFirmaDefecto);
             }
 
             // Guardar una copia limpia del PDF (sin estampar la firma) para la generación de la vista previa PNG del canvas.

@@ -712,9 +712,44 @@ public class PlantillaDocumentoService(
 
         if (!validarEditables) return sinReservados;
 
-        var permitidas = string.IsNullOrWhiteSpace(plantilla.VariablesEditables)
-            ? []
-            : System.Text.Json.JsonSerializer.Deserialize<List<string>>(plantilla.VariablesEditables) ?? [];
+        var permitidas = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        // 1. Cargar variables desde VariablesEditables (legacy / fallback)
+        if (!string.IsNullOrWhiteSpace(plantilla.VariablesEditables))
+        {
+            try
+            {
+                var legacy = System.Text.Json.JsonSerializer.Deserialize<List<string>>(plantilla.VariablesEditables);
+                if (legacy is not null)
+                {
+                    foreach (var v in legacy)
+                    {
+                        if (!string.IsNullOrWhiteSpace(v)) permitidas.Add(v.Trim());
+                    }
+                }
+            }
+            catch { }
+        }
+
+        // 2. Cargar variables desde CamposFormulario (moderno)
+        if (!string.IsNullOrWhiteSpace(plantilla.CamposFormulario))
+        {
+            try
+            {
+                var campos = System.Text.Json.JsonSerializer.Deserialize<List<CampoFormularioDto>>(plantilla.CamposFormulario);
+                if (campos is not null)
+                {
+                    foreach (var c in campos)
+                    {
+                        if (!string.IsNullOrWhiteSpace(c.Variable))
+                        {
+                            permitidas.Add(c.Variable.Trim());
+                        }
+                    }
+                }
+            }
+            catch { }
+        }
 
         var filtrados = sinReservados
             .Where(kv => permitidas.Contains(kv.Key))
