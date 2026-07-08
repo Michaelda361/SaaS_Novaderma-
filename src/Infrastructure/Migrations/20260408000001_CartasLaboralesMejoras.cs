@@ -1,10 +1,14 @@
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 
 #nullable disable
 
 namespace TalentManagement.Infrastructure.Migrations
 {
     /// <inheritdoc />
+    [DbContext(typeof(TalentManagement.Infrastructure.Persistence.AppDbContext))]
+    [Migration("20260408000001_CartasLaboralesMejoras")]
     public partial class CartasLaboralesMejoras : Migration
     {
         /// <inheritdoc />

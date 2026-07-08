@@ -4,6 +4,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <StaticWebAssetFingerprintingEnabled>false</StaticWebAssetFingerprintingEnabled>
   </PropertyGroup>
 
   <ItemGroup>
@@ -24,19 +25,12 @@
     <ProjectReference Include="..\Application\TalentManagement.Application.csproj" />
     <ProjectReference Include="..\Infrastructure\TalentManagement.Infrastructure.csproj" />
     <ProjectReference Include="..\Shared\TalentManagement.Shared.csproj" />
+    <ProjectReference Include="..\Client\TalentManagement.Client.csproj" />
   </ItemGroup>
 
   <!-- Incluir web.config en la salida de publicacion -->
   <ItemGroup>
     <Content Update="web.config" CopyToPublishDirectory="Always" />
   </ItemGroup>
-
-  <Target Name="PublishRunWebpack" AfterTargets="Build">
-    <Exec Command="dotnet build ../Client -c $(Configuration)" />
-    <ItemGroup>
-      <DistFiles Include="../Client/bin/$(Configuration)/net10.0/wwwroot/**" />
-    </ItemGroup>
-    <Copy SourceFiles="@(DistFiles)" DestinationFolder="wwwroot/%(RecursiveDir)" SkipUnchangedFiles="true" />
-  </Target>
 
 </Project>

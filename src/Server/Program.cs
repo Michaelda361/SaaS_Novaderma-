@@ -67,18 +67,24 @@ builder.Services.PostConfigure<Microsoft.AspNetCore.Authentication.JwtBearer.Jwt
         };
     });
 
-#if DEBUG
-    builder.Services.AddAuthentication()
-        .AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, DevAuthHandler>("DevUser", _ => { });
-    builder.Services.AddAuthorization(options =>
-        options.DefaultPolicy = new Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder()
-            .AddAuthenticationSchemes("Bearer", "DevUser")
-            .RequireAuthenticatedUser()
-            .Build());
-    builder.Services.AddSingleton<TalentManagement.Server.Services.DevUserStore>();
-#else
-    builder.Services.AddAuthorization();
-#endif
+    var tenantId = builder.Configuration["AzureAd:TenantId"] ?? string.Empty;
+    bool bypassAuth = tenantId.Contains("REEMPLAZA_CON_TU_TENANT_ID") || builder.Configuration.GetValue<bool>("BypassAuth");
+
+    if (bypassAuth)
+    {
+        builder.Services.AddAuthentication()
+            .AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, DevAuthHandler>("DevUser", _ => { });
+        builder.Services.AddAuthorization(options =>
+            options.DefaultPolicy = new Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder()
+                .AddAuthenticationSchemes("Bearer", "DevUser")
+                .RequireAuthenticatedUser()
+                .Build());
+        builder.Services.AddSingleton<TalentManagement.Server.Services.DevUserStore>();
+    }
+    else
+    {
+        builder.Services.AddAuthorization();
+    }
 
 builder.Services.AddOpenApi();
 builder.Services.AddRazorPages();
@@ -177,7 +183,15 @@ app.UseMiddleware<TalentManagement.Server.ExceptionHandlingMiddleware>();
 app.UseCors();
 app.UseRateLimiter();
 app.UseResponseCompression();
-app.UseStaticFiles();
+var contentTypeProvider = new Microsoft.AspNetCore.StaticFiles.FileExtensionContentTypeProvider();
+contentTypeProvider.Mappings[".dat"] = "application/octet-stream";
+contentTypeProvider.Mappings[".dll"] = "application/octet-stream";
+contentTypeProvider.Mappings[".wasm"] = "application/wasm";
+
+app.UseStaticFiles(new StaticFileOptions
+{
+    ContentTypeProvider = contentTypeProvider
+});
 
 app.MapRazorPages();
 

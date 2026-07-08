@@ -6,7 +6,6 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-#if DEBUG
 namespace TalentManagement.Server;
 
 /// <summary>
@@ -56,4 +55,3 @@ public class DevAuthHandler(
         return new AuthenticationTicket(principal, Scheme.Name);
     }
 }
-#endif

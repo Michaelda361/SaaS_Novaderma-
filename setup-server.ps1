@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Script de configuración inicial del servidor Windows Server 2019 para TalentManagement.
 .DESCRIPTION
