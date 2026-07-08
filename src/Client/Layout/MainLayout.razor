@@ -138,6 +138,7 @@
     {
         await AuthInfo.LoadAsync();
         VerificarColaborador();
+        StateHasChanged();
     }
 
     protected override void OnParametersSet()
@@ -148,7 +149,7 @@
     private void VerificarColaborador()
     {
         var uri = Nav.Uri.ToLower();
-        if (uri.Contains("/authentication/") || uri.Contains("/landing") || uri.Contains("/sin-registro"))
+        if (uri.Contains("/authentication/") || uri.Contains("/sin-registro"))
         {
             return;
         }
@@ -166,6 +167,7 @@
             Theme.OnChange += StateHasChanged;
             await Theme.InitAsync();
             await AuthInfo.LoadAsync();
+            StateHasChanged();
         }
 
         // Reconectar el hub si se desconectó (server reiniciado, etc.)

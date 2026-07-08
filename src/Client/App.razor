@@ -1,32 +1,51 @@
-﻿@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
 @using Microsoft.AspNetCore.Components.WebAssembly.Authentication
-@inject IConfiguration Config
+@inject NavigationManager Navigation
 
 <CascadingAuthenticationState>
-    <Router AppAssembly="@typeof(App).Assembly" NotFoundPage="typeof(Pages.NotFound)">
+    <Router AppAssembly="@typeof(App).Assembly">
         <Found Context="routeData">
-            <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)">
-                <NotAuthorized>
-                    @if (context.User.Identity?.IsAuthenticated != true)
-                    {
-                        <RedirectToLogin />
-                    }
-                    else
-                    {
-                        <div class="empty-state" style="min-height:60vh;">
-                            <div class="empty-state-icon">🔒</div>
-                            <h3>Sin acceso</h3>
-                            <p>No tienes permisos para ver esta página.</p>
+            <AuthorizeView>
+                <Authorized>
+                    <!-- Usuario Autenticado: Renderiza la ruta solicitada en el layout del sistema (sidebar + topbar) -->
+                    <RouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)" />
+                </Authorized>
+                <Authorizing>
+                    <!-- Cargando sesión: Mostrar spinner en pantalla limpia -->
+                    <LayoutView Layout="@typeof(EmptyLayout)">
+                        <div class="loading" style="min-height:100vh;">
+                            <div class="spinner"></div> Verificando sesión...
                         </div>
+                    </LayoutView>
+                </Authorizing>
+                <NotAuthorized>
+                    @{
+                        var path = Navigation.ToBaseRelativePath(Navigation.Uri).ToLowerInvariant();
+                        if (path.StartsWith("authentication"))
+                        {
+                            // Si es el flujo de login/logout/callback de MSAL, permite que renderice la vista de auth en pantalla limpia
+                            <RouteView RouteData="@routeData" DefaultLayout="@typeof(EmptyLayout)" />
+                        }
+                        else
+                        {
+                            // En cualquier otra URL no autenticada, muestra la Landing Page de bienvenida directamente con el maquetado limpio
+                            <LayoutView Layout="@typeof(EmptyLayout)">
+                                <TalentManagement.Client.Pages.Landing />
+                            </LayoutView>
+                        }
                     }
                 </NotAuthorized>
-                <Authorizing>
-                    <div class="loading" style="min-height:100vh;">
-                        <div class="spinner"></div> Verificando sesión...
-                    </div>
-                </Authorizing>
-            </AuthorizeRouteView>
+            </AuthorizeView>
             <FocusOnNavigate RouteData="@routeData" Selector="h1" />
         </Found>
+        <NotFound>
+            <LayoutView Layout="@typeof(MainLayout)">
+                <div class="empty-state" style="min-height:60vh;">
+                    <div class="empty-state-icon">❓</div>
+                    <h3>Página no encontrada</h3>
+                    <p>La página que buscas no existe o fue movida.</p>
+                </div>
+            </LayoutView>
+        </NotFound>
     </Router>
 </CascadingAuthenticationState>

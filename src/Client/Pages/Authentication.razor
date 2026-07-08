@@ -2,15 +2,109 @@
 @attribute [PageTitle("Autenticación")]
 @using Microsoft.AspNetCore.Components.WebAssembly.Authentication
 @attribute [AllowAnonymous]
+@inject NavigationManager Navigation
+@inject Microsoft.JSInterop.IJSRuntime JS
 
-<RemoteAuthenticatorView Action="@Action">
+<RemoteAuthenticatorView Action="@Action" OnLogInSucceeded="HandleLogInSuccess" OnLogOutSucceeded="HandleLogOutSuccess">
+    <LoggingIn>
+        <div class="loading" style="min-height:100vh;">
+            <div class="spinner"></div> Redirigiendo al proveedor de identidad...
+        </div>
+    </LoggingIn>
+    <CompletingLoggingIn>
+        <div class="loading" style="min-height:100vh;">
+            <div class="spinner"></div> Procesando credenciales...
+        </div>
+    </CompletingLoggingIn>
+    <LogOut>
+        <div class="loading" style="min-height:100vh;">
+            <div class="spinner"></div> Cerrando sesión...
+        </div>
+    </LogOut>
+    <CompletingLogOut>
+        <div class="loading" style="min-height:100vh;">
+            <div class="spinner"></div> Procesando cierre de sesión...
+        </div>
+    </CompletingLogOut>
     <LogOutSucceeded>
         <div class="loading" style="min-height:100vh;">
             <div class="spinner"></div> Sesión cerrada. Redirigiendo...
         </div>
     </LogOutSucceeded>
+    <LogOutFailed>
+        <div class="loading" style="min-height:100vh; flex-direction: column; gap: 1.5rem; justify-content: center; align-items: center;">
+            <div class="spinner"></div>
+            <div style="text-align: center; max-width: 400px; padding: 0 1rem;">
+                <h3 style="margin-bottom: 0.5rem;">Cierre de sesión incompleto</h3>
+                <p style="color: var(--text-muted, #6b7280); font-size: 0.9rem; margin-bottom: 1.5rem;">
+                    No pudimos sincronizar el cierre de sesión con el proveedor externo, pero podemos limpiar tu sesión local.
+                </p>
+                <button class="btn btn-primary" @onclick="ForceLocalLogOut" style="width: 100%;">
+                    Forzar cierre de sesión local
+                </button>
+            </div>
+        </div>
+    </LogOutFailed>
 </RemoteAuthenticatorView>
 
 @code {
     [Parameter] public string? Action { get; set; }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var actionLower = Action?.ToLowerInvariant();
+
+        // Perro guardián (watchdog) de 4 segundos para evitar quedar colgado en cualquier pantalla de login/logout/callback
+        if (!string.IsNullOrEmpty(actionLower))
+        {
+            _ = Task.Delay(4000).ContinueWith(async _ =>
+            {
+                await InvokeAsync(() =>
+                {
+                    // Si después de 4 segundos seguimos en la pantalla de autenticación, forzar salida
+                    var currentPath = Navigation.ToBaseRelativePath(Navigation.Uri).ToLowerInvariant();
+                    if (currentPath.StartsWith("authentication"))
+                    {
+                        if (actionLower.Contains("logout") || actionLower.Contains("logged"))
+                        {
+                            ForceLocalLogOut();
+                        }
+                        else
+                        {
+                            // Si era login-callback o login, redirigir internamente por SPA
+                            Navigation.NavigateTo("/");
+                        }
+                    }
+                });
+            });
+        }
+    }
+
+    private void HandleLogInSuccess(RemoteAuthenticationState state)
+    {
+        // Redirigir internamente por SPA al iniciar sesión con éxito
+        Navigation.NavigateTo("/");
+    }
+
+    private void HandleLogOutSuccess(RemoteAuthenticationState state)
+    {
+        ForceLocalLogOut();
+    }
+
+    private async void ForceLocalLogOut()
+    {
+        try
+        {
+            // Borrar almacenamiento de tokens locales de MSAL para forzar desautenticación local
+            await JS.InvokeVoidAsync("sessionStorage.clear");
+            await JS.InvokeVoidAsync("localStorage.clear");
+        }
+        catch
+        {
+            // Fallback silencioso
+        }
+        
+        // Redirigir físicamente a la raíz
+        Navigation.NavigateTo("/", forceLoad: true);
+    }
 }

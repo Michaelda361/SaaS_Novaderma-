@@ -1,4 +1,4 @@
-﻿@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
 @using Microsoft.AspNetCore.Components.WebAssembly.Authentication
 @inject AuthInfoService AuthInfo
 @inject NavigationManager Navigation
@@ -19,9 +19,16 @@
     </NotAuthorized>
 </AuthorizeView>
 
+@inject SignOutSessionStateManager SignOutManager
+
 @code {
     private void Login() => Navigation.NavigateToLogin("authentication/login");
-    private void LogoutLocal() => Navigation.NavigateToLogout("authentication/logout", "landing");
+    private async Task LogoutLocal()
+    {
+        AuthInfo.Invalidar();
+        await SignOutManager.SetSignOutState();
+        Navigation.NavigateTo("authentication/logout");
+    }
 
     protected override async Task OnInitializedAsync()
     {

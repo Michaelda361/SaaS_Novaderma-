@@ -90,7 +90,10 @@ public class NotificacionesService : IAsyncDisposable
             {
                 options.AccessTokenProvider = async () =>
                 {
-                    var tokenProvider = _serviceProvider.GetRequiredService<IAccessTokenProvider>();
+                    using var scope = _serviceProvider.CreateScope();
+                    var tokenProvider = scope.ServiceProvider.GetService<IAccessTokenProvider>();
+                    if (tokenProvider is null) return null;
+
                     var tokenResult = await tokenProvider.RequestAccessToken();
                     if (tokenResult.TryGetToken(out var token))
                     {

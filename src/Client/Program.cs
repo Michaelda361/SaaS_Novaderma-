@@ -9,9 +9,9 @@ var builder = WebAssemblyHostBuilder.CreateDefault(args);
 builder.RootComponents.Add<App>("#app");
 builder.RootComponents.Add<HeadOutlet>("head::after");
 
-// MSAL o Mock en desarrollo/pruebas
-var authority = builder.Configuration["AzureAd:Authority"] ?? string.Empty;
-bool bypassAuth = authority.Contains("REEMPLAZA_CON_TU_TENANT_ID") || builder.Configuration.GetValue<bool>("BypassAuth");
+// Solo usar Mock si se indica explícitamente en config (SOLO desarrollo local sin Azure)
+// En producción, BypassAuth NUNCA debe ser true
+bool bypassAuth = builder.Configuration.GetValue<bool>("BypassAuth");
 
 if (bypassAuth)
 {

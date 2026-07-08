@@ -14,13 +14,18 @@ namespace TalentManagement.Infrastructure.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            // SolicitudDocumento hereda BaseEntity — agregar columna Activo
-            migrationBuilder.AddColumn<bool>(
-                name: "Activo",
-                table: "SolicitudesDocumento",
-                type: "bit",
-                nullable: false,
-                defaultValue: true);
+            // SolicitudDocumento hereda BaseEntity — agregar columna Activo condicionalmente
+            migrationBuilder.Sql(@"
+                IF NOT EXISTS (
+                    SELECT 1 
+                    FROM sys.columns 
+                    WHERE object_id = OBJECT_ID('SolicitudesDocumento') 
+                      AND name = 'Activo'
+                )
+                BEGIN
+                    ALTER TABLE [SolicitudesDocumento] ADD [Activo] bit NOT NULL DEFAULT CAST(1 AS bit);
+                END
+            ");
 
             // TipoPlantilla cambia de nvarchar a string enum (ya era nvarchar, solo renombrar valores)
             // Los valores existentes "html"/"docx" se mapean a "Html"/"Docx"
@@ -37,9 +42,17 @@ namespace TalentManagement.Infrastructure.Migrations
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropColumn(
-                name: "Activo",
-                table: "SolicitudesDocumento");
+            migrationBuilder.Sql(@"
+                IF EXISTS (
+                    SELECT 1 
+                    FROM sys.columns 
+                    WHERE object_id = OBJECT_ID('SolicitudesDocumento') 
+                      AND name = 'Activo'
+                )
+                BEGIN
+                    ALTER TABLE [SolicitudesDocumento] DROP COLUMN [Activo];
+                END
+            ");
 
             migrationBuilder.Sql(@"
                 UPDATE PlantillasDocumento
