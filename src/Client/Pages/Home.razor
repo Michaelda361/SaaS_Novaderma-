@@ -1,13 +1,17 @@
 @page "/"
 @attribute [PageTitle("Dashboard")]
-@attribute [Authorize]
+@attribute [AllowAnonymous]
 @inject ColaboradorApiService ColaboradorSvc
 @inject CapacitacionApiService CapacitacionSvc
 @inject CertificadoApiService CertificadoSvc
 @inject AreaApiService AreaSvc
 @inject InscripcionApiService InscripcionSvc
 @inject AuthInfoService AuthInfo
+@inject NavigationManager Navigation
 
+
+@if (AuthInfo.EsColaborador)
+{
 <!-- Welcome banner -->
 <div class="welcome-banner">
     <div class="welcome-text">
@@ -468,6 +472,60 @@ else
         </div>
     }
 } @* fin else admin/jefe *@
+}
+else
+{
+    <div class="landing-page">
+        <div class="landing-card">
+            <div class="landing-logo">
+                <div class="landing-logo-icon">
+                    <img src="logo.png" alt="NovaHub" class="landing-logo-img" />
+                </div>
+                <div class="landing-logo-text">
+                    <h1>NovaHub</h1>
+                    <span>Gestión de Talento y Capacitación</span>
+                </div>
+            </div>
+
+            <div class="landing-body">
+                <h2>Bienvenido</h2>
+                <p>Gestiona tu equipo, capacitaciones y certificaciones desde un solo lugar.</p>
+
+                <div class="landing-features">
+                    <div class="landing-feature">
+                        <span class="landing-feature-icon">👥</span>
+                        <span>Gestión de colaboradores</span>
+                    </div>
+                    <div class="landing-feature">
+                        <span class="landing-feature-icon">📚</span>
+                        <span>Capacitaciones y cursos</span>
+                    </div>
+                    <div class="landing-feature">
+                        <span class="landing-feature-icon">🏆</span>
+                        <span>Seguimiento de certificados</span>
+                    </div>
+                    <div class="landing-feature">
+                        <span class="landing-feature-icon">⚠️</span>
+                        <span>Alertas de vencimiento</span>
+                    </div>
+                </div>
+
+                <button class="btn btn-primary landing-btn" @onclick="Login">
+                    <span>Iniciar sesión con Microsoft</span>
+                    <span class="landing-btn-icon">→</span>
+                </button>
+
+                <p class="landing-hint">Usa tu cuenta corporativa de Microsoft 365</p>
+            </div>
+        </div>
+
+        <div class="landing-bg">
+            <div class="landing-bg-circle c1"></div>
+            <div class="landing-bg-circle c2"></div>
+            <div class="landing-bg-circle c3"></div>
+        </div>
+    </div>
+}
 
 @code {
     private bool cargando = true;
@@ -487,6 +545,12 @@ else
     protected override async Task OnInitializedAsync()
     {
         await AuthInfo.LoadAsync();
+
+        if (!AuthInfo.EsColaborador)
+        {
+            cargando = false;
+            return;
+        }
 
         if (AuthInfo.EsSoloColaborador && AuthInfo.ColaboradorId.HasValue)
         {
@@ -523,4 +587,6 @@ else
 
     private static string Iniciales2(string nombre, string apellido) =>
         $"{(nombre.Length > 0 ? nombre[0] : '?')}{(apellido.Length > 0 ? apellido[0] : '?')}".ToUpper();
+
+    private void Login() => Navigation.NavigateToLogin("authentication/login");
 }
