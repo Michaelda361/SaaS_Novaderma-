@@ -185,8 +185,6 @@
                                         <td>@GetResponsableAsignado(solicitud)</td>
                                         <td>
                                             <div class="flex gap-1 flex-wrap">
-                                                <button class="btn btn-secondary btn-sm" @onclick="() => AbrirSolicitudDetalles(solicitud)">🔎 Ver detalle</button>
-                                                <button class="btn btn-secondary btn-sm" @onclick="() => AbrirSolicitudDetallesConDiff(solicitud)">📊 Ver cambios</button>
                                                 @if (solicitud.EstadoPropuesta == "PendienteRevision")
                                                 {
                                                     <button class="btn btn-primary btn-sm" @onclick="() => IniciarRevision(solicitud.Id)">Iniciar revisión</button>
@@ -1392,7 +1390,7 @@
                     }
                     else if (selectedSolicitudDetalle.EstadoPropuesta == "PendienteAprobacion")
                     {
-                        <button class="btn btn-success" @onclick="() => AbrirAprobarSolicitud(selectedSolicitudDetalle)">Aprobar</button>
+                        <button class="btn btn-success" @onclick="async () => await AbrirAprobarSolicitud(selectedSolicitudDetalle)">Aprobar</button>
                         <button class="btn btn-danger" @onclick="() => AbrirRechazarSolicitud(selectedSolicitudDetalle)">Rechazar</button>
                     }
                 </div>
@@ -1404,17 +1402,53 @@
 @if (showApproveModal)
 {
     <div class="modal-backdrop" @onclick="() => showApproveModal = false">
-        <div class="modal" @onclick:stopPropagation>
+        <div class="modal large" @onclick:stopPropagation style="max-width: 800px; width: 90%;">
             <div class="modal-header">
                 <span class="modal-title">Aprobar y publicar solicitud de cambio</span>
                 <button class="btn btn-ghost btn-sm btn-icon" @onclick="() => showApproveModal = false">✕</button>
             </div>
-            <div class="modal-body">
-                <div class="form-group">
-                    <label>Comentarios de aprobación (opcional)</label>
-                    <textarea class="form-control" @bind="approvalComments" rows="4" placeholder="Ingresa comentarios sobre la aprobación de estos cambios..."></textarea>
+            <div class="modal-body" style="max-height: 65vh; overflow-y: auto;">
+                
+                <h4 style="margin-top: 0; margin-bottom: 0.5rem; font-weight: 600;">Diferencias detectadas</h4>
+                <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1rem;">Solo se muestran los campos modificados desde la versión vigente del documento:</p>
+
+                <div class="diff-viewer" style="margin-bottom:1.5rem; border:1px solid var(--border); border-radius:6px; overflow:hidden;">
+                    @if (!currentDiffs.Any())
+                    {
+                        <div style="padding:1.5rem; text-align:center; color:var(--text-muted); background: var(--bg-muted);">
+                            No hay diferencias detectadas entre la versión vigente y los datos propuestos.
+                        </div>
+                    }
+                    else
+                    {
+                        <table style="width:100%; border-collapse:collapse; font-size:0.9rem;">
+                            <thead>
+                                <tr style="background:var(--bg-muted); border-bottom:1px solid var(--border);">
+                                    <th style="padding:0.75rem; text-align:left; width:25%; font-weight:600;">Campo</th>
+                                    <th style="padding:0.75rem; text-align:left; width:37.5%; font-weight:600;">Valor Vigente Anterior</th>
+                                    <th style="padding:0.75rem; text-align:left; width:37.5%; font-weight:600;">Valor Propuesto</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var diff in currentDiffs)
+                                {
+                                    <tr style="border-bottom:1px solid var(--border);">
+                                        <td style="padding:0.75rem; font-weight:500; border-right:1px solid var(--border);">@diff.Name</td>
+                                        <td style="padding:0.75rem; background-color:#fee2e2; color:#991b1b; border-right:1px solid var(--border);">@diff.OriginalValue</td>
+                                        <td style="padding:0.75rem; background-color:#dcfce7; color:#166534; font-weight:500;">@diff.ProposedValue</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
                 </div>
-                <div class="alert alert-success" style="margin-top:1rem; font-size:0.9rem;">
+
+                <div class="form-group">
+                    <label style="font-weight: 600; display: block; margin-bottom: 0.25rem;">Comentarios de aprobación (opcional)</label>
+                    <textarea class="form-control" @bind="approvalComments" rows="3" placeholder="Ingresa comentarios sobre la aprobación de estos cambios..."></textarea>
+                </div>
+                
+                <div class="alert alert-success" style="margin-top:1rem; font-size:0.9rem; margin-bottom:0;">
                     <strong>📢 Publicación automática:</strong> Al confirmar, esta solicitud se marcará como <strong>Publicada</strong>, la versión anterior se convertirá en <strong>Histórica</strong> y el borrador actual pasará a ser la versión oficial <strong>Vigente</strong>.
                 </div>
             </div>
@@ -2089,7 +2123,7 @@
         var sol = pendingSolicitudes.FirstOrDefault(s => s.Id == solicitudId);
         if (sol != null)
         {
-            AbrirAprobarSolicitud(sol);
+            await AbrirAprobarSolicitud(sol);
         }
         else
         {
@@ -2097,10 +2131,111 @@
         }
     }
 
-    private void AbrirAprobarSolicitud(SolicitudCambioDocumentoControlDto solicitud)
+    private async Task AbrirAprobarSolicitud(SolicitudCambioDocumentoControlDto solicitud)
     {
         solicitudSeleccionada = solicitud;
         approvalComments = string.Empty;
+        currentDiffs.Clear();
+
+        try
+        {
+            originalDocParaDiff = null;
+            if (!string.IsNullOrEmpty(solicitud.DatosOriginales))
+            {
+                try
+                {
+                    var origDto = System.Text.Json.JsonSerializer.Deserialize<TalentManagement.Shared.DTOs.ControlDocumental.DocumentoControlDto>(solicitud.DatosOriginales, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                    if (origDto != null)
+                    {
+                        originalDocParaDiff = new DocumentoControlDetalleDto
+                        {
+                            Id = origDto.Id,
+                            ListadoMaestroId = origDto.ListadoMaestroId,
+                            ListadoMaestroNombre = origDto.ListadoMaestroNombre,
+                            Codigo = origDto.Codigo,
+                            Nombre = origDto.Nombre,
+                            ProcesoResponsable = origDto.ProcesoResponsable,
+                            Version = origDto.Version,
+                            FechaDocumento = origDto.FechaDocumento,
+                            OneDriveUrl = origDto.OneDriveUrl,
+                            Estado = origDto.Estado,
+                            AreaId = origDto.AreaId,
+                            AreaNombre = origDto.AreaNombre,
+                            Uso = origDto.Uso,
+                            TiempoRetencion = origDto.TiempoRetencion,
+                            Proteccion = origDto.Proteccion,
+                            Recuperacion = origDto.Recuperacion,
+                            DisposicionFinal = origDto.DisposicionFinal,
+                            Observaciones = origDto.Observaciones,
+                            ComentarioCambio = origDto.ComentarioCambio,
+                            ArchivoNombre = origDto.ArchivoNombre,
+                            CamposPersonalizados = origDto.CamposPersonalizados ?? new Dictionary<string, string?>(),
+                            DocumentoOriginalId = origDto.DocumentoOriginalId,
+                            SolicitanteId = origDto.SolicitanteId,
+                            SolicitanteNombre = origDto.SolicitanteNombre,
+                            EditorId = origDto.EditorId,
+                            EditorNombre = origDto.EditorNombre,
+                            AprobadorId = origDto.AprobadorId,
+                            AprobadorNombre = origDto.AprobadorNombre,
+                            FechaPublicacion = origDto.FechaPublicacion,
+                            MotivoCambio = origDto.MotivoCambio,
+                            DescripcionDetallada = origDto.DescripcionDetallada
+                        };
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error deserializing original snapshot: {ex.Message}");
+                }
+            }
+
+            if (originalDocParaDiff == null)
+            {
+                originalDocParaDiff = await ControlDocumentalApi.GetDocumentoAsync(solicitud.DocumentoControlId);
+            }
+
+            if (originalDocParaDiff != null && !string.IsNullOrEmpty(solicitud.DatosPropuestos))
+            {
+                var propuesta = System.Text.Json.JsonSerializer.Deserialize<TalentManagement.Shared.DTOs.ControlDocumental.UpdateDocumentoControlDto>(solicitud.DatosPropuestos, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                if (propuesta != null)
+                {
+                    AddDiffIfChanged("Código", originalDocParaDiff.Codigo, propuesta.Codigo);
+                    AddDiffIfChanged("Nombre", originalDocParaDiff.Nombre, propuesta.Nombre);
+                    AddDiffIfChanged("Proceso responsable", originalDocParaDiff.ProcesoResponsable, propuesta.ProcesoResponsable);
+                    AddDiffIfChanged("Versión", originalDocParaDiff.Version, propuesta.Version);
+                    AddDiffIfChanged("Fecha documento", originalDocParaDiff.FechaDocumento.ToLocalTime().ToString("d"), propuesta.FechaDocumento.ToLocalTime().ToString("d"));
+                    AddDiffIfChanged("OneDrive URL", originalDocParaDiff.OneDriveUrl, propuesta.OneDriveUrl);
+                    AddDiffIfChanged("Nombre de archivo", originalDocParaDiff.ArchivoNombre ?? "—", propuesta.ArchivoNombre ?? "—");
+                    AddDiffIfChanged("Uso", originalDocParaDiff.Uso ?? "—", propuesta.Uso ?? "—");
+                    AddDiffIfChanged("Tiempo de retención", originalDocParaDiff.TiempoRetencion ?? "—", propuesta.TiempoRetencion ?? "—");
+                    AddDiffIfChanged("Protección", originalDocParaDiff.Proteccion ?? "—", propuesta.Proteccion ?? "—");
+                    AddDiffIfChanged("Recuperación", originalDocParaDiff.Recuperacion ?? "—", propuesta.Recuperacion ?? "—");
+                    AddDiffIfChanged("Disposición final", originalDocParaDiff.DisposicionFinal ?? "—", propuesta.DisposicionFinal ?? "—");
+                    AddDiffIfChanged("Observaciones", originalDocParaDiff.Observaciones ?? "—", propuesta.Observaciones ?? "—");
+                    AddDiffIfChanged("Comentario de cambio", originalDocParaDiff.ComentarioCambio ?? "—", propuesta.ComentarioCambio ?? "—");
+
+                    var origArea = areas.FirstOrDefault(a => a.Id == originalDocParaDiff.AreaId)?.Nombre ?? "—";
+                    var propArea = areas.FirstOrDefault(a => a.Id == propuesta.AreaId)?.Nombre ?? "—";
+                    AddDiffIfChanged("Área", origArea, propArea);
+
+                    var origKeys = originalDocParaDiff.CamposPersonalizados?.Keys ?? Enumerable.Empty<string>();
+                    var propKeys = propuesta.CamposPersonalizados?.Keys ?? Enumerable.Empty<string>();
+                    var allKeys = origKeys.Union(propKeys).Distinct();
+
+                    foreach (var key in allKeys)
+                    {
+                        originalDocParaDiff.CamposPersonalizados.TryGetValue(key, out var origVal);
+                        propuesta.CamposPersonalizados.TryGetValue(key, out var propVal);
+                        AddDiffIfChanged(key, origVal ?? "—", propVal ?? "—");
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            await toast.Show($"Error al cargar diferencias de la propuesta: {ex.Message}", "error");
+        }
+
         showApproveModal = true;
     }
 

@@ -62,6 +62,7 @@ public static class DependencyInjection
         services.AddScoped<DocxToHtmlConverterService>();
         services.AddScoped<IExcelImportService, ExcelImportService>();
         services.AddScoped<IExcelExportService, ExcelExportService>();
+        services.AddScoped<IEmailService, EmailService>();
 
         // SharePoint / FileStorage / AuditExcel — mock en Development o si no están configurados, real en producción
         var env = configuration["ASPNETCORE_ENVIRONMENT"] ?? "Production";

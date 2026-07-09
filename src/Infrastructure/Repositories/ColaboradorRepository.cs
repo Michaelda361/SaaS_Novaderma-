@@ -11,7 +11,6 @@ public class ColaboradorRepository(AppDbContext context) : IColaboradorRepositor
         await context.Colaboradores
             .Include(c => c.Area)
             .Include(c => c.Cargo)
-            .Include(c => c.Supervisor)
             .AsNoTracking()
             .ToListAsync();
 
@@ -19,7 +18,6 @@ public class ColaboradorRepository(AppDbContext context) : IColaboradorRepositor
         await context.Colaboradores
             .Include(c => c.Area)
             .Include(c => c.Cargo)
-            .Include(c => c.Supervisor)
             .FirstOrDefaultAsync(c => c.Id == id);
 
     public async Task<Colaborador?> GetByEmailAsync(string email) =>
@@ -121,6 +119,7 @@ public class ColaboradorRepository(AppDbContext context) : IColaboradorRepositor
         if (colaborador is null) return;
         // Soft delete
         colaborador.Activo = false;
+        colaborador.FechaSalida = DateTime.Today;
         await context.SaveChangesAsync();
     }
 
@@ -146,6 +145,7 @@ public class ColaboradorRepository(AppDbContext context) : IColaboradorRepositor
             .FirstOrDefaultAsync(c => c.Id == id);
         if (colaborador is null) return;
         colaborador.Activo = true;
+        colaborador.FechaSalida = null;
         await context.SaveChangesAsync();
     }
 }

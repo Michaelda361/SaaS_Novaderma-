@@ -9,13 +9,22 @@ public class Colaborador : BaseEntity
     public string Nombre { get; set; } = string.Empty;
     public string Apellido { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
-    public string Telefono { get; set; } = string.Empty;
     public DateTime FechaIngreso { get; set; }
 
     public string? Cedula { get; set; }
+    public DateTime? FechaExpedicion { get; set; }
+    public DateTime? FechaNacimiento { get; set; }
+    public string? LugarNacimiento { get; set; }
+
     public string? TipoContrato { get; set; }
+    public DateTime? FechaIngresoContrato { get; set; }
     public decimal? SueldoBasico { get; set; }
-    public string? Ciudad { get; set; }
+    public decimal? SubTransporte { get; set; }
+    public decimal? AuxMediosTransporte { get; set; }
+    public decimal? AuxTransporte { get; set; }
+    public decimal? ComisionVentas { get; set; }
+    public decimal? ComisionCobros { get; set; }
+    public DateTime? FechaSalida { get; set; }
 
     /// <summary>Género para tratamiento en documentos (cartas laborales). Cargado por RRHH.</summary>
     public GeneroColaborador Genero { get; set; } = GeneroColaborador.NoInformado;
@@ -28,9 +37,6 @@ public class Colaborador : BaseEntity
 
     public int CargoId { get; set; }
     public Cargo Cargo { get; set; } = null!;
-
-    public int? SupervisorId { get; set; }
-    public Colaborador? Supervisor { get; set; }
 
     [JsonIgnore]
     public ICollection<Certificado> Certificados { get; set; } = [];

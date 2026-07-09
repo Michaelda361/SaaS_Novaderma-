@@ -393,8 +393,9 @@ else
                             @if (usada) { <span class="variable-usada-badge">✓ en uso</span> }
                         </div>
                     }
-                    @if (camposFicha != null)
+                    @if (camposFicha != null && camposFicha.Any())
                     {
+                        <div style="margin-top:1rem; font-weight:600; color: var(--text);">Campos de la ficha del colaborador</div>
                         @foreach (var campo in camposFicha)
                         {
                             var key = "{{" + campo.CampoClave + "}}";
@@ -1253,25 +1254,14 @@ else
                 s.ColaboradorNombre.Contains(filtroHistorial, StringComparison.OrdinalIgnoreCase) ||
                 s.PlantillaNombre.Contains(filtroHistorial, StringComparison.OrdinalIgnoreCase));
 
-    private static readonly Dictionary<string, string> Variables = new()
+    private static readonly Dictionary<string, string> Variables = PlantillaVariableCatalog.StandardDefinitions
+        .Where(x => !string.Equals(x.Key, "{{destinatario}}", StringComparison.OrdinalIgnoreCase))
+        .ToDictionary(x => x.Key, x => x.Value, StringComparer.OrdinalIgnoreCase);
+
+    static CartasLaboralesAdmin()
     {
-        ["{{nombre_completo}}"]  = "Nombre y apellido",
-        ["{{nombre}}"]           = "Nombre",
-        ["{{apellido}}"]         = "Apellido",
-        ["{{cedula}}"]           = "Cédula",
-        ["{{cargo}}"]            = "Cargo actual",
-        ["{{area}}"]             = "Área / departamento",
-        ["{{fecha_ingreso}}"]    = "Fecha de ingreso",
-        ["{{tipo_contrato}}"]    = "Tipo de contrato",
-        ["{{sueldo_basico}}"]    = "Sueldo básico",
-        ["{{ciudad}}"]           = "Ciudad",
-        ["{{fecha_expedicion}}"] = "Fecha de hoy",
-        ["{{fecha_actual}}"]     = "Fecha actual (dd/MM/yyyy)",
-        ["{{nombre_firmante}}"]  = "Nombre del firmante",
-        ["{{cargo_firmante}}"]   = "Cargo del firmante",
-        ["{{destinatario}}"]     = "Destinatario (solo si está en «campos editables» — lo escribe el colaborador)",
-        ["{{genero}}"]           = "Tratamiento según género RRHH (el señor / la señora / neutro) — automático, no editable",
-    };
+        Variables["{{destinatario}}"] = "Destinatario (solo si está en «campos editables» — lo escribe el colaborador)";
+    }
 
     private static readonly Dictionary<string, string> VariablesEditablesOpciones = new()
     {

@@ -35,16 +35,22 @@ public class ColaboradorService(IColaboradorRepository repository)
             Nombre = dto.Nombre,
             Apellido = dto.Apellido,
             Email = dto.Email,
-            Telefono = dto.Telefono,
             FechaIngreso = dto.FechaIngreso,
             Cedula = dto.Cedula,
+            FechaExpedicion = dto.FechaExpedicion,
+            FechaNacimiento = dto.FechaNacimiento,
+            LugarNacimiento = dto.LugarNacimiento,
             TipoContrato = dto.TipoContrato,
+            FechaIngresoContrato = dto.FechaIngresoContrato,
             SueldoBasico = dto.SueldoBasico,
-            Ciudad = dto.Ciudad,
+            SubTransporte = dto.SubTransporte,
+            AuxMediosTransporte = dto.AuxMediosTransporte,
+            AuxTransporte = dto.AuxTransporte,
+            ComisionVentas = dto.ComisionVentas,
+            ComisionCobros = dto.ComisionCobros,
             Genero = ParseGenero(dto.Genero),
             AreaId = dto.AreaId,
-            CargoId = dto.CargoId,
-            SupervisorId = dto.SupervisorId
+            CargoId = dto.CargoId
         };
 
         var created = await repository.CreateAsync(colaborador);
@@ -72,11 +78,18 @@ public class ColaboradorService(IColaboradorRepository repository)
         colaborador.Nombre = dto.Nombre;
         colaborador.Apellido = dto.Apellido;
         colaborador.Email = dto.Email;
-        colaborador.Telefono = dto.Telefono;
         colaborador.Cedula = dto.Cedula;
+        colaborador.FechaExpedicion = dto.FechaExpedicion;
+        colaborador.FechaNacimiento = dto.FechaNacimiento;
+        colaborador.LugarNacimiento = dto.LugarNacimiento;
         colaborador.TipoContrato = dto.TipoContrato;
+        colaborador.FechaIngresoContrato = dto.FechaIngresoContrato;
         colaborador.SueldoBasico = dto.SueldoBasico;
-        colaborador.Ciudad = dto.Ciudad;
+        colaborador.SubTransporte = dto.SubTransporte;
+        colaborador.AuxMediosTransporte = dto.AuxMediosTransporte;
+        colaborador.AuxTransporte = dto.AuxTransporte;
+        colaborador.ComisionVentas = dto.ComisionVentas;
+        colaborador.ComisionCobros = dto.ComisionCobros;
         colaborador.Genero = ParseGenero(dto.Genero);
         if (colaborador.AreaId != dto.AreaId)
         {
@@ -88,7 +101,6 @@ public class ColaboradorService(IColaboradorRepository repository)
             colaborador.CargoId = dto.CargoId;
             colaborador.Cargo = null!;
         }
-        colaborador.SupervisorId = dto.SupervisorId;
 
         var updated = await repository.UpdateAsync(colaborador);
         if (dto.CamposAdicionales is not null)
@@ -142,18 +154,24 @@ public class ColaboradorService(IColaboradorRepository repository)
         Nombre = c.Nombre,
         Apellido = c.Apellido,
         Email = c.Email,
-        Telefono = c.Telefono,
         FechaIngreso = c.FechaIngreso,
         Cedula = c.Cedula,
+        FechaExpedicion = c.FechaExpedicion,
+        FechaNacimiento = c.FechaNacimiento,
+        LugarNacimiento = c.LugarNacimiento,
         TipoContrato = c.TipoContrato,
+        FechaIngresoContrato = c.FechaIngresoContrato,
         SueldoBasico = c.SueldoBasico,
-        Ciudad = c.Ciudad,
+        SubTransporte = c.SubTransporte,
+        AuxMediosTransporte = c.AuxMediosTransporte,
+        AuxTransporte = c.AuxTransporte,
+        ComisionVentas = c.ComisionVentas,
+        ComisionCobros = c.ComisionCobros,
+        FechaSalida = c.FechaSalida,
         AreaNombre = c.Area?.Nombre ?? string.Empty,
         AreaId = c.AreaId,
         CargoNombre = c.Cargo?.Nombre ?? string.Empty,
         CargoId = c.CargoId,
-        SupervisorId = c.SupervisorId,
-        SupervisorNombre = c.Supervisor is null ? null : $"{c.Supervisor.Nombre} {c.Supervisor.Apellido}",
         Rol = c.Rol.ToString(),
         Genero = c.Genero.ToString(),
         CamposAdicionales = new Dictionary<string, string?>()

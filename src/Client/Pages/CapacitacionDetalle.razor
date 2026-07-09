@@ -559,7 +559,7 @@
                         </label>
                         <input class="form-control" style="margin-top:.35rem;"
                                @bind="certForm.PlantillaNombreCertificado"
-                               placeholder="Ej: Certificado de {{capacitacion}} — {{nombre_completo}}" />
+                               placeholder="Ej: Certificado aprobado el {{fecha_aprobacion}}" />
                     </div>
 
                     <div>
@@ -614,7 +614,9 @@
                             }
 
                             <p class="text-xs text-muted" style="margin-top:.6rem; margin-bottom: 0;">
-                                Sube un archivo .pptx con variables {{nombre_completo}}, {{cargo}}, {{capacitacion}}, etc.
+                                Sube un archivo .pptx con variables como {{email}}, {{id}}, {{genero}} y {{fecha_aprobacion}}.
+                                También puedes usar cualquier campo de la ficha del colaborador que aparece en la lista de variables.
+                                Las variables de firma digital {{firma_imagen}} y {{firma_imagen_base64}} solo aplican si cargas una firma PNG.
                             </p>
                             <div style="margin-top:.5rem;padding:.5rem .75rem;font-size:.8rem;background-color:rgba(13, 202, 240, 0.08);border:1px solid rgba(13, 202, 240, 0.2);border-radius:4px;color:#055160;line-height:1.4;">
                                 💡 <strong>Nota:</strong> Los certificados se descargarán automáticamente en formato <strong>PDF</strong>. El servidor procesará la plantilla .pptx reemplazando las variables y generando el PDF para el colaborador.
@@ -734,8 +736,9 @@
                                     <button type="button" class="btn btn-ghost btn-sm" @onclick="() => CopiarAlPortapapeles(v)" style="font-size: 0.7rem; padding: 0.1rem 0.25rem;" title="Copiar">📋</button>
                                 </div>
                             }
-                            @if (camposFicha != null)
+                            @if (camposFicha != null && camposFicha.Any())
                             {
+                                <div style="margin-top:0.5rem; margin-bottom:0.4rem; font-size:0.78rem; font-weight:600; color: var(--text);">Campos de la ficha del colaborador</div>
                                 @foreach (var campo in camposFicha)
                                 {
                                     var v = "{{" + campo.CampoClave + "}}";
@@ -1430,25 +1433,9 @@
     private List<ColaboradorCampoDto> camposFicha = [];
     private string? previewCertificadoBase64Temp = null;
 
-    private static readonly Dictionary<string, string> VariablesListadoFriendly = new()
-    {
-        ["{{nombre_completo}}"]  = "Nombre completo",
-        ["{{nombre}}"]           = "Nombre",
-        ["{{apellido}}"]         = "Apellido",
-        ["{{cedula}}"]           = "Cédula",
-        ["{{cargo}}"]            = "Cargo actual",
-        ["{{area}}"]             = "Área / departamento",
-        ["{{fecha_ingreso}}"]    = "Fecha de ingreso",
-        ["{{tipo_contrato}}"]    = "Tipo de contrato",
-        ["{{sueldo_basico}}"]    = "Sueldo básico",
-        ["{{ciudad}}"]           = "Ciudad",
-        ["{{fecha_emision}}"]    = "Fecha de emisión (dd/MM/yyyy)",
-        ["{{fecha_expedicion}}"] = "Fecha de emisión (larga)",
-        ["{{fecha_actual}}"]     = "Fecha de hoy",
-        ["{{genero}}"]           = "Tratamiento de género",
-        ["{{capacitacion}}"]     = "Nombre de la capacitación",
-        ["{{puntaje}}"]          = "Calificación obtenida"
-    };
+    private static readonly Dictionary<string, string> VariablesListadoFriendly = PlantillaVariableCatalog.StandardDefinitions
+        .Where(x => !string.Equals(x.Key, "{{destinatario}}", StringComparison.OrdinalIgnoreCase))
+        .ToDictionary(x => x.Key, x => x.Value, StringComparer.OrdinalIgnoreCase);
 
     private async Task CargarCapacitacionesConPlantilla()
     {

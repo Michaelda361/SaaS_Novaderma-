@@ -254,10 +254,6 @@ else
                             <ValidationMessage For="() => formColaborador.Email" class="validation-message" />
                         </div>
                         <div class="form-group">
-                            <label>Teléfono</label>
-                            <InputText @bind-Value="formColaborador.Telefono" placeholder="+57 300 000 0000" />
-                        </div>
-                        <div class="form-group">
                             <label>Fecha de ingreso</label>
                             <InputDate @bind-Value="formColaborador.FechaIngreso" />
                         </div>
@@ -422,7 +418,7 @@ else
                 new UpdateColaboradorDto
                 {
                     Nombre = formColaborador.Nombre, Apellido = formColaborador.Apellido,
-                    Email = formColaborador.Email, Telefono = formColaborador.Telefono,
+                    Email = formColaborador.Email,
                     AreaId = Id, CargoId = formColaborador.CargoId,
                     Genero = formColaborador.Genero,
                 })

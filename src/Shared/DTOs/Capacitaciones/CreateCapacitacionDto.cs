@@ -28,8 +28,8 @@ public class CreateCapacitacionDto
     public string? NombreCertificado { get; set; }
 
     /// <summary>
-    /// Plantilla con variables: {{nombre_completo}}, {{cargo}}, {{area}},
-    /// {{capacitacion}}, {{fecha_emision}}, {{puntaje}}.
+    /// Plantilla con variables estándar: {{email}}, {{id}}, {{cedula}}, {{genero}}, {{fecha_aprobacion}},
+    /// {{firma_imagen}} y {{firma_imagen_base64}}.
     /// Tiene prioridad sobre NombreCertificado si está definida.
     /// </summary>
     public string? PlantillaNombreCertificado { get; set; }

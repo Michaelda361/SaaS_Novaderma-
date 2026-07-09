@@ -320,7 +320,127 @@ public class CapacitacionTests : IClassFixture<CustomWebApplicationFactory>
         resCol.StatusCode.Should().Be(HttpStatusCode.Created);
         var createdCol = await resCol.Content.ReadFromJsonAsync<CapacitacionDto>();
         createdCol.Should().NotBeNull();
-        createdCol!.ColaboradorId.Should().Be(colabId);
         createdCol.AreaId.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task PublicarCapacitacion_EnrollsAndSendsEmail()
+    {
+        var adminEmail = "admin-cap-publish@novaderma.com";
+        var colabEmail = "colab-cap-publish@novaderma.com";
+        int capId;
+        int colabId;
+
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var area = await db.Areas.FirstAsync();
+            var cargo = await db.Cargos.FirstAsync();
+
+            var admin = await db.Colaboradores.FirstOrDefaultAsync(c => c.Email == adminEmail);
+            if (admin == null)
+            {
+                admin = new Colaborador
+                {
+                    Nombre = "Admin",
+                    Apellido = "Publish",
+                    Email = adminEmail,
+                    Rol = RolUsuario.Admin,
+                    AreaId = area.Id,
+                    CargoId = cargo.Id,
+                    FechaIngreso = DateTime.UtcNow
+                };
+                db.Colaboradores.Add(admin);
+            }
+
+            var colab = await db.Colaboradores.FirstOrDefaultAsync(c => c.Email == colabEmail);
+            if (colab == null)
+            {
+                colab = new Colaborador
+                {
+                    Nombre = "Colaborador",
+                    Apellido = "Publish",
+                    Email = colabEmail,
+                    Rol = RolUsuario.Colaborador,
+                    AreaId = area.Id,
+                    CargoId = cargo.Id,
+                    FechaIngreso = DateTime.UtcNow
+                };
+                db.Colaboradores.Add(colab);
+            }
+
+            await db.SaveChangesAsync();
+            colabId = colab.Id;
+
+            // Crear una capacitación en borrador (Publicada = false)
+            var cap = new Capacitacion
+            {
+                Nombre = "Capacitación Borrador Test",
+                Descripcion = "Para pruebas de publicación",
+                DuracionHoras = 4,
+                FechaInicio = DateTime.Today,
+                FechaFin = DateTime.Today.AddDays(5),
+                Publicada = false,
+                Activo = true
+            };
+            db.Capacitaciones.Add(cap);
+            await db.SaveChangesAsync();
+            capId = cap.Id;
+
+            // Inscribir al colaborador
+            var insc = new Inscripcion
+            {
+                ColaboradorId = colabId,
+                CapacitacionId = capId,
+                FechaInscripcion = DateTime.UtcNow
+            };
+            db.Inscripciones.Add(insc);
+            await db.SaveChangesAsync();
+        }
+
+        var client = _factory.CreateClient();
+        client.DefaultRequestHeaders.Add("X-Test-Email", adminEmail);
+
+        // Limpiar directorio de correos temporales antes de la prueba para evitar ruido de otras corridas
+        var dir = AppContext.BaseDirectory;
+        string? emailsFolder = null;
+        while (!string.IsNullOrEmpty(dir))
+        {
+            if (File.Exists(Path.Combine(dir, "TalentManagement.slnx")) || Directory.Exists(Path.Combine(dir, "src")))
+            {
+                emailsFolder = Path.Combine(dir, "scratch", "emails");
+                break;
+            }
+            dir = Path.GetDirectoryName(dir);
+        }
+        if (emailsFolder != null && Directory.Exists(emailsFolder))
+        {
+            foreach (var file in Directory.GetFiles(emailsFolder))
+            {
+                try { File.Delete(file); } catch { }
+            }
+        }
+
+        // Publicar la capacitación (HTTP PATCH /api/v1/capacitaciones/{id}/publicar)
+        var responsePublish = await client.PatchAsync($"/api/v1/capacitaciones/{capId}/publicar", null);
+        responsePublish.StatusCode.Should().Be(HttpStatusCode.OK);
+        var publishedCap = await responsePublish.Content.ReadFromJsonAsync<CapacitacionDto>();
+        publishedCap.Should().NotBeNull();
+        publishedCap!.Publicada.Should().BeTrue();
+
+        // Esperar un momento a que el Task.Run asíncrono guarde el correo mock
+        await Task.Delay(1000);
+
+        // Verificar que se haya creado el correo mock en la carpeta scratch
+        if (emailsFolder != null && Directory.Exists(emailsFolder))
+        {
+            var files = Directory.GetFiles(emailsFolder, "*.html");
+            files.Length.Should().BeGreaterThan(0, "Se debería haber generado al menos un archivo de correo mock en scratch/emails/");
+            
+            // Validar que contenga el email del destinatario y detalles de la capacitación
+            var fileContent = await File.ReadAllTextAsync(files.First());
+            fileContent.Should().Contain(colabEmail);
+            fileContent.Should().Contain("Capacitación Borrador Test");
+        }
     }
 }

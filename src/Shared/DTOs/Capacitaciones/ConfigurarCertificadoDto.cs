@@ -9,15 +9,15 @@ public class ConfigurarCertificadoDto
     public bool EmiteCertificado { get; set; }
 
     /// <summary>
-    /// Plantilla del nombre con variables:
-    /// {{nombre_completo}}, {{cargo}}, {{area}}, {{capacitacion}}, {{fecha_emision}}, {{puntaje}}
+    /// Plantilla del nombre con variables estándar:
+    /// {{email}}, {{id}}, {{cedula}}, {{genero}}, {{fecha_aprobacion}}, {{firma_imagen}} y {{firma_imagen_base64}}
     /// Si vacío, se usa el nombre de la capacitación.
     /// </summary>
     public string? PlantillaNombreCertificado { get; set; }
 
     /// <summary>
     /// Archivo DOCX, PPTX o PDF en Base64. Si se envía, se guarda como plantilla del certificado.
-    /// Soporta las mismas variables que PlantillaNombreCertificado.
+    /// Soporta las mismas variables que PlantillaNombreCertificado y variables adicionales definidas en la plantilla.
     /// </summary>
     public string? ArchivoDocxBase64 { get; set; }
 

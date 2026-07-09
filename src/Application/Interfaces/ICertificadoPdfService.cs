@@ -7,8 +7,9 @@ public interface ICertificadoPdfService
 {
     /// <summary>
     /// Aplica las variables al archivo de plantilla (DOCX o PPTX) y genera un PDF.
-    /// Variables soportadas: {{nombre_completo}}, {{cargo}}, {{area}},
-    /// {{capacitacion}}, {{fecha_emision}}, {{puntaje}}.
+    /// Variables estándar: {{email}}, {{id}}, {{cedula}}, {{genero}}, {{fecha_aprobacion}},
+    /// {{firma_imagen}} y {{firma_imagen_base64}}.
+    /// Admite además variables adicionales definidas por la plantilla.
     /// </summary>
     /// <param name="archivoBytes">Bytes del archivo DOCX o PPTX.</param>
     /// <param name="variables">Variables a reemplazar en el documento.</param>
@@ -28,4 +29,4 @@ public interface ICertificadoPdfService
     /// </summary>
     byte[]? GenerarPreviewCertificado(byte[] archivoBytes);
 }
-
+

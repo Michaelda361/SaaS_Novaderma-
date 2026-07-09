@@ -510,7 +510,7 @@ public class PdfGeneratorService(LibreOfficeConverterService libreOffice)
     }
 
     /// <summary>
-    /// Word a veces fragmenta una variable en múltiples runs (ej: {{nombre}} → {{, nombre, }}).
+    /// Word a veces fragmenta una variable en múltiples runs (ej: {{email}} → {{, email, }}).
     /// Este método consolida runs consecutivos con el mismo formato para que el reemplazo funcione.
     /// </summary>
     private static void ConsolidarRuns(Body body)

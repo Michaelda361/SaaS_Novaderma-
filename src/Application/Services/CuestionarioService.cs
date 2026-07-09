@@ -480,46 +480,7 @@ public class CuestionarioService(
     private static Dictionary<string, string> ConstruirVariablesCertificado(
         Colaborador? col, Capacitacion cap, DateTime fechaEmision, string puntajeStr, Dictionary<string, string?>? camposAdicionales = null)
     {
-        var cultura = new System.Globalization.CultureInfo("es-CO");
-        var hoy = DateTime.Today;
-        var variables = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-        {
-            ["{{nombre_completo}}"]  = col != null ? $"{col.Nombre} {col.Apellido}" : string.Empty,
-            ["{{nombre}}"]           = col?.Nombre ?? string.Empty,
-            ["{{apellido}}"]         = col?.Apellido ?? string.Empty,
-            ["{{email}}"]            = col?.Email ?? string.Empty,
-            ["{{telefono}}"]         = col?.Telefono ?? string.Empty,
-            ["{{cedula}}"]           = col?.Cedula ?? string.Empty,
-            ["{{cargo}}"]            = col?.Cargo?.Nombre ?? string.Empty,
-            ["{{area}}"]             = col?.Area?.Nombre ?? string.Empty,
-            ["{{fecha_ingreso}}"]    = col != null ? col.FechaIngreso.ToString("d 'de' MMMM 'de' yyyy", cultura) : string.Empty,
-            ["{{tipo_contrato}}"]    = col?.TipoContrato ?? string.Empty,
-            ["{{sueldo_basico}}"]    = col?.SueldoBasico.HasValue == true ? col.SueldoBasico.Value.ToString("C0", cultura) : string.Empty,
-            ["{{ciudad}}"]           = col?.Ciudad ?? string.Empty,
-            ["{{fecha_emision}}"]    = fechaEmision.ToString("dd/MM/yyyy"),
-            ["{{fecha_expedicion}}"] = fechaEmision.ToString("d 'de' MMMM 'de' yyyy", cultura),
-            ["{{fecha_actual}}"]     = hoy.ToString("dd/MM/yyyy"),
-            ["{{genero}}"]           = col != null ? (col.Genero switch
-            {
-                TalentManagement.Domain.Enums.GeneroColaborador.Masculino => "el señor",
-                TalentManagement.Domain.Enums.GeneroColaborador.Femenino  => "la señora",
-                _                                                         => "el(la) señor(a)",
-            }) : "el(la) señor(a)",
-            ["{{capacitacion}}"]     = cap.NombreCertificado ?? cap.PlantillaNombreCertificado ?? cap.Nombre,
-            ["{{puntaje}}"]          = puntajeStr
-        };
-
-        if (camposAdicionales is { Count: > 0 })
-        {
-            foreach (var (key, value) in camposAdicionales)
-            {
-                if (!string.IsNullOrWhiteSpace(key))
-                {
-                    variables[$"{{{{{key}}}}}"] = value ?? string.Empty;
-                }
-            }
-        }
-
+        var variables = ColaboradorVariablesBuilder.ConstruirVariablesCertificado(col, cap, fechaEmision, puntajeStr, camposAdicionales);
         return variables;
     }
 }

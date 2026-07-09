@@ -251,38 +251,8 @@ public class PlantillaDocumentoService(
     {
         var (html, plantilla, colaborador) = await ResolverInternoAsync(plantillaId, email, extras, validarEditables);
 
-        var cultura = new CultureInfo("es-CO");
-        var valoresPerfil = new Dictionary<string, string>
-        {
-            ["nombre_completo"]  = $"{colaborador.Nombre} {colaborador.Apellido}",
-            ["nombre"]           = colaborador.Nombre,
-            ["apellido"]         = colaborador.Apellido,
-            ["email"]            = colaborador.Email ?? string.Empty,
-            ["telefono"]         = colaborador.Telefono ?? string.Empty,
-            ["cedula"]           = colaborador.Cedula ?? string.Empty,
-            ["cargo"]            = colaborador.Cargo?.Nombre ?? string.Empty,
-            ["area"]             = colaborador.Area?.Nombre ?? string.Empty,
-            ["ciudad"]           = colaborador.Ciudad ?? string.Empty,
-            ["fecha_expedicion"] = DateTime.Today.ToString("d 'de' MMMM 'de' yyyy", cultura),
-            ["fecha_actual"]     = DateTime.Today.ToString("dd/MM/yyyy"),
-            ["tipo_contrato"]    = colaborador.TipoContrato ?? string.Empty,
-            ["fecha_ingreso"]    = colaborador.FechaIngreso.ToString("d 'de' MMMM 'de' yyyy", cultura),
-            ["sueldo_basico"]    = colaborador.SueldoBasico.HasValue ? colaborador.SueldoBasico.Value.ToString("C0", cultura) : string.Empty,
-            ["genero"]           = TextoGeneroParaDocumento(colaborador.Genero),
-            ["rol"]              = colaborador.Rol.ToString(),
-        };
-
         var camposAdicionales = await colaboradorRepository.GetValoresPorColaboradorAsync(colaborador.Id);
-        if (camposAdicionales is { Count: > 0 })
-        {
-            foreach (var (key, value) in camposAdicionales)
-            {
-                if (!string.IsNullOrWhiteSpace(key))
-                {
-                    valoresPerfil[key] = value ?? string.Empty;
-                }
-            }
-        }
+        var valoresPerfil = ColaboradorVariablesBuilder.ConstruirVariablesPerfil(colaborador, DateTime.Today, camposAdicionales, usarLlavesPlantilla: false);
 
         return (html, plantilla, valoresPerfil);
     }
@@ -636,39 +606,8 @@ public class PlantillaDocumentoService(
         var colaborador = await colaboradorRepository.GetByEmailAsync(email)
             ?? throw new UnauthorizedAccessException("Usuario no registrado como colaborador");
 
-        var cultura = new CultureInfo("es-CO");
-        var result = new Dictionary<string, string>
-        {
-            ["nombre_completo"]  = $"{colaborador.Nombre} {colaborador.Apellido}",
-            ["nombre"]           = colaborador.Nombre,
-            ["apellido"]         = colaborador.Apellido,
-            ["email"]            = colaborador.Email ?? string.Empty,
-            ["telefono"]         = colaborador.Telefono ?? string.Empty,
-            ["cedula"]           = colaborador.Cedula ?? string.Empty,
-            ["cargo"]            = colaborador.Cargo?.Nombre ?? string.Empty,
-            ["area"]             = colaborador.Area?.Nombre ?? string.Empty,
-            ["ciudad"]           = colaborador.Ciudad ?? string.Empty,
-            ["fecha_expedicion"] = DateTime.Today.ToString("d 'de' MMMM 'de' yyyy", cultura),
-            ["fecha_actual"]     = DateTime.Today.ToString("dd/MM/yyyy"),
-            ["tipo_contrato"]    = colaborador.TipoContrato ?? string.Empty,
-            ["fecha_ingreso"]    = colaborador.FechaIngreso.ToString("d 'de' MMMM 'de' yyyy", cultura),
-            ["sueldo_basico"]    = colaborador.SueldoBasico.HasValue ? colaborador.SueldoBasico.Value.ToString("C0", cultura) : string.Empty,
-            ["genero"]           = TextoGeneroParaDocumento(colaborador.Genero),
-            ["rol"]              = colaborador.Rol.ToString(),
-        };
-
         var camposAdicionales = await colaboradorRepository.GetValoresPorColaboradorAsync(colaborador.Id);
-        if (camposAdicionales is { Count: > 0 })
-        {
-            foreach (var (key, value) in camposAdicionales)
-            {
-                if (!string.IsNullOrWhiteSpace(key))
-                {
-                    result[key] = value ?? string.Empty;
-                }
-            }
-        }
-
+        var result = ColaboradorVariablesBuilder.ConstruirVariablesPerfil(colaborador, DateTime.Today, camposAdicionales, usarLlavesPlantilla: false);
         return result;
     }
 
@@ -761,79 +700,7 @@ public class PlantillaDocumentoService(
     public static Dictionary<string, string> ConstruirVariablesDocumento(
         Colaborador c, PlantillaDocumento p, Dictionary<string, string>? extrasFiltrados, Dictionary<string, string?>? camposAdicionales = null)
     {
-        var cultura = new CultureInfo("es-CO");
-        var hoy = DateTime.Today;
-        var variables = new Dictionary<string, string>
-        {
-            ["{{nombre_completo}}"]  = $"{c.Nombre} {c.Apellido}",
-            ["{{nombre}}"]           = c.Nombre,
-            ["{{apellido}}"]         = c.Apellido,
-            ["{{email}}"]            = c.Email ?? string.Empty,
-            ["{{telefono}}"]         = c.Telefono ?? string.Empty,
-            ["{{cedula}}"]           = c.Cedula ?? string.Empty,
-            ["{{cargo}}"]            = c.Cargo?.Nombre ?? string.Empty,
-            ["{{area}}"]             = c.Area?.Nombre ?? string.Empty,
-            ["{{fecha_ingreso}}"]    = c.FechaIngreso.ToString("d 'de' MMMM 'de' yyyy", cultura),
-            ["{{tipo_contrato}}"]    = c.TipoContrato ?? string.Empty,
-            ["{{sueldo_basico}}"]    = c.SueldoBasico.HasValue
-                ? c.SueldoBasico.Value.ToString("C0", cultura) : string.Empty,
-            ["{{ciudad}}"]           = c.Ciudad ?? string.Empty,
-            ["{{fecha_expedicion}}"] = hoy.ToString("d 'de' MMMM 'de' yyyy", cultura),
-            ["{{fecha_actual}}"]     = hoy.ToString("dd/MM/yyyy"),
-            ["{{nombre_firmante}}"]  = p.NombreFirmante ?? string.Empty,
-            ["{{cargo_firmante}}"]   = p.CargoFirmante ?? string.Empty,
-            ["{{genero}}"]           = TextoGeneroParaDocumento(c.Genero),
-            ["{{rol}}"]              = c.Rol.ToString(),
-        };
-
-        if (camposAdicionales is { Count: > 0 })
-        {
-            foreach (var (key, value) in camposAdicionales)
-            {
-                if (!string.IsNullOrWhiteSpace(key))
-                {
-                    variables[$"{{{{{key}}}}}"] = value ?? string.Empty;
-                }
-            }
-        }
-
-        if (extrasFiltrados is { Count: > 0 })
-        {
-            var camposNum = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            if (!string.IsNullOrWhiteSpace(p.CamposFormulario))
-            {
-                try
-                {
-                    var campos = System.Text.Json.JsonSerializer.Deserialize<List<CampoFormularioDto>>(p.CamposFormulario);
-                    if (campos is not null)
-                    {
-                        foreach (var campo in campos)
-                        {
-                            if (campo.Tipo == "Número")
-                            {
-                                camposNum.Add(campo.Variable);
-                            }
-                        }
-                    }
-                }
-                catch { }
-            }
-
-            foreach (var (key, value) in extrasFiltrados)
-            {
-                if (camposNum.Contains(key))
-                {
-                    if (decimal.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var parsedValue))
-                    {
-                        variables[$"{{{{{key}}}}}"] = parsedValue.ToString("#,##0", cultura);
-                        continue;
-                    }
-                }
-                variables[$"{{{{{key}}}}}"] = value ?? string.Empty;
-            }
-        }
-
-        return variables;
+        return ColaboradorVariablesBuilder.ConstruirVariablesDocumento(c, p, extrasFiltrados, camposAdicionales);
     }
 
     private static string ReemplazarVariables(

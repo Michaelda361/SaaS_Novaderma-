@@ -25,6 +25,8 @@ public class CartasLaboralesTests : IClassFixture<CustomWebApplicationFactory>
         _factory = factory;
     }
 
+
+
     // ── Bug #6 — Soft-delete excluye plantillas del listado ───────────────────
 
     [Fact]
@@ -64,7 +66,7 @@ public class CartasLaboralesTests : IClassFixture<CustomWebApplicationFactory>
             {
                 Nombre = "Carta de Empleo Activa",
                 TipoPlantilla = TipoPlantilla.Html,
-                ContenidoHtml = "<p>Hola {{nombre_completo}}</p>",
+                ContenidoHtml = "<p>Hola {{email}}</p>",
                 AplicaTodasAreas = true,
                 Activo = true
             };

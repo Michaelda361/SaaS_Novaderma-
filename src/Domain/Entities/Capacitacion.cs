@@ -25,8 +25,8 @@ public class Capacitacion : BaseEntity
     public string? NombreCertificado { get; set; }
 
     /// <summary>
-    /// Plantilla del nombre con variables: {{nombre_completo}}, {{cargo}}, {{area}},
-    /// {{capacitacion}}, {{fecha_emision}}, {{puntaje}}.
+    /// Plantilla del nombre con variables estándar: {{email}}, {{id}}, {{cedula}}, {{genero}},
+    /// {{fecha_aprobacion}}, {{firma_imagen}} y {{firma_imagen_base64}}.
     /// Si tiene valor, tiene prioridad sobre NombreCertificado.
     /// </summary>
     public string? PlantillaNombreCertificado { get; set; }

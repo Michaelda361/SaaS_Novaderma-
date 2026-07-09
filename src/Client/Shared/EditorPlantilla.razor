@@ -80,22 +80,9 @@
     [Parameter]
     public EventCallback<string> HtmlContentChanged { get; set; }
 
-    private static readonly Dictionary<string, string> Variables = new()
-    {
-        ["{{nombre_completo}}"]  = "Nombre completo",
-        ["{{nombre}}"]           = "Nombre",
-        ["{{apellido}}"]         = "Apellido",
-        ["{{cedula}}"]           = "Cédula",
-        ["{{cargo}}"]            = "Cargo",
-        ["{{area}}"]             = "Área",
-        ["{{fecha_ingreso}}"]    = "Fecha ingreso",
-        ["{{tipo_contrato}}"]    = "Tipo contrato",
-        ["{{sueldo_basico}}"]    = "Sueldo básico",
-        ["{{ciudad}}"]           = "Ciudad",
-        ["{{fecha_expedicion}}"] = "Fecha actual",
-        ["{{nombre_firmante}}"]  = "Firmante",
-        ["{{cargo_firmante}}"]   = "Cargo firmante",
-    };
+    private static readonly Dictionary<string, string> Variables = PlantillaVariableCatalog.StandardDefinitions
+        .Where(x => !string.Equals(x.Key, "{{destinatario}}", StringComparison.OrdinalIgnoreCase))
+        .ToDictionary(x => x.Key, x => x.Value, StringComparer.OrdinalIgnoreCase);
 
     private async Task SetContentAsync(string html)
     {

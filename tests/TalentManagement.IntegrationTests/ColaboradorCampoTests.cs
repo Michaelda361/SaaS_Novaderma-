@@ -235,69 +235,7 @@ public class ColaboradorCampoTests : IClassFixture<CustomWebApplicationFactory>
         colabDto!.CamposAdicionales.Should().NotContainKey("campo_test_hobbies_val");
     }
 
-    [Fact]
-    public async Task GetColaboradores_IncludesSupervisor()
-    {
-        // 1. Arrange: Create a supervisor and a collaborator assigned to them
-        var email = "admin-sup-test@novaderma.com";
-        int colaboradorId;
 
-        using (var scope = _factory.Services.CreateScope())
-        {
-            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            var area = await db.Areas.FirstAsync();
-            var cargo = await db.Cargos.FirstAsync();
-
-            var supervisor = new Colaborador
-            {
-                Nombre = "Jefe",
-                Apellido = "Sup",
-                Email = "jefe.sup@novaderma.com",
-                Rol = RolUsuario.Jefe,
-                AreaId = area.Id,
-                CargoId = cargo.Id,
-                FechaIngreso = DateTime.UtcNow
-            };
-            db.Colaboradores.Add(supervisor);
-            await db.SaveChangesAsync();
-
-            var colaborador = new Colaborador
-            {
-                Nombre = "Subordinado",
-                Apellido = "Sup",
-                Email = "sub.sup@novaderma.com",
-                Rol = RolUsuario.Colaborador,
-                AreaId = area.Id,
-                CargoId = cargo.Id,
-                SupervisorId = supervisor.Id,
-                FechaIngreso = DateTime.UtcNow
-            };
-            db.Colaboradores.Add(colaborador);
-            await db.SaveChangesAsync();
-            colaboradorId = colaborador.Id;
-        }
-
-        var client = _factory.CreateClient();
-        client.DefaultRequestHeaders.Add("X-Test-Email", email);
-
-        // 2. Act: Call GET api/v1/colaboradores
-        var response = await client.GetAsync("/api/v1/colaboradores");
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
-
-        // 3. Assert: SupervisorNombre must be mapped correctly
-        var list = await response.Content.ReadFromJsonAsync<List<ColaboradorDto>>();
-        list.Should().NotBeNull();
-        var subDto = list!.FirstOrDefault(c => c.Id == colaboradorId);
-        subDto.Should().NotBeNull();
-        subDto!.SupervisorNombre.Should().Be("Jefe Sup");
-
-        // Also check GetById
-        var getByIdResponse = await client.GetAsync($"/api/v1/colaboradores/{colaboradorId}");
-        getByIdResponse.StatusCode.Should().Be(HttpStatusCode.OK);
-        var byIdDto = await getByIdResponse.Content.ReadFromJsonAsync<ColaboradorDto>();
-        byIdDto.Should().NotBeNull();
-        byIdDto!.SupervisorNombre.Should().Be("Jefe Sup");
-    }
 
     [Fact]
     public async Task CreateUpdateDeleteColaborador_AsColaborador_ReturnsForbidden()

@@ -103,7 +103,7 @@ else
             <div class="table-wrapper">
                 <table>
                     <thead>
-                        <tr><th>Colaborador</th><th>Cargo</th><th>Área</th><th>Género</th><th></th></tr>
+                        <tr><th>Colaborador</th><th>Cargo</th><th>Área</th><th>Género</th><th>Salida</th><th></th></tr>
                     </thead>
                     <tbody>
                         @foreach (var c in inactivos!)
@@ -122,6 +122,7 @@ else
                                 <td class="text-sm">@c.CargoNombre</td>
                                 <td><span class="badge badge-gray">@c.AreaNombre</span></td>
                                 <td class="text-sm text-muted">@ColaboradorGeneroUi.Etiqueta(c.Genero)</td>
+                                <td class="text-muted text-sm">@c.FechaSalida?.ToString("dd/MM/yyyy")</td>
                                 <td>
                                     <button class="btn btn-ghost btn-sm"
                                             @onclick="() => RestaurarColaborador(cid)">
@@ -169,7 +170,6 @@ else
                         <th>Área</th>
                         <th>Género</th>
                         <th>Ingreso</th>
-                        <th>Supervisor</th>
                         <th>Rol</th>
                         @if (AuthInfo.EsJefe || AuthInfo.EsAdmin)
                         {
@@ -195,7 +195,6 @@ else
                             <td><span class="badge badge-info">@c.AreaNombre</span></td>
                             <td class="text-sm text-muted">@ColaboradorGeneroUi.Etiqueta(c.Genero)</td>
                             <td class="text-muted text-sm">@c.FechaIngreso.ToString("dd/MM/yyyy")</td>
-                            <td class="text-muted text-sm">@(c.SupervisorNombre ?? "—")</td>
                             <td>
                                 <select class="rol-selector rol-selector--@c.Rol.ToLower()"
                                         value="@c.Rol"
@@ -242,6 +241,7 @@ else
                     <div class="form-grid">
                         @foreach (var campo in GetMergedCampos())
                         {
+                            if (campo.CampoClave == "FechaSalida" && !editandoId.HasValue) continue;
                             <div class="form-group">
                                 <label>@campo.Nombre@if (campo.Requerido) { <span class="text-danger">*</span> }</label>
 
@@ -260,10 +260,6 @@ else
                                     <InputText @bind-Value="form.Email" />
                                     <ValidationMessage For="() => form.Email" class="validation-message" />
                                 }
-                                else if (campo.CampoClave == "Telefono")
-                                {
-                                    <InputText @bind-Value="form.Telefono" />
-                                }
                                 else if (campo.CampoClave == "FechaIngreso")
                                 {
                                     <InputDate @bind-Value="form.FechaIngreso" />
@@ -271,6 +267,18 @@ else
                                 else if (campo.CampoClave == "Cedula")
                                 {
                                     <InputText @bind-Value="form.Cedula" />
+                                }
+                                else if (campo.CampoClave == "FechaExpedicion")
+                                {
+                                    <InputDate @bind-Value="form.FechaExpedicion" />
+                                }
+                                else if (campo.CampoClave == "FechaNacimiento")
+                                {
+                                    <InputDate @bind-Value="form.FechaNacimiento" />
+                                }
+                                else if (campo.CampoClave == "LugarNacimiento")
+                                {
+                                    <InputText @bind-Value="form.LugarNacimiento" />
                                 }
                                 else if (campo.CampoClave == "TipoContrato")
                                 {
@@ -282,13 +290,42 @@ else
                                         <option value="prestación de servicios">Prestación de servicios</option>
                                     </InputSelect>
                                 }
+                                else if (campo.CampoClave == "FechaIngresoContrato")
+                                {
+                                    <InputDate @bind-Value="form.FechaIngresoContrato" />
+                                }
                                 else if (campo.CampoClave == "SueldoBasico")
                                 {
                                     <input type="text" class="form-control" value="@NumberFormatHelper.FormatDecimal(form.SueldoBasico)" @onchange="@(e => form.SueldoBasico = NumberFormatHelper.ParseDecimal(e.Value?.ToString()))" />
                                 }
-                                else if (campo.CampoClave == "Ciudad")
+                                else if (campo.CampoClave == "SubTransporte")
                                 {
-                                    <InputText @bind-Value="form.Ciudad" />
+                                    <input type="text" class="form-control" value="@NumberFormatHelper.FormatDecimal(form.SubTransporte)" @onchange="@(e => form.SubTransporte = NumberFormatHelper.ParseDecimal(e.Value?.ToString()))" />
+                                }
+                                else if (campo.CampoClave == "AuxMediosTransporte")
+                                {
+                                    <input type="text" class="form-control" value="@NumberFormatHelper.FormatDecimal(form.AuxMediosTransporte)" @onchange="@(e => form.AuxMediosTransporte = NumberFormatHelper.ParseDecimal(e.Value?.ToString()))" />
+                                }
+                                else if (campo.CampoClave == "AuxTransporte")
+                                {
+                                    <input type="text" class="form-control" value="@NumberFormatHelper.FormatDecimal(form.AuxTransporte)" @onchange="@(e => form.AuxTransporte = NumberFormatHelper.ParseDecimal(e.Value?.ToString()))" />
+                                }
+                                else if (campo.CampoClave == "ComisionVentas")
+                                {
+                                    <input type="text" class="form-control" value="@NumberFormatHelper.FormatDecimal(form.ComisionVentas)" @onchange="@(e => form.ComisionVentas = NumberFormatHelper.ParseDecimal(e.Value?.ToString()))" />
+                                }
+                                else if (campo.CampoClave == "ComisionCobros")
+                                {
+                                    <input type="text" class="form-control" value="@NumberFormatHelper.FormatDecimal(form.ComisionCobros)" @onchange="@(e => form.ComisionCobros = NumberFormatHelper.ParseDecimal(e.Value?.ToString()))" />
+                                }
+                                else if (campo.CampoClave == "TotalSalario")
+                                {
+                                    var total = (form.SueldoBasico ?? 0m) + (form.SubTransporte ?? 0m) + (form.AuxMediosTransporte ?? 0m) + (form.AuxTransporte ?? 0m) + (form.ComisionVentas ?? 0m) + (form.ComisionCobros ?? 0m);
+                                    <input type="text" class="form-control" value="@total.ToString("C0", new System.Globalization.CultureInfo("es-CO"))" disabled style="font-weight:600;" />
+                                }
+                                else if (campo.CampoClave == "FechaSalida")
+                                {
+                                    <input type="date" class="form-control" value="@form.FechaSalida?.ToString("yyyy-MM-dd")" disabled />
                                 }
                                 else if (campo.CampoClave == "Genero")
                                 {
@@ -320,16 +357,6 @@ else
                                         }
                                     </InputSelect>
                                     <ValidationMessage For="() => form.CargoId" class="validation-message" />
-                                }
-                                else if (campo.CampoClave == "SupervisorNombre")
-                                {
-                                    <InputSelect @bind-Value="form.SupervisorId">
-                                        <option value="">-- Sin supervisor --</option>
-                                        @foreach (var c in colaboradores ?? [])
-                                        {
-                                            <option value="@c.Id">@c.NombreCompleto</option>
-                                        }
-                                    </InputSelect>
                                 }
                                 else
                                 {
@@ -446,16 +473,24 @@ else
         ("Nombre", "Nombre", 10),
         ("Apellido", "Apellido", 20),
         ("Email", "Email", 30),
-        ("Telefono", "Teléfono", 40),
-        ("FechaIngreso", "Fecha de ingreso", 50),
-        ("Cedula", "Cédula", 60),
-        ("TipoContrato", "Tipo de contrato", 70),
-        ("SueldoBasico", "Sueldo básico", 80),
-        ("Ciudad", "Ciudad", 90),
-        ("Genero", "Género", 100),
-        ("AreaNombre", "Área", 110),
-        ("CargoNombre", "Cargo", 120),
-        ("SupervisorNombre", "Supervisor", 130)
+        ("FechaIngreso", "Fecha de ingreso", 40),
+        ("Cedula", "Cédula", 50),
+        ("FechaExpedicion", "Fecha de expedición", 60),
+        ("FechaNacimiento", "Fecha de nacimiento", 70),
+        ("LugarNacimiento", "Lugar de nacimiento", 80),
+        ("TipoContrato", "Tipo de contrato", 90),
+        ("FechaIngresoContrato", "Fecha de ingreso del contrato", 100),
+        ("SueldoBasico", "Salario", 110),
+        ("SubTransporte", "Subsidio de transporte", 120),
+        ("AuxMediosTransporte", "Auxilio de medios de transporte", 130),
+        ("AuxTransporte", "Auxilio de transporte", 135),
+        ("ComisionVentas", "Comisión de ventas", 140),
+        ("ComisionCobros", "Comisión de cobros", 150),
+        ("TotalSalario", "Total salario", 155),
+        ("FechaSalida", "Fecha de salida", 160),
+        ("Genero", "Género", 170),
+        ("AreaNombre", "Área", 180),
+        ("CargoNombre", "Cargo", 190)
     };
 
     private List<ColaboradorCampoDto> GetMergedCampos()
@@ -517,16 +552,23 @@ else
             Nombre = collaborator.Nombre,
             Apellido = collaborator.Apellido,
             Email = collaborator.Email,
-            Telefono = collaborator.Telefono,
             FechaIngreso = collaborator.FechaIngreso,
             AreaId = collaborator.AreaId,
             CargoId = collaborator.CargoId,
             Cedula = collaborator.Cedula,
+            FechaExpedicion = collaborator.FechaExpedicion,
+            FechaNacimiento = collaborator.FechaNacimiento,
+            LugarNacimiento = collaborator.LugarNacimiento,
             TipoContrato = collaborator.TipoContrato,
+            FechaIngresoContrato = collaborator.FechaIngresoContrato,
             SueldoBasico = collaborator.SueldoBasico,
-            Ciudad = collaborator.Ciudad,
+            SubTransporte = collaborator.SubTransporte,
+            AuxMediosTransporte = collaborator.AuxMediosTransporte,
+            AuxTransporte = collaborator.AuxTransporte,
+            ComisionVentas = collaborator.ComisionVentas,
+            ComisionCobros = collaborator.ComisionCobros,
+            FechaSalida = collaborator.FechaSalida,
             Genero = collaborator.Genero,
-            SupervisorId = collaborator.SupervisorId,
             CamposAdicionales = collaborator.CamposAdicionales ?? new Dictionary<string, string?>()
         };
 
@@ -562,11 +604,23 @@ else
             {
                 var dto = new UpdateColaboradorDto
                 {
-                    Nombre = form.Nombre, Apellido = form.Apellido,
-                    Email = form.Email, Telefono = form.Telefono,
-                    AreaId = form.AreaId, CargoId = form.CargoId,
-                    SupervisorId = form.SupervisorId,
-                    Cedula = form.Cedula, TipoContrato = form.TipoContrato, SueldoBasico = form.SueldoBasico, Ciudad = form.Ciudad,
+                    Nombre = form.Nombre,
+                    Apellido = form.Apellido,
+                    Email = form.Email,
+                    AreaId = form.AreaId,
+                    CargoId = form.CargoId,
+                    Cedula = form.Cedula,
+                    FechaExpedicion = form.FechaExpedicion,
+                    FechaNacimiento = form.FechaNacimiento,
+                    LugarNacimiento = form.LugarNacimiento,
+                    TipoContrato = form.TipoContrato,
+                    FechaIngresoContrato = form.FechaIngresoContrato,
+                    SueldoBasico = form.SueldoBasico,
+                    SubTransporte = form.SubTransporte,
+                    AuxMediosTransporte = form.AuxMediosTransporte,
+                    AuxTransporte = form.AuxTransporte,
+                    ComisionVentas = form.ComisionVentas,
+                    ComisionCobros = form.ComisionCobros,
                     Genero = form.Genero,
                     CamposAdicionales = form.CamposAdicionales
                 };

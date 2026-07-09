@@ -90,12 +90,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .HasForeignKey(c => c.CargoId)
             .OnDelete(DeleteBehavior.Restrict);
 
-        // Auto-referencia supervisor
-        modelBuilder.Entity<Colaborador>()
-            .HasOne(c => c.Supervisor)
-            .WithMany()
-            .HasForeignKey(c => c.SupervisorId)
-            .OnDelete(DeleteBehavior.Restrict);
+
 
         modelBuilder.Entity<ColaboradorCampoValor>()
             .HasOne(v => v.Colaborador)
@@ -326,6 +321,22 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
         modelBuilder.Entity<Colaborador>()
             .Property(c => c.SueldoBasico)
+            .HasPrecision(18, 2);
+
+        modelBuilder.Entity<Colaborador>()
+            .Property(c => c.SubTransporte)
+            .HasPrecision(18, 2);
+
+        modelBuilder.Entity<Colaborador>()
+            .Property(c => c.AuxMediosTransporte)
+            .HasPrecision(18, 2);
+
+        modelBuilder.Entity<Colaborador>()
+            .Property(c => c.ComisionVentas)
+            .HasPrecision(18, 2);
+
+        modelBuilder.Entity<Colaborador>()
+            .Property(c => c.ComisionCobros)
             .HasPrecision(18, 2);
 
         modelBuilder.Entity<Colaborador>()
