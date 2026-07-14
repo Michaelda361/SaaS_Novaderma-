@@ -50,7 +50,6 @@ public static class ColaboradorVariablesBuilder
             [$"{prefijo}sueldo_basico{sufijo}"] = FormatearMoneda(colaborador?.SueldoBasico),
             [$"{prefijo}sub_transporte{sufijo}"] = FormatearMoneda(colaborador?.SubTransporte),
             [$"{prefijo}aux_medios_transporte{sufijo}"] = FormatearMoneda(colaborador?.AuxMediosTransporte),
-            [$"{prefijo}aux_transporte{sufijo}"] = FormatearMoneda(colaborador?.AuxTransporte),
             [$"{prefijo}comision_ventas{sufijo}"] = FormatearMoneda(colaborador?.ComisionVentas),
             [$"{prefijo}comision_cobros{sufijo}"] = FormatearMoneda(colaborador?.ComisionCobros),
             [$"{prefijo}total_salario{sufijo}"] = FormatearMoneda(CalcularTotalSalario(colaborador)),
@@ -174,7 +173,6 @@ public static class ColaboradorVariablesBuilder
         return (colaborador.SueldoBasico ?? 0m)
             + (colaborador.SubTransporte ?? 0m)
             + (colaborador.AuxMediosTransporte ?? 0m)
-            + (colaborador.AuxTransporte ?? 0m)
             + (colaborador.ComisionVentas ?? 0m)
             + (colaborador.ComisionCobros ?? 0m);
     }

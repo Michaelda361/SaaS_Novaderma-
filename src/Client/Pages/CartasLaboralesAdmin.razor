@@ -383,7 +383,7 @@ else
                     <strong>{{genero}}</strong> usa el género cargado en RRHH (tratamiento «el señor» / «la señora» / neutro); no debe incluirse en «campos editables».
                 </p>
                 <div class="variables-grid">
-                    @foreach (var v in Variables)
+                    @foreach (var v in Variables.Where(x => x.Key != "{{aux_medios_transporte}}" && x.Key != "{{comision_ventas}}" && x.Key != "{{comision_cobros}}" && x.Key != "{{firma_imagen}}" && x.Key != "{{firma_imagen_base64}}" && x.Key != "{{rol}}" && x.Key != "{{id}}" && x.Key != "{{area_nombre}}" && x.Key != "{{cargo_nombre}}" && x.Key != "{{fecha_ingreso_contrato}}" && x.Key != "{{aux_transporte}}"))
                     {
                         var usada = plantillaVariables.TipoPlantilla == "html" &&
                                     (plantillaVariables.ContenidoHtml?.Contains(v.Key) ?? false);
@@ -408,6 +408,25 @@ else
                             </div>
                         }
                     }
+                </div>
+
+                <div style="margin-top:1.25rem;padding-top:1rem;border-top:1px solid var(--border);">
+                    <p class="text-sm" style="margin-bottom:.5rem;font-weight:600;color: #10b981;">
+                        💰 Cobros Especiales (Automáticos)
+                    </p>
+                    <div class="variables-grid">
+                        @foreach (var key in new[] { "{{aux_medios_transporte}}", "{{comision_ventas}}", "{{comision_cobros}}" })
+                        {
+                            var vVal = Variables.GetValueOrDefault(key, string.Empty);
+                            var usada = plantillaVariables.TipoPlantilla == "html" &&
+                                        (plantillaVariables.ContenidoHtml?.Contains(key) ?? false);
+                            <div class="variable-item @(usada ? "variable-item--usada" : "")">
+                                <code class="variable-tag" style="background-color: rgba(16, 185, 129, 0.08); color: #10b981; border-color: rgba(16, 185, 129, 0.2);">@key</code>
+                                <span class="text-muted text-sm">@vVal</span>
+                                @if (usada) { <span class="variable-usada-badge">✓ en uso</span> }
+                            </div>
+                        }
+                    </div>
                 </div>
 
                 @if (plantillaVariables.CamposFormulario != null && plantillaVariables.CamposFormulario.Any())
@@ -695,12 +714,26 @@ else
 
                                 <div style="font-weight: 600; font-size: 0.78rem; text-transform: uppercase; color: var(--text-subtle); margin-bottom: 0.4rem;">Datos de RRHH (Automáticos)</div>
                                 <div style="display: flex; flex-direction: column; gap: 0.35rem; max-height: 160px; overflow-y: auto; padding-right: 0.2rem; margin-bottom: 1rem; border-bottom: 1px solid var(--border); padding-bottom: 0.75rem;">
-                                    @foreach (var v in Variables.Where(x => x.Key != "{{destinatario}}"))
+                                    @foreach (var v in Variables.Where(x => x.Key != "{{destinatario}}" && x.Key != "{{aux_medios_transporte}}" && x.Key != "{{comision_ventas}}" && x.Key != "{{comision_cobros}}" && x.Key != "{{firma_imagen}}" && x.Key != "{{firma_imagen_base64}}" && x.Key != "{{rol}}" && x.Key != "{{id}}" && x.Key != "{{area_nombre}}" && x.Key != "{{cargo_nombre}}" && x.Key != "{{fecha_ingreso_contrato}}" && x.Key != "{{aux_transporte}}"))
                                     {
                                         var key = v.Key;
                                         <div style="display: flex; align-items: center; justify-content: space-between; background: var(--surface); border: 1px solid var(--border); padding: 0.25rem 0.4rem; border-radius: 4px;">
                                             <code style="font-size: 0.75rem; color: var(--primary); font-weight: bold; cursor: pointer;" @onclick="() => CopiarAlPortapapeles(key)" title="Haga clic para copiar">@key</code>
                                             <button type="button" class="btn btn-ghost btn-sm" @onclick="() => CopiarAlPortapapeles(key)" style="font-size: 0.7rem; padding: 0.1rem 0.25rem;" title="Copiar">📋</button>
+                                        </div>
+                                    }
+                                </div>
+
+                                <div style="font-weight: 600; font-size: 0.78rem; text-transform: uppercase; color: #10b981; margin-bottom: 0.4rem;">💰 Cobros Especiales</div>
+                                <div style="display: flex; flex-direction: column; gap: 0.35rem; max-height: 140px; overflow-y: auto; margin-bottom: 1rem; border-bottom: 1px solid var(--border); padding-bottom: 0.75rem;">
+                                    @foreach (var key in new[] { "{{aux_medios_transporte}}", "{{comision_ventas}}", "{{comision_cobros}}" })
+                                    {
+                                        var label = EtiquetaVariableFriendly(key);
+                                        var keyCopy = key;
+                                        <div style="display: flex; align-items: center; justify-content: space-between; background: var(--surface); border: 1px solid var(--border); padding: 0.25rem 0.4rem; border-radius: 4px;">
+                                            <code style="font-size: 0.75rem; color: #10b981; font-weight: bold; cursor: pointer;" @onclick="() => CopiarAlPortapapeles(keyCopy)" title="Haga clic para copiar">@keyCopy</code>
+                                            <span class="text-xs text-muted" style="margin-left:auto; margin-right: 0.5rem;" title="@label">@label</span>
+                                            <button type="button" class="btn btn-ghost btn-sm" @onclick="() => CopiarAlPortapapeles(keyCopy)" style="font-size: 0.7rem; padding: 0.1rem 0.25rem;" title="Copiar">📋</button>
                                         </div>
                                     }
                                 </div>
@@ -1950,6 +1983,9 @@ else
             "tipo_contrato"    => "Tipo contrato",
             "fecha_ingreso"    => "Fecha ingreso",
             "sueldo_basico"    => "Sueldo básico",
+            "aux_medios_transporte" => "Auxilio de medios de transporte",
+            "comision_ventas"  => "Comisión de ventas",
+            "comision_cobros"  => "Comisión de cobros",
             "genero"           => "Tratamiento género",
             "rol"              => "Rol",
             _                  => key.Replace("_", " "),

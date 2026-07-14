@@ -21,12 +21,10 @@ public class ColaboradorDto
     public decimal? ComisionVentas { get; set; }
     public decimal? ComisionCobros { get; set; }
 
-    /// <summary>Total salarial: suma de Salario + Sub. Transporte + Aux. Medios de Transporte + Aux. Transporte + Comisiones.</summary>
     public decimal TotalSalario =>
         (SueldoBasico ?? 0m) +
         (SubTransporte ?? 0m) +
         (AuxMediosTransporte ?? 0m) +
-        (AuxTransporte ?? 0m) +
         (ComisionVentas ?? 0m) +
         (ComisionCobros ?? 0m);
 
