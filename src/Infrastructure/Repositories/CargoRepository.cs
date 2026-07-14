@@ -45,10 +45,16 @@ public class CargoRepository(AppDbContext context, IMemoryCache cache) : ICargoR
 
     public async Task<Cargo> UpdateAsync(Cargo cargo)
     {
-        context.Cargos.Update(cargo);
+        // Fetch a tracked entity (no includes) and only update scalar fields
+        // to avoid EF Core trying to re-attach navigation collections.
+        var tracked = await context.Cargos.FindAsync(cargo.Id);
+        if (tracked is null) return cargo;
+        tracked.Nombre = cargo.Nombre;
+        tracked.Descripcion = cargo.Descripcion;
+        tracked.AreaId = cargo.AreaId;
         await context.SaveChangesAsync();
-        InvalidarCache(cargo.AreaId);
-        return cargo;
+        InvalidarCache(tracked.AreaId);
+        return tracked;
     }
 
     public async Task DeleteAsync(int id)

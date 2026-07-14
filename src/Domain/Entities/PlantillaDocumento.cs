@@ -46,6 +46,10 @@ public class PlantillaDocumento : BaseEntity
     /// <summary>JSON array con los detalles de los campos del formulario dinámico del colaborador.</summary>
     public string? CamposFormulario { get; set; }
 
+    /// <summary>true = permite al admin editar aux_medios_transporte, comision_ventas y comision_cobros al aprobar</summary>
+    public bool PermitirCobrosEspeciales { get; set; } = false;
+
     public ICollection<PlantillaDocumentoArea> Areas { get; set; } = [];
+
     public ICollection<SolicitudDocumento> Solicitudes { get; set; } = [];
 }

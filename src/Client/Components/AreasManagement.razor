@@ -95,7 +95,7 @@
 
 @if (mostrarModal)
 {
-    <div class="modal-backdrop" @onclick="CerrarModal">
+    <div class="modal-backdrop">
         <div class="modal" @onclick:stopPropagation>
             <div class="modal-header">
                 <span class="modal-title">@(editandoId.HasValue ? "Editar área" : "Nueva área")</span>

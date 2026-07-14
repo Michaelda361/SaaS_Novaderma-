@@ -45,10 +45,11 @@ public class LibreOfficeConverterService(ILogger<LibreOfficeConverterService> lo
             var filter = ConvertFilterPorExtension.TryGetValue(extension, out var filterName)
                 ? filterName
                 : "pdf";
+            var userProfileDir = Path.Combine(tempDir, "profile").Replace("\\", "/");
             var psi = new ProcessStartInfo
             {
                 FileName = soffice,
-                Arguments = $"--headless --norestore --convert-to {filter} \"{inputPath}\" --outdir \"{tempDir}\"",
+                Arguments = $"-env:UserInstallation=\"file:///{userProfileDir}\" --headless --norestore --convert-to {filter} \"{inputPath}\" --outdir \"{tempDir}\"",
                 UseShellExecute = false,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
@@ -65,7 +66,7 @@ public class LibreOfficeConverterService(ILogger<LibreOfficeConverterService> lo
         catch (Exception ex) { logger.LogError(ex, "Error convirtiendo {Ext}", extension); return null; }
         finally { try { Directory.Delete(tempDir, recursive: true); } catch { } }
     }
-
+ 
     public byte[]? ConvertirPptxAPng(byte[] pptxBytes)
     {
         var soffice = EncontrarSoffice();
@@ -76,10 +77,11 @@ public class LibreOfficeConverterService(ILogger<LibreOfficeConverterService> lo
         {
             var inputPath = Path.Combine(tempDir, "documento.pptx");
             File.WriteAllBytes(inputPath, pptxBytes);
+            var userProfileDir = Path.Combine(tempDir, "profile").Replace("\\", "/");
             var psi = new ProcessStartInfo
             {
                 FileName = soffice,
-                Arguments = $"--headless --norestore --convert-to png \"{inputPath}\" --outdir \"{tempDir}\"",
+                Arguments = $"-env:UserInstallation=\"file:///{userProfileDir}\" --headless --norestore --convert-to png \"{inputPath}\" --outdir \"{tempDir}\"",
                 UseShellExecute = false,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
@@ -99,7 +101,7 @@ public class LibreOfficeConverterService(ILogger<LibreOfficeConverterService> lo
         catch (Exception ex) { logger.LogError(ex, "Error convirtiendo PPTX a PNG"); return null; }
         finally { try { Directory.Delete(tempDir, recursive: true); } catch { } }
     }
-
+ 
     public byte[]? ConvertirPdfAPng(byte[] pdfBytes)
     {
         var soffice = EncontrarSoffice();
@@ -110,10 +112,11 @@ public class LibreOfficeConverterService(ILogger<LibreOfficeConverterService> lo
         {
             var inputPath = Path.Combine(tempDir, "documento.pdf");
             File.WriteAllBytes(inputPath, pdfBytes);
+            var userProfileDir = Path.Combine(tempDir, "profile").Replace("\\", "/");
             var psi = new ProcessStartInfo
             {
                 FileName = soffice,
-                Arguments = $"--headless --norestore --convert-to png \"{inputPath}\" --outdir \"{tempDir}\"",
+                Arguments = $"-env:UserInstallation=\"file:///{userProfileDir}\" --headless --norestore --convert-to png \"{inputPath}\" --outdir \"{tempDir}\"",
                 UseShellExecute = false,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,

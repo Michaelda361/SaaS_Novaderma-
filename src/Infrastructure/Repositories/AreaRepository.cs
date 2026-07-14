@@ -38,10 +38,16 @@ public class AreaRepository(AppDbContext context, IMemoryCache cache) : IAreaRep
 
     public async Task<Area> UpdateAsync(Area area)
     {
-        context.Areas.Update(area);
+        // Fetch a tracked entity (no includes) and only update scalar fields
+        // to avoid EF Core trying to re-attach navigation collections.
+        var tracked = await context.Areas.FindAsync(area.Id);
+        if (tracked is null) return area;
+        tracked.Nombre = area.Nombre;
+        tracked.Descripcion = area.Descripcion;
+        tracked.JefeId = area.JefeId;
         await context.SaveChangesAsync();
         cache.Remove("areas_all");
-        return area;
+        return tracked;
     }
 
     public async Task DeleteAsync(int id)

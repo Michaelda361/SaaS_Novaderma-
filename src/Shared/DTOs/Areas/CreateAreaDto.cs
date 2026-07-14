@@ -8,7 +8,7 @@ public class CreateAreaDto
     [MaxLength(100)]
     public string Nombre { get; set; } = string.Empty;
 
-    public string Descripcion { get; set; } = string.Empty;
+    public string? Descripcion { get; set; }
 
     public int? JefeId { get; set; }
 }

@@ -396,153 +396,37 @@ public class PdfGeneratorService(LibreOfficeConverterService libreOffice)
 
     private static byte[] AplicarVariablesEnDocx(byte[] docxBytes, Dictionary<string, string> variables)
     {
-        using var ms = new MemoryStream();
-        ms.Write(docxBytes, 0, docxBytes.Length);
-        ms.Position = 0;
+        using var inputStream = new MemoryStream(docxBytes);
+        using var wordDoc = new Syncfusion.DocIO.DLS.WordDocument(inputStream, Syncfusion.DocIO.FormatType.Docx);
 
-        using (var doc = WordprocessingDocument.Open(ms, true))
+        // Para evitar el doble $ en variables monetarias si el usuario escribió "${{variable}}" en la plantilla,
+        // primero reemplazamos con el signo de pesos incluido en la búsqueda.
+        var variablesMoneda = new[] { "sueldo_basico", "sub_transporte", "aux_medios_transporte", "aux_transporte", "comision_ventas", "comision_cobros", "total_salario" };
+        foreach (var varName in variablesMoneda)
         {
-            var body = doc.MainDocumentPart?.Document?.Body;
-            if (body is not null)
+            var keyConLlaves = $"{{{{{varName}}}}}"; // "{{sueldo_basico}}"
+            if (variables.TryGetValue(keyConLlaves, out var value))
             {
-                ConsolidarRuns(body);
-                ReemplazarEnParrafos(body, variables);
-                if (doc.MainDocumentPart?.Document != null)
+                // Si el valor ya tiene el '$', buscamos "${{variable}}" y lo reemplazamos por el valor formateado (evitando $$)
+                if (!string.IsNullOrEmpty(value) && value.StartsWith("$"))
                 {
-                    doc.MainDocumentPart.Document.Save();
+                    wordDoc.Replace($"${keyConLlaves}", value, true, true);
                 }
             }
         }
 
-        return ms.ToArray();
-    }
-
-    /// <summary>
-    /// Reemplaza variables en runs individuales. Si una variable queda fragmentada
-    /// entre varios runs (Word la partió con formatos distintos), reconstruye el párrafo
-    /// usando el formato del primer run como base.
-    /// </summary>
-    private static void ReemplazarEnParrafos(Body body, Dictionary<string, string> variables)
-    {
-        foreach (var para in body.Descendants<Paragraph>())
+        // Reemplazo estándar de todas las variables
+        foreach (var (key, value) in variables)
         {
-            // Paso 1: reemplazo run a run (caso simple — variable en un solo run)
-            foreach (var run in para.Descendants<Run>())
-            {
-                var textEl = run.GetFirstChild<Text>();
-                if (textEl is null) continue;
-
-                var original = textEl.Text;
-                var reemplazado = original;
-                foreach (var (key, value) in variables)
-                    reemplazado = reemplazado.Replace(key, value);
-
-                if (reemplazado == original) continue;
-
-                textEl.Text = reemplazado;
-                textEl.Space = DocumentFormat.OpenXml.SpaceProcessingModeValues.Preserve;
-                NormalizarFuenteRun(run);
-            }
-
-            // Paso 2: si quedan variables fragmentadas entre runs, reconstruir el párrafo
-            var textoParrafo = string.Concat(para.Descendants<Text>().Select(t => t.Text));
-            if (!variables.Keys.Any(k => textoParrafo.Contains(k))) continue;
-
-            var textoFinal = textoParrafo;
-            foreach (var (key, value) in variables)
-                textoFinal = textoFinal.Replace(key, value);
-
-            var runs = para.Elements<Run>().ToList();
-            if (!runs.Any()) continue;
-
-            // Usar el run más largo como base de formato (es el texto "normal" del párrafo)
-            var runBase = runs.OrderByDescending(r =>
-                r.GetFirstChild<Text>()?.Text?.Length ?? 0).First();
-
-            var primerRun = runs[0];
-            var primerText = primerRun.GetFirstChild<Text>();
-            if (primerText is null) continue;
-
-            // Copiar propiedades del run base si es distinto al primero
-            if (runBase != primerRun && runBase.RunProperties is not null)
-            {
-                primerRun.RunProperties?.Remove();
-                primerRun.InsertBefore(
-                    (RunProperties)runBase.RunProperties.CloneNode(true),
-                    primerRun.GetFirstChild<Text>());
-            }
-
-            primerText.Text = textoFinal;
-            primerText.Space = DocumentFormat.OpenXml.SpaceProcessingModeValues.Preserve;
-            NormalizarFuenteRun(primerRun);
-
-            foreach (var r in runs.Skip(1))
-                r.Remove();
+            if (string.IsNullOrEmpty(key)) continue;
+            wordDoc.Replace(key, value ?? string.Empty, true, true);
         }
+
+        using var outputStream = new MemoryStream();
+        wordDoc.Save(outputStream, Syncfusion.DocIO.FormatType.Docx);
+        return outputStream.ToArray();
     }
 
-    /// <summary>
-    /// Normaliza el run reemplazado para que herede el formato del párrafo:
-    /// quita overrides de fuente, tamaño y color que venían del placeholder.
-    /// Preserva negrita, cursiva y subrayado intencionales.
-    /// </summary>
-    private static void NormalizarFuenteRun(Run run)
-    {
-        var rPr = run.RunProperties;
-        if (rPr is null) return;
-
-        // Quitar override de fuente
-        rPr.RemoveAllChildren<RunFonts>();
-        // Quitar override de tamaño (sz = half-points, szCs = complex script)
-        rPr.RemoveAllChildren<FontSize>();
-        rPr.RemoveAllChildren<FontSizeComplexScript>();
-        // Quitar override de color
-        rPr.RemoveAllChildren<DocumentFormat.OpenXml.Wordprocessing.Color>();
-        // Quitar highlight y shading que pudiera tener el placeholder
-        rPr.RemoveAllChildren<Highlight>();
-        rPr.RemoveAllChildren<Shading>();
-        // Quitar spacing de caracteres y kern
-        rPr.RemoveAllChildren<Spacing>();
-        rPr.RemoveAllChildren<Kern>();
-
-        if (!rPr.HasChildren)
-            rPr.Remove();
-    }
-
-    /// <summary>
-    /// Word a veces fragmenta una variable en múltiples runs (ej: {{email}} → {{, email, }}).
-    /// Este método consolida runs consecutivos con el mismo formato para que el reemplazo funcione.
-    /// </summary>
-    private static void ConsolidarRuns(Body body)
-    {
-        foreach (var para in body.Descendants<Paragraph>())
-        {
-            var runs = para.Elements<Run>().ToList();
-            if (runs.Count < 2) continue;
-
-            for (int i = runs.Count - 1; i > 0; i--)
-            {
-                var prev = runs[i - 1];
-                var curr = runs[i];
-
-                // Solo consolidar si tienen el mismo formato (o ambos sin formato)
-                var prevProps = prev.RunProperties?.OuterXml ?? string.Empty;
-                var currProps = curr.RunProperties?.OuterXml ?? string.Empty;
-
-                if (prevProps == currProps)
-                {
-                    var prevText = prev.GetFirstChild<Text>();
-                    var currText = curr.GetFirstChild<Text>();
-                    if (prevText is not null && currText is not null)
-                    {
-                        prevText.Text += currText.Text;
-                        prevText.Space = DocumentFormat.OpenXml.SpaceProcessingModeValues.Preserve;
-                        curr.Remove();
-                    }
-                }
-            }
-        }
-    }
 
     // ── Parser HTML completo ──────────────────────────────────────────────────
 

@@ -587,6 +587,20 @@ else
                                 </div>
                             </div>
 
+                            <!-- Tarjeta 4.5: Cobros Especiales -->
+                            <div class="card" style="padding: 1rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface);">
+                                <h4 style="margin-top: 0; margin-bottom: 0.75rem; font-size: 0.95rem; font-weight: 600; color: #10b981; display: flex; align-items: center; gap: 0.35rem;">💰 Cobros Especiales</h4>
+                                <div class="form-group" style="margin-bottom: 0;">
+                                    <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;margin-bottom:0; font-size: 0.85rem; font-weight: 500;">
+                                        <input type="checkbox" @bind="form.PermitirCobrosEspeciales" />
+                                        Solicitar comisiones/auxilios al aprobar la solicitud
+                                    </label>
+                                    <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.35rem; margin-bottom: 0; line-height: 1.3;">
+                                        Si se activa y el documento contiene las variables de cobros especiales, se le pedirá al aprobador ingresar los montos correspondientes para el colaborador antes de aprobar la solicitud.
+                                    </p>
+                                </div>
+                            </div>
+
                             <!-- Tarjeta 5: Campos que completará el colaborador -->
                             <div class="card" style="padding: 1rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); border-left: 4px solid #3b82f6;">
                                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
@@ -940,9 +954,18 @@ else
                                 <span class="text-sm">Cargando documento...</span>
                             </div>
                         }
+                        else if (!string.IsNullOrEmpty(pngPreviewBase64))
+                        {
+                            <!-- Visualizar como imagen PNG para evitar activar el diálogo de la impresora del navegador -->
+                            <div style="width: 100%; height: 100%; overflow: auto; display: flex; justify-content: center; background: #e5e7eb; padding: 1rem; border-radius: var(--radius); box-sizing: border-box;">
+                                <img src="data:image/png;base64,@pngPreviewBase64" 
+                                     style="max-width: 100%; height: auto; box-shadow: 0 4px 12px rgba(0,0,0,0.15); background: white; border-radius: 4px; object-fit: contain;" 
+                                     alt="Vista previa de la carta laboral" />
+                            </div>
+                        }
                         else if (!string.IsNullOrEmpty(pdfPreviewBase64))
                         {
-                            <iframe src="data:application/pdf;base64,@pdfPreviewBase64"
+                            <iframe src="data:application/pdf;base64,@pdfPreviewBase64#toolbar=0&navpanes=0"
                                     class="revision-pdf-frame"
                                     title="Vista previa del documento"></iframe>
                         }
@@ -1374,12 +1397,36 @@ else
     private List<CampoFormularioDto> ObtenerCamposAprobador()
     {
         if (solicitudResolviendo is null) return [];
-        // Bug #2 fix: buscar en la lista local primero y como fallback en la plantilla cargada
-        // para el modal de resolución (cubre el caso donde el jefe entra directo a Pendientes).
-        var plantilla = plantillas.FirstOrDefault(p => p.Id == solicitudResolviendo.PlantillaDocumentoId)
-                        ?? plantillaResolviendo;
-        return plantilla?.CamposFormulario?.Where(c => c.DiligenciadoPor == "Aprobador").ToList() ?? [];
+        // Priorizar la plantilla recién cargada del modal para evitar problemas de caché desactualizado
+        var plantilla = plantillaResolviendo 
+                        ?? plantillas.FirstOrDefault(p => p.Id == solicitudResolviendo.PlantillaDocumentoId);
+        
+        var list = plantilla?.CamposFormulario?.Where(c => c.DiligenciadoPor == "Aprobador").ToList() ?? [];
+
+        if (plantilla is not null && plantilla.PermitirCobrosEspeciales)
+        {
+            bool esDocx = string.Equals(plantilla.TipoPlantilla, "docx", StringComparison.OrdinalIgnoreCase);
+            bool tieneAux = esDocx || (plantilla.ContenidoHtml?.Contains("{{aux_medios_transporte}}", StringComparison.OrdinalIgnoreCase) ?? false);
+            bool tieneVentas = esDocx || (plantilla.ContenidoHtml?.Contains("{{comision_ventas}}", StringComparison.OrdinalIgnoreCase) ?? false);
+            bool tieneCobros = esDocx || (plantilla.ContenidoHtml?.Contains("{{comision_cobros}}", StringComparison.OrdinalIgnoreCase) ?? false);
+
+            if (tieneAux && !list.Any(c => c.Variable == "aux_medios_transporte"))
+            {
+                list.Add(new CampoFormularioDto { Variable = "aux_medios_transporte", Nombre = "Auxilio de medios de transporte", Tipo = "Número", Obligatorio = false, DiligenciadoPor = "Aprobador" });
+            }
+            if (tieneVentas && !list.Any(c => c.Variable == "comision_ventas"))
+            {
+                list.Add(new CampoFormularioDto { Variable = "comision_ventas", Nombre = "Comisión de ventas", Tipo = "Número", Obligatorio = false, DiligenciadoPor = "Aprobador" });
+            }
+            if (tieneCobros && !list.Any(c => c.Variable == "comision_cobros"))
+            {
+                list.Add(new CampoFormularioDto { Variable = "comision_cobros", Nombre = "Comisión de cobros", Tipo = "Número", Obligatorio = false, DiligenciadoPor = "Aprobador" });
+            }
+        }
+
+        return list;
     }
+
 
     private void OnVariablesAprobadorInput(string key, string valor)
     {
@@ -1408,10 +1455,8 @@ else
         comentarioResolucion = string.Empty;
         variablesAprobadorModel = [];
 
-        // Bug #2 fix: siempre cargar la plantilla desde el API para que ObtenerCamposAprobador
-        // funcione incluso cuando el jefe entra directo a la pestaña Pendientes (lista local vacía).
-        plantillaResolviendo = plantillas.FirstOrDefault(p => p.Id == s.PlantillaDocumentoId)
-                               ?? await ApiService.GetByIdAsync(s.PlantillaDocumentoId);
+        // Obtener la plantilla fresca desde el API para garantizar que PermitirCobrosEspeciales esté actualizado.
+        plantillaResolviendo = await ApiService.GetByIdAsync(s.PlantillaDocumentoId);
 
         firmaX = 70;
         firmaY = 70;
@@ -1421,15 +1466,42 @@ else
 
         var camposAprobador = ObtenerCamposAprobador();
         subTabActiva = camposAprobador.Any() ? "variables" : "datos";
+
+        // Cargar datos de la ficha del colaborador para cobros especiales si aplica
+        TalentManagement.Shared.DTOs.Colaboradores.ColaboradorDto? col = null;
+        if (plantillaResolviendo is not null && plantillaResolviendo.PermitirCobrosEspeciales)
+        {
+            try { col = await ColaboradorApi.GetByIdAsync(s.ColaboradorId); } catch { }
+        }
+
         foreach (var campo in camposAprobador)
         {
             var valorExistente = s.VariablesCompletadas.GetValueOrDefault(campo.Variable, string.Empty);
+
+            // Si no hay valor previo guardado y es un cobro especial, precargar el de la ficha del colaborador
+            if (string.IsNullOrWhiteSpace(valorExistente) && col is not null)
+            {
+                if (campo.Variable == "aux_medios_transporte")
+                {
+                    valorExistente = col.AuxMediosTransporte?.ToString() ?? string.Empty;
+                }
+                else if (campo.Variable == "comision_ventas")
+                {
+                    valorExistente = col.ComisionVentas?.ToString() ?? string.Empty;
+                }
+                else if (campo.Variable == "comision_cobros")
+                {
+                    valorExistente = col.ComisionCobros?.ToString() ?? string.Empty;
+                }
+            }
+
             variablesAprobadorModel[campo.Variable] = valorExistente;
         }
 
         StateHasChanged();
         await CargarPdfPreviewAsync(s);
     }
+
 
     private async Task AbrirRechazar(SolicitudDocumentoDto s)
     {
@@ -1682,6 +1754,7 @@ else
             NombreFirmante = p.NombreFirmante,
             CargoFirmante = p.CargoFirmante,
             AplicaTodasAreas = p.AplicaTodasAreas,
+            PermitirCobrosEspeciales = p.PermitirCobrosEspeciales,
             AreaIds = [..p.AreaIds],
             VariablesEditables = [..p.VariablesEditables],
         };

@@ -19,4 +19,7 @@ public class PlantillaDocumentoDto
 
     /// <summary>Configuración detallada de campos dinámicos para el formulario.</summary>
     public List<CampoFormularioDto> CamposFormulario { get; set; } = [];
+
+    public bool PermitirCobrosEspeciales { get; set; }
 }
+

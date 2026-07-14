@@ -8,7 +8,7 @@ public class CreateCargoDto
     [MaxLength(100)]
     public string Nombre { get; set; } = string.Empty;
 
-    public string Descripcion { get; set; } = string.Empty;
+    public string? Descripcion { get; set; }
 
     [Range(1, int.MaxValue, ErrorMessage = "Selecciona un área")]
     public int AreaId { get; set; }

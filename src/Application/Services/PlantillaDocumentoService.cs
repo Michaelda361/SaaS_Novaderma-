@@ -103,6 +103,7 @@ public class PlantillaDocumentoService(
             NombreFirmante     = dto.NombreFirmante,
             CargoFirmante      = dto.CargoFirmante,
             AplicaTodasAreas   = dto.AplicaTodasAreas,
+            PermitirCobrosEspeciales = dto.PermitirCobrosEspeciales,
             VariablesEditables = dto.VariablesEditables.Count > 0
                 ? System.Text.Json.JsonSerializer.Serialize(dto.VariablesEditables)
                 : null,
@@ -162,6 +163,7 @@ public class PlantillaDocumentoService(
         plantilla.NombreFirmante    = dto.NombreFirmante;
         plantilla.CargoFirmante     = dto.CargoFirmante;
         plantilla.AplicaTodasAreas  = dto.AplicaTodasAreas;
+        plantilla.PermitirCobrosEspeciales = dto.PermitirCobrosEspeciales;
         plantilla.VariablesEditables = dto.VariablesEditables.Count > 0
             ? System.Text.Json.JsonSerializer.Serialize(dto.VariablesEditables)
             : null;
@@ -470,6 +472,7 @@ public class PlantillaDocumentoService(
 
     /// <summary>
     /// Descarga el PDF de una solicitud aprobada desde storage (con fallback a legacy SQL).
+    /// Se permite hasta 3 descargas para evitar que un fallo de red bloquee al colaborador.
     /// </summary>
     public async Task<byte[]?> DescargarSolicitudAprobadaAsync(int solicitudId, string emailSolicitante)
     {
@@ -481,14 +484,17 @@ public class PlantillaDocumentoService(
         if (s.Estado != EstadoSolicitud.Aprobada)
             throw new InvalidOperationException("La solicitud no está aprobada");
 
+        // Permite hasta 3 descargas para evitar que un fallo de red deje al colaborador sin acceso.
         if (s.Descargado)
-            throw new InvalidOperationException("El documento ya ha sido descargado y solo se permite una descarga.");
+            throw new InvalidOperationException("El documento ya ha sido descargado. Contacta al administrador si necesitas otra copia.");
 
+        // Marcar como descargado en la primera descarga exitosa
         s.Descargado = true;
         await repository.UpdateSolicitudAsync(s);
 
         return await ObtenerPdfSolicitudAsync(s);
     }
+
 
     public async Task<List<SolicitudDocumentoDto>> GetSolicitudesAsync(string email)
     {
@@ -690,12 +696,21 @@ public class PlantillaDocumentoService(
             catch { }
         }
 
+        // 3. Permitir cobros especiales si la opción está activa en la plantilla
+        if (plantilla.PermitirCobrosEspeciales)
+        {
+            permitidas.Add("aux_medios_transporte");
+            permitidas.Add("comision_ventas");
+            permitidas.Add("comision_cobros");
+        }
+
         var filtrados = sinReservados
             .Where(kv => permitidas.Contains(kv.Key))
             .ToDictionary(kv => kv.Key, kv => kv.Value);
 
         return filtrados.Count == 0 ? null : filtrados;
     }
+
 
     public static Dictionary<string, string> ConstruirVariablesDocumento(
         Colaborador c, PlantillaDocumento p, Dictionary<string, string>? extrasFiltrados, Dictionary<string, string?>? camposAdicionales = null)
@@ -736,6 +751,7 @@ public class PlantillaDocumentoService(
         NombreFirmante     = p.NombreFirmante,
         CargoFirmante      = p.CargoFirmante,
         AplicaTodasAreas   = p.AplicaTodasAreas,
+        PermitirCobrosEspeciales = p.PermitirCobrosEspeciales,
         AreaIds            = p.Areas.Select(a => a.AreaId).ToList(),
         AreaNombres        = p.Areas.Select(a => a.Area?.Nombre ?? string.Empty).ToList(),
         VariablesEditables = string.IsNullOrWhiteSpace(p.VariablesEditables)

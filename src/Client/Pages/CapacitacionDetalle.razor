@@ -1433,9 +1433,11 @@
     private List<ColaboradorCampoDto> camposFicha = [];
     private string? previewCertificadoBase64Temp = null;
 
-    private static readonly Dictionary<string, string> VariablesListadoFriendly = PlantillaVariableCatalog.StandardDefinitions
-        .Where(x => !string.Equals(x.Key, "{{destinatario}}", StringComparison.OrdinalIgnoreCase))
-        .ToDictionary(x => x.Key, x => x.Value, StringComparer.OrdinalIgnoreCase);
+    private static readonly Dictionary<string, string> VariablesListadoFriendly =
+        PlantillaVariableCatalog.StandardDefinitions
+            .Where(x => !string.Equals(x.Key, "{{destinatario}}", StringComparison.OrdinalIgnoreCase))
+            .Concat(PlantillaVariableCatalog.CertificadoDefinitions)
+            .ToDictionary(x => x.Key, x => x.Value, StringComparer.OrdinalIgnoreCase);
 
     private async Task CargarCapacitacionesConPlantilla()
     {
