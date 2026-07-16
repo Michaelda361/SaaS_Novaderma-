@@ -11,8 +11,6 @@ using TalentManagement.Server;
 using TalentManagement.Server.Hubs;
 
 
-// Registrar licencia de Syncfusion
-Syncfusion.Licensing.SyncfusionLicenseProvider.RegisterLicense("Ngo9BigBOggjHTQxAR8/V1JAaF5cX2pCdkx3Rnxbf1x2ZFZMYFVbR3dPIiBoS35RcEVkWHtfdXdRRGJYU0N2VEFZ");
 
 var builder = WebApplication.CreateBuilder(args);
 

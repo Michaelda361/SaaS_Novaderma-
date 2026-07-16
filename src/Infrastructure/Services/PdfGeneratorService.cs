@@ -10,12 +10,7 @@ using PdfSharpCore.Pdf.IO;
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
-using Syncfusion.DocIO.DLS;
-using Syncfusion.DocIORenderer;
-using Syncfusion.Pdf;
-using Syncfusion.Pdf.Graphics;
-using Syncfusion.Pdf.Interactive;
-using Syncfusion.Pdf.Parsing;
+using MiniSoftware;
 using TalentManagement.Application.Services;
 using TalentManagement.Domain.Entities;
 using TalentManagement.Domain.Enums;
@@ -49,8 +44,7 @@ public class PdfGeneratorService(LibreOfficeConverterService libreOffice)
 
     /// <summary>
     /// Aplica variables al .docx y convierte a PDF.
-    /// Usa LibreOffice si está disponible (máxima fidelidad).
-    /// Cae en Syncfusion DocIORenderer como fallback.
+    /// Requiere LibreOffice instalado en el servidor para realizar la conversión.
     /// </summary>
     public byte[] GenerarPdfDesdeDocx(string contenidoResuelto)
     {
@@ -62,32 +56,30 @@ public class PdfGeneratorService(LibreOfficeConverterService libreOffice)
             if (pdf is not null) return pdf;
         }
 
-        // Fallback: Syncfusion DocIORenderer
-        using var inputStream = new MemoryStream(docxBytes);
-        using var wordDoc = new Syncfusion.DocIO.DLS.WordDocument(inputStream, Syncfusion.DocIO.FormatType.Docx);
-        using var renderer = new Syncfusion.DocIORenderer.DocIORenderer();
-        using var pdfDoc = renderer.ConvertToPDF(wordDoc);
-        using var outputStream = new MemoryStream();
-        pdfDoc.Save(outputStream);
-        return outputStream.ToArray();
+        throw new InvalidOperationException(
+            "LibreOffice no esta disponible en el servidor. Instale LibreOffice para convertir documentos DOCX a PDF.");
     }
 
     public byte[] GenerarPdfDesdePdf(byte[] pdfBytes, Dictionary<string, string> variables)
     {
         using var input = new MemoryStream(pdfBytes);
-        using var document = new PdfLoadedDocument(input);
+        using var document = PdfReader.Open(input, PdfDocumentOpenMode.Modify);
 
         var normalizedVariables = BuildPdfReplacementDictionary(variables);
 
-        if (document.Form is PdfLoadedForm form && form.Fields is PdfLoadedFormFieldCollection fields && fields.Count > 0)
+        var acroForm = document.AcroForm;
+        if (acroForm != null && acroForm.Fields != null)
         {
             var normalizedFields = normalizedVariables
                 .Select(kvp => new KeyValuePair<string, string>(NormalizeFieldName(kvp.Key), kvp.Value))
                 .Where(pair => !string.IsNullOrWhiteSpace(pair.Key))
                 .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.OrdinalIgnoreCase);
 
-            FillPdfFields(fields, normalizedFields);
-            form.Flatten = true;
+            FillPdfFieldsPdfSharp(acroForm.Fields, normalizedFields);
+            
+            // Simular el flattening haciendo todos los campos de solo lectura
+            SetFieldsReadOnlyPdfSharp(acroForm.Fields);
+            acroForm.Elements.SetBoolean("/NeedAppearances", false);
 
             using var output = new MemoryStream();
             document.Save(output);
@@ -95,6 +87,62 @@ public class PdfGeneratorService(LibreOfficeConverterService libreOffice)
         }
 
         return ReemplazarVariablesEnPdf(pdfBytes, normalizedVariables);
+    }
+
+    private static void FillPdfFieldsPdfSharp(dynamic fields, Dictionary<string, string> normalizedFields)
+    {
+        foreach (var field in fields)
+        {
+            string fieldName = field.Name ?? string.Empty;
+            var normalizedName = NormalizeFieldName(fieldName);
+            if (normalizedFields.TryGetValue(normalizedName, out var value))
+            {
+                if (field is PdfTextField textField)
+                {
+                    textField.Text = value;
+                }
+                else if (field is PdfComboBoxField comboBoxField)
+                {
+                    comboBoxField.Value = new PdfString(value);
+                }
+                else if (field is PdfCheckBoxField checkBoxField)
+                {
+                    checkBoxField.Checked = value.Equals("true", StringComparison.OrdinalIgnoreCase)
+                                           || value == "1" || value.Equals("x", StringComparison.OrdinalIgnoreCase);
+                }
+            }
+
+            var childFields = field.Fields;
+            if (childFields is not null)
+            {
+                FillPdfFieldsPdfSharp(childFields, normalizedFields);
+            }
+        }
+    }
+
+    private static void SetFieldsReadOnlyPdfSharp(dynamic fields)
+    {
+        foreach (var field in fields)
+        {
+            if (field is PdfTextField textField)
+            {
+                textField.ReadOnly = true;
+            }
+            else if (field is PdfComboBoxField comboBoxField)
+            {
+                comboBoxField.ReadOnly = true;
+            }
+            else if (field is PdfCheckBoxField checkBoxField)
+            {
+                checkBoxField.ReadOnly = true;
+            }
+
+            var childFields = field.Fields;
+            if (childFields is not null)
+            {
+                SetFieldsReadOnlyPdfSharp(childFields);
+            }
+        }
     }
 
     private static byte[] ReemplazarVariablesEnPdf(byte[] pdfBytes, Dictionary<string, string> variables)
@@ -126,38 +174,6 @@ public class PdfGeneratorService(LibreOfficeConverterService libreOffice)
         using var output = new MemoryStream();
         document.Save(output);
         return output.ToArray();
-    }
-
-    private static void FillPdfFields(PdfLoadedFormFieldCollection fields, Dictionary<string, string> normalizedFields)
-    {
-        foreach (PdfLoadedField field in fields)
-        {
-            var fieldName = NormalizeFieldName(field.Name ?? string.Empty);
-            if (!normalizedFields.TryGetValue(fieldName, out var value))
-            {
-                continue;
-            }
-
-            switch (field)
-            {
-                case PdfLoadedTextBoxField textBox:
-                    textBox.Text = value;
-                    break;
-                case PdfLoadedComboBoxField comboBox:
-                    comboBox.SelectedValue = value;
-                    break;
-                case PdfLoadedListBoxField listBox:
-                    listBox.SelectedValue = new[] { value };
-                    break;
-                case PdfLoadedCheckBoxField checkBox:
-                    checkBox.Checked = value.Equals("true", StringComparison.OrdinalIgnoreCase)
-                                       || value == "1" || value.Equals("x", StringComparison.OrdinalIgnoreCase);
-                    break;
-                default:
-                    field.SetValue("V", value);
-                    break;
-            }
-        }
     }
 
     private static string NormalizeFieldName(string key)
@@ -396,34 +412,60 @@ public class PdfGeneratorService(LibreOfficeConverterService libreOffice)
 
     private static byte[] AplicarVariablesEnDocx(byte[] docxBytes, Dictionary<string, string> variables)
     {
-        using var inputStream = new MemoryStream(docxBytes);
-        using var wordDoc = new Syncfusion.DocIO.DLS.WordDocument(inputStream, Syncfusion.DocIO.FormatType.Docx);
+        using var ms = new MemoryStream();
+        ms.Write(docxBytes, 0, docxBytes.Length);
+        ms.Position = 0;
 
-        // Para evitar el doble $ en variables monetarias si el usuario escribió "${{variable}}" en la plantilla,
-        // primero reemplazamos con el signo de pesos incluido en la búsqueda.
         var variablesMoneda = new[] { "sueldo_basico", "sub_transporte", "aux_medios_transporte", "aux_transporte", "comision_ventas", "comision_cobros", "total_salario" };
-        foreach (var varName in variablesMoneda)
+
+        // 1. Preprocesar el DOCX con OpenXml para evitar el doble '$' en variables de moneda
+        using (var doc = WordprocessingDocument.Open(ms, true))
         {
-            var keyConLlaves = $"{{{{{varName}}}}}"; // "{{sueldo_basico}}"
-            if (variables.TryGetValue(keyConLlaves, out var value))
+            var body = doc.MainDocumentPart?.Document?.Body;
+            if (body != null)
             {
-                // Si el valor ya tiene el '$', buscamos "${{variable}}" y lo reemplazamos por el valor formateado (evitando $$)
-                if (!string.IsNullOrEmpty(value) && value.StartsWith("$"))
+                var textNodes = body.Descendants<Text>().ToList();
+                for (int i = 0; i < textNodes.Count; i++)
                 {
-                    wordDoc.Replace($"${keyConLlaves}", value, true, true);
+                    var textNode = textNodes[i];
+                    foreach (var varName in variablesMoneda)
+                    {
+                        if (textNode.Text != null && textNode.Text.Contains($"{{{{{varName}}}}}"))
+                        {
+                            // Caso A: El nodo de texto contiene el '$' pegado al tag
+                            if (textNode.Text.Contains($"${{{{{varName}}}}}"))
+                            {
+                                textNode.Text = textNode.Text.Replace($"${{{{{varName}}}}}", $"{{{{{varName}}}}}");
+                            }
+                            // Caso B: El '$' quedó separado en el nodo de texto inmediatamente anterior (split runs)
+                            else if (i > 0)
+                            {
+                                var prevNode = textNodes[i - 1];
+                                if (prevNode.Text != null && prevNode.Text.EndsWith("$"))
+                                {
+                                    prevNode.Text = prevNode.Text[..^1];
+                                }
+                            }
+                        }
+                    }
                 }
+                doc.MainDocumentPart.Document.Save();
             }
         }
 
-        // Reemplazo estándar de todas las variables
+        // 2. Normalizar las claves de las variables para MiniWord (remover '{{' y '}}')
+        var miniWordVariables = new Dictionary<string, object>();
         foreach (var (key, value) in variables)
         {
             if (string.IsNullOrEmpty(key)) continue;
-            wordDoc.Replace(key, value ?? string.Empty, true, true);
+            var cleanKey = key.Trim().TrimStart('{').TrimEnd('}').Trim();
+            miniWordVariables[cleanKey] = value ?? string.Empty;
         }
 
-        using var outputStream = new MemoryStream();
-        wordDoc.Save(outputStream, Syncfusion.DocIO.FormatType.Docx);
+        // 3. Aplicar MiniWord
+        ms.Position = 0;
+        var outputStream = new MemoryStream();
+        MiniWord.SaveAsByTemplate(outputStream, ms.ToArray(), miniWordVariables);
         return outputStream.ToArray();
     }
 

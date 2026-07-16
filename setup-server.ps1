@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     Script de configuración inicial del servidor Windows Server 2019 para TalentManagement.
 .DESCRIPTION
@@ -204,7 +204,6 @@ if (-not (Test-Path $configPath)) {
   "AzureStorage": {
     "ConnectionString": "REEMPLAZA_CON_TU_AZURE_STORAGE_CONNECTION_STRING"
   },
-  "SyncfusionLicense": "REEMPLAZA_CON_TU_LICENCIA_SYNCFUSION",
   "DatabaseSettings": {
     "UseEnsureCreated": false
   },
